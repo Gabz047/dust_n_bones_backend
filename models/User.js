@@ -103,24 +103,6 @@ User.init({
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
-  invitedBy: {
-    type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'users',
-      key: 'id',
-    },
-    onDelete: 'SET NULL',
-    onUpdate: 'CASCADE',
-  },
-  invitedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  acceptedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
 }, {
   sequelize,
   modelName: 'User',

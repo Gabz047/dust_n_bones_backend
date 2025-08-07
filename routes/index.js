@@ -5,6 +5,8 @@ import companySettingsRoutes from './company-settings.js';
 import companyCustomizationRoutes from './company-customizations.js';
 import tenantRoutes from './tenants.js';
 import userRoutes from './users.js';
+import branchRoutes from './branch.js'
+import userBranchRoutes from './userBranch.js'
 import SignupController from '../controllers/SignupController.js';
 import { validateRequest, signupSchema } from '../middleware/validation.js';
 
@@ -24,7 +26,9 @@ router.get('/', (req, res) => {
             companySettings: '/api/company-settings',
             companyCustomizations: '/api/company-customizations',
             tenants: '/api/tenants',
-            users: '/api/users'
+            users: '/api/users',
+            branches: '/api/branches',
+            userBranches: '/api/userBranches'
         }
     });
 });
@@ -33,6 +37,8 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+router.use('/userBranches', userBranchRoutes)
+router.use('/branches', branchRoutes)
 router.use('/accounts', accountRoutes);
 router.use('/companies', companyRoutes);
 router.use('/company-settings', companySettingsRoutes);

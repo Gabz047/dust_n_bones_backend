@@ -17,7 +17,7 @@ export const extractTenant = async (req, res, next) => {
                 id: tenantId,
                 active: true
             }
-        });
+        }); 
 
         if (!tenant) {
             return res.status(404).json({
