@@ -53,7 +53,6 @@ class UserController {
                 role: role || 'employee',
                 permissions: permissions || [],
                 companyId: req.tenant.id,
-                invitedBy: req.user ? req.user.id : null
             });
 
             // Remover password da resposta
@@ -239,13 +238,6 @@ class UserController {
                 limit: parseInt(limit),
                 offset: parseInt(offset),
                 attributes: { exclude: ['password'] },
-                include: [
-                    {
-                        model: User,
-                        as: 'inviter',
-                        attributes: ['id', 'firstName', 'lastName', 'email']
-                    }
-                ],
                 order: [['createdAt', 'DESC']]
             });
 
@@ -294,11 +286,6 @@ class UserController {
                         as: 'company',
                         attributes: ['id', 'name', 'subdomain']
                     },
-                    {
-                        model: User,
-                        as: 'inviter',
-                        attributes: ['id', 'firstName', 'lastName', 'email']
-                    }
                 ]
             });
 

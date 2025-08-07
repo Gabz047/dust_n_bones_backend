@@ -3,7 +3,7 @@ import { sequelize } from '../models/index.js';
 const runMigrations = async () => {
     try {
         console.log('🔄 Iniciando migrações...');
-        await sequelize.sync({ force: false, alter: true });
+        await sequelize.sync({ force: true, alter: true });
         console.log('✅ Migrações executadas com sucesso!');
         process.exit(0);
     } catch (error) {

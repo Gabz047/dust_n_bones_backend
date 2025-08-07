@@ -1,4 +1,4 @@
-import { Branch, Company, CompanySettings, CompanyCustomize, User, UserBranch, sequelize, CompanyCustomize } from '../models/index.js';
+import { Branch, Company, CompanySettings, CompanyCustomize, User, UserBranch, sequelize } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 class BranchController {

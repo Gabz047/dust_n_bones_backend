@@ -6,8 +6,12 @@ import companyCustomizationRoutes from './company-customizations.js';
 import tenantRoutes from './tenants.js';
 import userRoutes from './users.js';
 import branchRoutes from './branch.js'
+import customerRoutes from './customer.js'
+import customerGroupRoutes from './customer-group.js'
 import userBranchRoutes from './userBranch.js'
 import SignupController from '../controllers/SignupController.js';
+import itemRoutes from './item.js';
+import itemFeatureRoutes from './item-feature.js';
 import { validateRequest, signupSchema } from '../middleware/validation.js';
 
 const router = express.Router();
@@ -28,7 +32,11 @@ router.get('/', (req, res) => {
             tenants: '/api/tenants',
             users: '/api/users',
             branches: '/api/branches',
-            userBranches: '/api/userBranches'
+            userBranches: '/api/userBranches',
+            customers: '/api/customers',
+            customers_group: '/api/customers_group',
+            items: '/api/items',
+            item_features: '/api/item-features',
         }
     });
 });
@@ -37,6 +45,10 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+router.use('/items', itemRoutes);
+router.use('/item-features', itemFeatureRoutes);
+router.use('/customers', customerRoutes)
+router.use('/customers_group', customerGroupRoutes)
 router.use('/userBranches', userBranchRoutes)
 router.use('/branches', branchRoutes)
 router.use('/accounts', accountRoutes);

@@ -7,6 +7,10 @@ import CompanyCustomize from './CompanyCustomize.js';
 import User from './User.js';
 import Branch from './Branch.js';
 import UserBranch from './UserBranch.js';
+import Customer from './Customer.js';
+import CustomerGroup from './CustomerGroup.js';
+import Item from './Item.js';
+import ItemFeature from './ItemFeature.js';
 
 // Definir associações
 Account.hasMany(AuthProvider, {
@@ -61,7 +65,7 @@ CompanyCustomize.belongsTo(Company, {
 
 Branch.hasMany(User, {
     foreignKey: 'branchId',
-    as: 'users'
+    as: 'directUsers'
 })
 
 User.belongsTo(Branch, {
@@ -91,31 +95,20 @@ User.belongsTo(Company, {
     as: 'company'
 });
 
-// Auto-referência para convites
-User.hasMany(User, {
-    foreignKey: 'invitedBy',
-    as: 'invitedUsers'
-});
-
-User.belongsTo(User, {
-    foreignKey: 'invitedBy',
-    as: 'inviter'
-});
-
 //Associação User - Branch (muitos para muitos) via UserBranch
 
 User.belongsToMany(Branch, {
     through: UserBranch,
     foreignKey: 'userId',
     otherKey: 'branchId',
-    as: 'branches'
+    as: 'assignedBranches'
 });
 
 Branch.belongsToMany(User, {
     through: UserBranch,
     foreignKey: 'branchId',
     otherKey: 'userId',
-    as: 'users'
+    as: 'assignedUsers'
 });
 
 UserBranch.belongsTo(User, {
@@ -138,6 +131,55 @@ Branch.hasMany(UserBranch, {
     as: 'userBranches'
 });
 
+
+// Associações Cliente - Grupo Cliente
+
+Customer.belongsTo(CustomerGroup, {
+    foreignKey: 'id',
+    as: 'customerGroups'
+})
+
+CustomerGroup.hasMany(Customer, {
+    foreignKey: 'customerGroup',
+    as: 'customersInGroup'
+})
+
+CustomerGroup.belongsTo(Customer, {
+    foreignKey: 'mainCustomer',
+    as: 'mainCustomerInGroup'
+})
+
+// Associações Item e ItemFeature
+Item.hasMany(ItemFeature, {
+    foreignKey: 'itemId',
+    as: 'features'
+}); 
+
+ItemFeature.belongsTo(Item, {
+    foreignKey: 'itemId',
+    as: 'item'
+});
+
+Item.belongsTo(Company, {
+    foreignKey: 'companyId',
+    as: 'company'
+});
+
+Item.belongsTo(Branch, {
+    foreignKey: 'branchId',
+    as: 'branch'
+});
+
+Company.hasMany(Item, {
+    foreignKey: 'companyId',
+    as: 'items'
+});
+
+Branch.hasMany(Item, {
+    foreignKey: 'branchId',
+    as: 'items'
+});
+
 // Exportar modelos e sequelize
 export {
     sequelize,
@@ -148,7 +190,9 @@ export {
     CompanyCustomize,
     User,
     Branch,
-    UserBranch
+    UserBranch,
+    Customer,
+    CustomerGroup,
 };
 
 export default {
@@ -161,4 +205,6 @@ export default {
     User,
     Branch,
     UserBranch,
+    Customer,
+    CustomerGroup
 };

@@ -186,6 +186,57 @@ export const userBranchSchemas = {
   }),
 };
 
+// Schema de validação para customer
+
+export const customerSchemas = {
+  create: {
+    body: Joi.object({
+      name: Joi.string().required(),
+      document: Joi.string().min(11).max(18).allow(null, ''), // ← aqui
+      email: Joi.string().email().required(),
+      phone: Joi.string().required(),
+      address: Joi.string().required(),
+      city: Joi.string().required(),
+      state: Joi.string().required(),
+      zipCode: Joi.string().required(),
+      country: Joi.string().default('Brasil')
+    })
+  },
+  update: {
+    body: Joi.object({
+      name: Joi.string(),
+      document: Joi.string().min(11).max(18).allow(null, ''), // ← aqui também
+      email: Joi.string().email(),
+      phone: Joi.string(),
+      address: Joi.string(),
+      city: Joi.string(),
+      state: Joi.string(),
+      zipCode: Joi.string(),
+      country: Joi.string()
+    })
+  }
+};
+
+// Schemas de validação para customerGroup
+
+export const customerGroupSchemas = {
+  create: {
+    body: Joi.object({
+      mainCustomer: Joi.string().uuid().required()
+    })
+  },
+  updateCustomers: {
+    body: Joi.object({
+      customerIds: Joi.array().items(Joi.string().uuid()).required()
+    })
+  },
+  updateMainCustomer: {
+    body: Joi.object({
+      mainCustomerId: Joi.string().uuid().required()
+    })
+  }
+};
+
 // Schemas de validação para CompanySettings
 export const companySettingsSchemas = {
     update: Joi.object({
@@ -232,6 +283,231 @@ export const companyCustomizeSchemas = {
         showCompanyName: Joi.boolean().optional(),
         compactMode: Joi.boolean().optional()
     })
+};
+
+
+// Schemas de validação para Caracteristica do item
+
+export const itemFeatureSchemas = {
+  create: Joi.object({
+    itemId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .required()
+      .messages({
+        'string.guid': 'ID do item deve ser um UUID válido.',
+        'any.required': 'ID do item é obrigatório.',
+      }),
+    name: Joi.string()
+      .min(2)
+      .max(255)
+      .required()
+      .messages({
+        'string.base': 'Nome deve ser uma string.',
+        'string.empty': 'Nome não pode ser vazio.',
+        'string.min': 'Nome deve ter pelo menos 2 caracteres.',
+        'string.max': 'Nome deve ter no máximo 255 caracteres.',
+        'any.required': 'Nome da característica é obrigatório.',
+      }),
+    options: Joi.array()
+      .items(Joi.string())
+      .optional()
+      .allow(null)
+      .messages({
+        'array.base': 'Opções devem ser um array de strings.',
+        'string.base': 'Cada opção deve ser uma string.',
+      }),
+  }),
+
+  update: Joi.object({
+    name: Joi.string()
+      .min(2)
+      .max(255)
+      .optional()
+      .messages({
+        'string.base': 'Nome deve ser uma string.',
+        'string.empty': 'Nome não pode ser vazio.',
+        'string.min': 'Nome deve ter pelo menos 2 caracteres.',
+        'string.max': 'Nome deve ter no máximo 255 caracteres.',
+      }),
+    options: Joi.array()
+      .items(Joi.string())
+      .optional()
+      .allow(null)
+      .messages({
+        'array.base': 'Opções devem ser um array de strings.',
+        'string.base': 'Cada opção deve ser uma string.',
+      }),
+  }),
+};
+
+// Schemas de validação para Item
+
+export const itemSchemas = {
+  create: Joi.object({
+    name: Joi.string()
+      .min(3)
+      .max(100)
+      .required()
+      .messages({
+        'string.base': 'Nome deve ser uma string.',
+        'string.empty': 'Nome não pode ser vazio.',
+        'string.min': 'Nome deve ter pelo menos 3 caracteres.',
+        'string.max': 'Nome deve ter no máximo 100 caracteres.',
+        'any.required': 'Nome é obrigatório.',
+      }),
+    description: Joi.string()
+      .max(500)
+      .allow('', null)
+      .optional()
+      .messages({
+        'string.base': 'Descrição deve ser uma string.',
+        'string.max': 'Descrição deve ter no máximo 500 caracteres.',
+      }),
+    measurementUnit: Joi.string()
+      .valid(
+        'kg', 'g', 'mg', 'l', 'ml', 'un', 'm', 'cm', 'mm',
+        'm2', 'm3', 'pa', 'dz', 'pct', 'rol', 'cx', 'fl', 'ton'
+      )
+      .required()
+      .messages({
+        'any.only': 'Unidade de medida inválida.',
+        'any.required': 'Unidade de medida é obrigatória.',
+      }),
+    itemType: Joi.string()
+      .valid('Matérias-primas', 'Produtos em processo', 'Produto Acabado')
+      .required()
+      .messages({
+        'any.only': 'Tipo de item inválido.',
+        'any.required': 'Tipo de item é obrigatório.',
+      }),
+    weight: Joi.number()
+      .min(0)
+      .required()
+      .messages({
+        'number.base': 'Peso deve ser um número.',
+        'number.min': 'Peso não pode ser negativo.',
+        'any.required': 'Peso é obrigatório.',
+      }),
+    price: Joi.number()
+      .min(0)
+      .required()
+      .messages({
+        'number.base': 'Preço deve ser um número.',
+        'number.min': 'Preço não pode ser negativo.',
+        'any.required': 'Preço é obrigatório.',
+      }),
+    minStock: Joi.number()
+      .integer()
+      .min(0)
+      .required()
+      .messages({
+        'number.base': 'Estoque mínimo deve ser um número inteiro.',
+        'number.min': 'Estoque mínimo não pode ser negativo.',
+        'any.required': 'Estoque mínimo é obrigatório.',
+      }),
+    maxStock: Joi.number()
+      .integer()
+      .min(0)
+      .required()
+      .messages({
+        'number.base': 'Estoque máximo deve ser um número inteiro.',
+        'number.min': 'Estoque máximo não pode ser negativo.',
+        'any.required': 'Estoque máximo é obrigatório.',
+      }),
+    companyId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .required()
+      .messages({
+        'string.guid': 'ID da empresa deve ser um UUID válido.',
+        'any.required': 'ID da empresa é obrigatório.',
+      }),
+    branchId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .allow(null)
+      .messages({
+        'string.guid': 'ID da filial deve ser um UUID válido.',
+      }),
+  }),
+
+  update: Joi.object({
+    name: Joi.string()
+      .min(3)
+      .max(100)
+      .optional()
+      .messages({
+        'string.base': 'Nome deve ser uma string.',
+        'string.empty': 'Nome não pode ser vazio.',
+        'string.min': 'Nome deve ter pelo menos 3 caracteres.',
+        'string.max': 'Nome deve ter no máximo 100 caracteres.',
+      }),
+    description: Joi.string()
+      .max(500)
+      .optional()
+      .allow('', null)
+      .messages({
+        'string.base': 'Descrição deve ser uma string.',
+        'string.max': 'Descrição deve ter no máximo 500 caracteres.',
+      }),
+    measurementUnit: Joi.string()
+      .valid(
+        'kg', 'g', 'mg', 'l', 'ml', 'un', 'm', 'cm', 'mm',
+        'm2', 'm3', 'pa', 'dz', 'pct', 'rol', 'cx', 'fl', 'ton'
+      )
+      .optional()
+      .messages({
+        'any.only': 'Unidade de medida inválida.',
+      }),
+    itemType: Joi.string()
+      .valid('Matérias-primas', 'Produtos em processo', 'Produto Acabado')
+      .optional()
+      .messages({
+        'any.only': 'Tipo de item inválido.',
+      }),
+    weight: Joi.number()
+      .min(0)
+      .optional()
+      .messages({
+        'number.base': 'Peso deve ser um número.',
+        'number.min': 'Peso não pode ser negativo.',
+      }),
+    price: Joi.number()
+      .min(0)
+      .optional()
+      .messages({
+        'number.base': 'Preço deve ser um número.',
+        'number.min': 'Preço não pode ser negativo.',
+      }),
+    minStock: Joi.number()
+      .integer()
+      .min(0)
+      .optional()
+      .messages({
+        'number.base': 'Estoque mínimo deve ser um número inteiro.',
+        'number.min': 'Estoque mínimo não pode ser negativo.',
+      }),
+    maxStock: Joi.number()
+      .integer()
+      .min(0)
+      .optional()
+      .messages({
+        'number.base': 'Estoque máximo deve ser um número inteiro.',
+        'number.min': 'Estoque máximo não pode ser negativo.',
+      }),
+    companyId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .messages({
+        'string.guid': 'ID da empresa deve ser um UUID válido.',
+      }),
+    branchId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .allow(null)
+      .messages({
+        'string.guid': 'ID da filial deve ser um UUID válido.',
+      }),
+  }),
 };
 
 // Schemas de validação para User
@@ -354,4 +630,6 @@ export const signupSchema = Joi.object({
     }).required().messages({
         'any.required': 'Dados da empresa são obrigatórios'
     })
+
+
 });

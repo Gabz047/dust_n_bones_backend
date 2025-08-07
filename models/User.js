@@ -65,7 +65,7 @@ User.init({
     defaultValue: 'employee',
     validate: {
       isIn: {
-        args: [['owner', 'admin', 'manager', 'employee', 'viewer']],
+        args: [['owner', 'administrative', 'manager', 'expedition',]],
         msg: 'Role inválido',
       },
     },
@@ -123,9 +123,6 @@ User.init({
     {
       fields: ['role']
     },
-    {
-      fields: ['invited_by']
-    }
   ]
 });
 
@@ -159,7 +156,7 @@ User.prototype.getFullName = function () {
 
 // Método para verificar permissão
 User.prototype.hasPermission = function (permission) {
-  if (this.role === 'owner' || this.role === 'admin') {
+  if (this.role === 'owner' || this.role === 'administrative') {
     return true; // Owner e Admin têm todas as permissões
   }
   return this.permissions.includes(permission);
