@@ -10,10 +10,10 @@ const router = express.Router();
 router.post('/', authenticateToken, validateRequest(userBranchSchemas.create), UserBranchController.create);
 
 // Rotas administrativas com tenant obrigatório
-router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), UserBranchController.getAll);
+router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), UserBranchController.getAll);
 
-router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), validateRequest(userBranchSchemas.update), UserBranchController.update);
+router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(userBranchSchemas.update), UserBranchController.update);
 
-router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), UserBranchController.delete);
+router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), UserBranchController.delete);
 
 export default router;

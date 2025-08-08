@@ -14,9 +14,9 @@ router.post('/', authenticateToken, validateRequest(branchSchemas.create), Branc
 router.get('/branch', authenticateToken, BranchController.getBranch);
 
 // Rotas administrativas com tenant obrigatório
-router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), BranchController.getAll);
-router.get('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), BranchController.getById);
-router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), validateRequest(branchSchemas.update), BranchController.update);
-router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), BranchController.delete);
+router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), BranchController.getAll);
+router.get('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), BranchController.getById);
+router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(branchSchemas.update), BranchController.update);
+router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), BranchController.delete);
 
 export default router;

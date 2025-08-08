@@ -9,7 +9,7 @@ import { validateRequest, customerSchemas } from '../middleware/validation.js';
 const router = express.Router();
 
 // Rotas protegidas para usuários autenticados (sem tenant obrigatório)
-router.post('/', authenticateToken, validateRequest(customerSchemas.create), CustomerController.create);
+router.post('/', authenticateToken, validateRequest(customerSchemas.create.body), CustomerController.create);
 
 // Rotas administrativas com tenant obrigatório
 router.get(
@@ -17,7 +17,7 @@ router.get(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   CustomerController.getAll
 );
 
@@ -26,7 +26,7 @@ router.get(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   CustomerController.getById
 );
 
@@ -35,7 +35,7 @@ router.put(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   validateRequest(customerSchemas.update),
   CustomerController.update
 );
@@ -45,7 +45,7 @@ router.delete(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   CustomerController.delete
 );
 

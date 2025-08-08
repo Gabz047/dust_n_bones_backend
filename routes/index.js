@@ -45,6 +45,7 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+
 router.use('/items', itemRoutes);
 router.use('/item-features', itemFeatureRoutes);
 router.use('/customers', customerRoutes)

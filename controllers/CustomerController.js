@@ -1,4 +1,4 @@
-import { Customer, Company, Branch, User, sequelize } from '../models/index.js';
+import { Customer, Company, Branch, User, sequelize, CustomerGroup } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 class CustomerController {
@@ -14,7 +14,8 @@ class CustomerController {
                 city,
                 state,
                 zipCode,
-                country
+                country,
+                customerGroup
             } = req.body;
 
             // Verificar se documento já existe (se fornecido)
@@ -48,6 +49,15 @@ class CustomerController {
                 }
             }
 
+            // Verificar se Grupo de Cliente existe
+            const existingGroup = await CustomerGroup.findByPk(customerGroup);
+            if (customerGroup && !existingGroup) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Grupo de cliente não encontrado'
+                });
+            }
+
             const customer = await Customer.create({
                 id: uuidv4(),
                 name,
@@ -58,6 +68,7 @@ class CustomerController {
                 city,
                 state,
                 zipCode,
+                customerGroup: customerGroup || null,
                 country: country || 'Brasil'
             }, { transaction });
 

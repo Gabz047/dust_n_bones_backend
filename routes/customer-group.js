@@ -12,8 +12,8 @@ router.post(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
-  validateRequest(customerGroupSchemas.create),
+  authorizeRoles('admin', 'owner'),
+  validateRequest(customerGroupSchemas.create.body),
   CustomerGroupController.create
 );
 
@@ -23,7 +23,7 @@ router.get(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   CustomerGroupController.getAll
 );
 
@@ -33,7 +33,7 @@ router.put(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   validateRequest(customerGroupSchemas.updateCustomers),
   CustomerGroupController.updateGroupCustomers
 );
@@ -44,7 +44,7 @@ router.put(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   validateRequest(customerGroupSchemas.updateMainCustomer),
   CustomerGroupController.updateGroupMainCustomer
 );
@@ -55,7 +55,7 @@ router.delete(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   CustomerGroupController.delete
 );
 

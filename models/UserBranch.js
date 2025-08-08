@@ -31,7 +31,7 @@ UserBranch.init({
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
     },
-    dataJoined: {
+    dateJoined: {
         type: DataTypes.DATE,
         allowNull: true,
         defaultValue: DataTypes.NOW,

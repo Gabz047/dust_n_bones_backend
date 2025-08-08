@@ -14,9 +14,9 @@ router.post('/', authenticateToken, validateRequest(companySchemas.create), Comp
 router.get('/company', authenticateToken, CompanyController.getCompany);
 
 // Rotas administrativas com tenant obrigatório
-router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), CompanyController.getAll);
+router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), CompanyController.getAll);
 router.get('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), CompanyController.getById);
-router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), validateRequest(companySchemas.update), CompanyController.update);
+router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(companySchemas.update), CompanyController.update);
 router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), CompanyController.delete);
 
 export default router;

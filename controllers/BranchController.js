@@ -1,5 +1,6 @@
 import { Branch, Company, CompanySettings, CompanyCustomize, User, UserBranch, sequelize } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
 
 class BranchController {
     static async create(req, res) {
@@ -20,7 +21,8 @@ class BranchController {
                 website,
                 description,
                 maxUsers,
-                company_id,
+                companyId,
+                ownerId,
             } = req.body;
 
             const subdomainINLower = subdomain.toLowerCase()
@@ -66,12 +68,30 @@ class BranchController {
             }
 
             //Verificar se empresa está ativa
-            const activeCompany = await Company.findOne({ where: { id: company_id, active: true } })
+            const activeCompany = await Company.findOne({ where: { id: companyId, active: true } })
             if (!activeCompany) {
                 return res.status(400).json({
                     success: false,
                     message: 'Esta empresa não está ativa'
                 })
+            }
+
+            // Verificar se o usuário é o dono da empresa ou já está em uma filial
+            const userBranch = await UserBranch.findOne({
+                where: { userId: ownerId },
+                include: [
+                    {
+                        model: Branch,
+                        as: 'branch',
+                        where: { companyId }
+                    }
+                ]
+            });
+            if (userBranch) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Usuário já está associado a uma filial desta empresa'
+                });
             }
 
             const branchId = uuidv4();
@@ -92,21 +112,21 @@ class BranchController {
                 country: country || 'Brasil',
                 website,
                 description,
-                company_id,
+                companyId,
                 maxUsers: maxUsers || 5,
-                ownerId: req.user.id
+                ownerId
             }, { transaction });
 
             // Associar usuário à filial (tabela intermediária UserBranch)
             await UserBranch.create({
-                userId: req.user.id,
+                userId: ownerId,
                 branchId: branch.id
             }, { transaction })
 
             // Garantir que usuario tem a companyId da empresa:
             await User.update(
-                { company_id: company_id },
-                { where: { id: req.user.id } }, { transaction })
+                { companyId: companyId },
+                { where: { id: ownerId } }, { transaction })
 
             await transaction.commit()
 
@@ -371,6 +391,39 @@ class BranchController {
                 }
             }
 
+            // Verificar se ownerId está sendo atualizado
+            if (updates.ownerId && updates.ownerId !== branch.ownerId) {
+                // Verificar se o usuário já está associado a outra filial
+                const userBranch = await UserBranch.findOne({
+                    where: { userId: updates.ownerId },
+                    include: [
+                        {
+                            model: Branch,
+                            as: 'branch',
+                            where: { id: { [Op.ne]: id } } 
+                        }
+                    ]
+                });
+                if (userBranch) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Usuário já está associado a outra filial'
+                    });
+                }
+
+                const existingUserBranch = await UserBranch.findOne({ where: { branchId: id } });
+
+                if (existingUserBranch) {
+                    await existingUserBranch.destroy();
+                }
+
+                await UserBranch.create({
+                    userId: updates.ownerId,
+                    branchId: id
+                });
+
+            }
+
             await Branch.update(updates, { where: { id } });
 
             res.json({
@@ -418,6 +471,8 @@ class BranchController {
     }
 
     static async getBranch(req, res) {
+
+        // const {id} = req.params;
         try {
             const branchUser = await UserBranch.findOne({
                 where: { userId: req.user.id },

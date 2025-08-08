@@ -192,27 +192,29 @@ export const customerSchemas = {
   create: {
     body: Joi.object({
       name: Joi.string().required(),
-      document: Joi.string().min(11).max(18).allow(null, ''), // ← aqui
+      document: Joi.string().min(11).max(18).allow(null, ''),
       email: Joi.string().email().required(),
       phone: Joi.string().required(),
       address: Joi.string().required(),
       city: Joi.string().required(),
       state: Joi.string().required(),
       zipCode: Joi.string().required(),
-      country: Joi.string().default('Brasil')
+      country: Joi.string().default('Brasil'),
+      customerGroup: Joi.string().uuid().optional()  // <-- adiciona aqui
     })
   },
   update: {
     body: Joi.object({
       name: Joi.string(),
-      document: Joi.string().min(11).max(18).allow(null, ''), // ← aqui também
+      document: Joi.string().min(11).max(18).allow(null, ''),
       email: Joi.string().email(),
       phone: Joi.string(),
       address: Joi.string(),
       city: Joi.string(),
       state: Joi.string(),
       zipCode: Joi.string(),
-      country: Joi.string()
+      country: Joi.string(),
+      customerGroup: Joi.string().uuid().optional()  // <-- e aqui
     })
   }
 };
