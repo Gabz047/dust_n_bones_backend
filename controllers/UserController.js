@@ -1,5 +1,5 @@
 import e from 'cors';
-import { User, Company, Account } from '../models/index.js';
+import { User, Company, Account, UserBranch } from '../models/index.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -188,12 +188,15 @@ class UserController {
             );
 
             const { password: _, ...entityData } = authenticatedEntity.toJSON();
-            
+
+            const userInBranch = await UserBranch.findOne({where: { userId: authenticatedEntity.id}})
+
             res.json({
                 success: true,
                 message: 'Login realizado com sucesso',
                 data: {
-                    [entityType]: entityData, // user ou account
+                    [entityType]: entityData, // user ou account,
+                    ['userInBranch']: userInBranch ? true : false, // Verifica se o usuário está vinculado a uma filial ou diretamente à empresa
                     token,
                     entityType,
                     tenant: {
