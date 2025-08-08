@@ -1,4 +1,5 @@
 import { Company } from '../models/index.js';
+import { RedisCache } from '../config/redis.js'; // Seu wrapper do Redis
 
 export const extractTenant = async (req, res, next) => {
     try {
@@ -11,13 +12,25 @@ export const extractTenant = async (req, res, next) => {
             });
         }
 
-        // Buscar e validar o tenant
-        const tenant = await Company.findOne({
-            where: {
-                id: tenantId,
-                active: true
+        // Tentar pegar no cache primeiro
+        let tenant = await RedisCache.getTenantData(tenantId);
+
+        if (!tenant) {
+            // Se não tiver no cache, buscar no banco
+            tenant = await Company.findOne({
+                where: { id: tenantId, active: true },
+                raw: true, // Se quiser pegar plain object e economizar peso
+            });
+
+            console.log('🔍 Tenant buscado no banco:', tenant);
+
+            if (tenant) {
+                // Salvar no cache com um TTL (ex: 30 minutos)
+                await RedisCache.setTenantData(tenantId, tenant, 1800);
             }
-        }); 
+        } else {
+            console.log('🟢 Tenant recuperado do cache Redis');
+        }
 
         if (!tenant) {
             return res.status(404).json({
@@ -26,7 +39,6 @@ export const extractTenant = async (req, res, next) => {
             });
         }
 
-        // Adicionar tenant ao request
         req.tenant = tenant;
         next();
     } catch (error) {
