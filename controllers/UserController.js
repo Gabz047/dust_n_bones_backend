@@ -75,7 +75,7 @@ class UserController {
     
     static async login(req, res) {
         try {
-            const { email, username, password } = req.body;
+            const { email, username, password, rememberToken } = req.body;
             
             if (!email && !username) {
                 return res.status(400).json({
@@ -184,12 +184,20 @@ class UserController {
                     entityType: entityType // Adicionar tipo da entidade para diferenciar
                 },
                 process.env.JWT_SECRET,
-                { expiresIn: process.env.JWT_EXPIRES_IN }
+                { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
             );
 
             const { password: _, ...entityData } = authenticatedEntity.toJSON();
 
             const userInBranch = await UserBranch.findOne({where: { userId: authenticatedEntity.id}})
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                // secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                secure: false,
+                sameSite: 'lax', // Protege contra CSRF
+                maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+            })
 
             res.json({
                 success: true,
@@ -197,8 +205,8 @@ class UserController {
                 data: {
                     [entityType]: entityData, // user ou account,
                     ['userInBranch']: userInBranch ? true : false, // Verifica se o usuário está vinculado a uma filial ou diretamente à empresa
-                    token,
                     entityType,
+                    token,
                     tenant: {
                         id: req.tenant.id,
                         name: req.tenant.name,

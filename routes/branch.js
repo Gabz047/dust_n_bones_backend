@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/subdomain/:subdomain/company/:companyId', BranchController.getBySubdomain);
 
 // Rotas protegidas para usuários (sem tenant obrigatório)
-router.post('/', authenticateToken, validateRequest(branchSchemas.create), BranchController.create);
+router.post('/', authenticateToken, validateRequest(branchSchemas.create), authorizeRoles('admin', 'owner'), BranchController.create);
 router.get('/branch', authenticateToken, BranchController.getBranch);
 
 // Rotas administrativas com tenant obrigatório

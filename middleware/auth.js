@@ -4,8 +4,11 @@ import { redisClient } from '../config/redis.js';
 
 export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = req.cookies?.token || (req.headers['authorization'] && authHeader && authHeader.split(' ')[1]);
 
+  console.log('Token do cookie:', req.cookies.token);
+  console.log('Token do header Authorization:', authHeader);
+  
   if (!token) {
     return res.status(401).json({
       success: false,

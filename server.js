@@ -7,11 +7,14 @@ import { Connect } from './config/database.js';
 import { sequelize } from './models/index.js';
 import routes from './routes/index.js';
 import { redisClient } from './config/redis.js';
+import cookieParser from 'cookie-parser';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use(cookieParser());
 
 app.use(helmet());
 
@@ -21,7 +24,7 @@ const corsOptions = {
     const isEstoquellogiaSubdomain = /^https?:\/\/([a-zA-Z0-9-]+\.)?estoquelogia\.com(:\d+)?$/.test(origin);
     const additionalAllowedOrigins = process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
+      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://zecatutorial.localhost:3001'];
     if (isEstoquellogiaSubdomain || additionalAllowedOrigins.includes(origin)) {
       return callback(null, true);
     }
@@ -30,7 +33,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID'],
+  exposedHeaders: ['Authorization'],
 };
 
 app.use(cors(corsOptions));

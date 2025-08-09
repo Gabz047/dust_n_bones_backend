@@ -83,7 +83,7 @@ class BranchController {
                     {
                         model: Branch,
                         as: 'branch',
-                        where: { companyId }
+                        where: { companyId, active: true }
                     }
                 ]
             });
