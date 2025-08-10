@@ -1,5 +1,4 @@
 import Item from '../models/Item.js';
-import ItemFeature from '../models/ItemFeature.js';
 import Company from '../models/Company.js';
 import Branch from '../models/Branch.js';
 
@@ -7,9 +6,47 @@ export default {
   // Criar um item
   async create(req, res) {
     try {
-      const data = req.body;
+      const {
+        companyId,
+        branchId,
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight
+      } = req.body;
 
-      const item = await Item.create(data);
+      let item;
+
+      if (branchId) {
+      item = await Item.create({
+        branchId,
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight
+      });
+    } else if (companyId) {
+      item = await Item.create({
+        companyId,
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight
+      });
+    }
+
       return res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Erro ao criar item:', error);
@@ -22,9 +59,8 @@ export default {
     try {
       const items = await Item.findAll({
         include: [
-          { model: ItemFeature, as: 'features' },
           { model: Company, as: 'company' },
-          { model: Branch, as: 'branch' },
+          { model: Branch, as: 'branch' }
         ],
         order: [['createdAt', 'DESC']],
       });
@@ -42,9 +78,8 @@ export default {
       const { id } = req.params;
       const item = await Item.findByPk(id, {
         include: [
-          { model: ItemFeature, as: 'features' },
           { model: Company, as: 'company' },
-          { model: Branch, as: 'branch' },
+          { model: Branch, as: 'branch' }
         ],
       });
 
@@ -63,14 +98,33 @@ export default {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const data = req.body;
+      const {
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight
+      } = req.body;
 
       const item = await Item.findByPk(id);
       if (!item) {
         return res.status(404).json({ success: false, message: 'Item não encontrado.' });
       }
 
-      await item.update(data);
+      await item.update({
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight
+      });
+
       return res.json({ success: true, data: item });
     } catch (error) {
       console.error('Erro ao atualizar item:', error);

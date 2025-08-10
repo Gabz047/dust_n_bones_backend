@@ -11,7 +11,7 @@ const router = express.Router();
 router.post(
   '/',
   authenticateToken,
-  validateRequest(itemSchemas, 'create', 'body'),
+  validateRequest(itemSchemas.create),
   ItemController.create
 );
 
@@ -21,7 +21,7 @@ router.get(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   ItemController.getAll
 );
 
@@ -42,7 +42,7 @@ router.put(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'manager'),
-  validateRequest(itemSchemas, 'update', 'body'),
+  validateRequest(itemSchemas.update),
   ItemController.update
 );
 

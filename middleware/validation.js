@@ -528,7 +528,7 @@ export const userSchemas = {
         lastName: Joi.string().min(2).max(50).optional(),
         phone: Joi.string().min(10).max(15).optional(),
         avatar: Joi.string().uri().optional(),
-        role: Joi.string().valid('owner', 'admin', 'manager', 'employee', 'viewer').default('employee'),
+        role: Joi.string().valid('owner', 'administrative', 'manager', 'expedition').default('expedition'),
         permissions: Joi.array().items(Joi.string()).default([])
     }),
 

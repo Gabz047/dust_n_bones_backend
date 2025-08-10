@@ -16,7 +16,7 @@ router.post(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin', 'manager'),
+  authorizeRoles('admin', 'manager', 'owner'),
   validateRequest(itemFeatureSchemas.create),
   ItemFeatureController.create
 );
@@ -26,7 +26,7 @@ router.get(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin', 'manager'),
+  authorizeRoles('admin', 'manager', 'owner'),
   ItemFeatureController.getById
 );
 

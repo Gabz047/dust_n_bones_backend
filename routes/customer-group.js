@@ -34,7 +34,7 @@ router.put(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'owner'),
-  validateRequest(customerGroupSchemas.updateCustomers),
+  validateRequest(customerGroupSchemas.updateCustomers.body),
   CustomerGroupController.updateGroupCustomers
 );
 
@@ -45,7 +45,7 @@ router.put(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'owner'),
-  validateRequest(customerGroupSchemas.updateMainCustomer),
+  validateRequest(customerGroupSchemas.updateMainCustomer.body),
   CustomerGroupController.updateGroupMainCustomer
 );
 
