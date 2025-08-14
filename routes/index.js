@@ -11,8 +11,14 @@ import customerGroupRoutes from './customer-group.js'
 import userBranchRoutes from './userBranch.js'
 import SignupController from '../controllers/SignupController.js';
 import itemRoutes from './item.js';
-import itemFeatureRoutes from './item-feature.js';
+import FeatureRoutes from './feature.js';
 import { validateRequest, signupSchema } from '../middleware/validation.js';
+import packageRoutes from './package.js'
+import itemFeatureRoutes from './itemFeature.js';
+import featureOptionRoutes from './featureOption.js';
+import projectRoutes from './project.js'
+import orderRoutes from './order.js';
+import orderItemRoutes from './orderItem.js';
 
 const router = express.Router();
 
@@ -36,7 +42,13 @@ router.get('/', (req, res) => {
             customers: '/api/customers',
             customers_group: '/api/customers_group',
             items: '/api/items',
+            features: '/api/item-features',
+            packages: '/api/packages',
             item_features: '/api/item-features',
+            feature_options: '/api/feature-options',
+            projects: '/api/projects',
+            orders: '/api/orders',
+            order_items: '/api/order-items'
         }
     });
 });
@@ -46,8 +58,13 @@ router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
 
-router.use('/items', itemRoutes);
+router.use('/projects', projectRoutes);
+router.use('/orders', orderRoutes);
+router.use('/order-items', orderItemRoutes);
 router.use('/item-features', itemFeatureRoutes);
+router.use('/feature-options', featureOptionRoutes);
+router.use('/items', itemRoutes);
+router.use('/features', FeatureRoutes);
 router.use('/customers', customerRoutes)
 router.use('/customers_group', customerGroupRoutes)
 router.use('/userBranches', userBranchRoutes)
@@ -58,5 +75,6 @@ router.use('/company-settings', companySettingsRoutes);
 router.use('/company-customizations', companyCustomizationRoutes);
 router.use('/tenants', tenantRoutes);
 router.use('/users', userRoutes);
+router.use('/packages', packageRoutes)
 
 export default router;

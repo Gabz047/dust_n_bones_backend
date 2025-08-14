@@ -49,7 +49,7 @@ Customer.init({
         allowNull: true,
     },
     state: {
-        type: DataTypes.STRING(2),
+        type: DataTypes.STRING(255),
         allowNull: true,
     },
     zipCode: {
@@ -73,7 +73,7 @@ Customer.init({
             model: 'customers_group',
             key: 'id',
         },
-        onDelete: 'CASCADE',
+        onDelete: 'RESTRICT',
         onUpdate: 'CASCADE',
     }
 }, {

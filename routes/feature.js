@@ -1,14 +1,12 @@
 import express from 'express';
-import ItemFeatureController from '../controllers/ItemFeatureController.js';
+import FeatureController from '../controllers/FeatureController.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
-import { validateRequest, itemFeatureSchemas } from '../middleware/validation.js';
+import { validateRequest, FeatureSchemas } from '../middleware/validation.js';
 import { extractTenant, optionalTenant, validateTenantAccess } from '../middleware/tenant.js';
 
 const router = express.Router();
 
 // Rotas públicas ou que não precisam de tenant obrigatório
-// Por exemplo, listar todas as características de um item (não exige tenant)
-router.get('/item/:itemId', authenticateToken, ItemFeatureController.getAllByItem);
 
 // Rotas administrativas com tenant obrigatório
 router.post(
@@ -17,8 +15,8 @@ router.post(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'manager', 'owner'),
-  validateRequest(itemFeatureSchemas.create),
-  ItemFeatureController.create
+  validateRequest(FeatureSchemas.create),
+  FeatureController.create
 );
 
 router.get(
@@ -27,7 +25,7 @@ router.get(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'manager', 'owner'),
-  ItemFeatureController.getById
+  FeatureController.getById
 );
 
 router.put(
@@ -36,8 +34,8 @@ router.put(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'manager'),
-  validateRequest(itemFeatureSchemas.update),
-  ItemFeatureController.update
+  validateRequest(FeatureSchemas.update),
+  FeatureController.update
 );
 
 router.delete(
@@ -46,7 +44,7 @@ router.delete(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin'),
-  ItemFeatureController.delete
+  FeatureController.delete
 );
 
 export default router;

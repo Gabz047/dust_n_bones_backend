@@ -1,85 +1,129 @@
-import ItemFeature from '../models/ItemFeature.js';
+import { Item, Feature, ItemFeature } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
+
 export default {
-  // Criar característica do item
+  // Criar associação item-característica
   async create(req, res) {
     try {
-      const { itemId, name, options } = req.body;
+      const { itemId, featureId } = req.body;
 
-      // Verifica se já existe característica com mesmo nome para o mesmo item
-      const exists = await ItemFeature.findOne({ where: { itemId, name } });
-      if (exists) {
-        return res.status(400).json({ success: false, message: 'Característica já existe para este item.' });
-      }
+      const item = await Item.findByPk(itemId);
+      if (!item) return res.status(400).json({ success: false, message: 'Item não encontrado.' });
 
-      const feature = await ItemFeature.create({ id: uuidv4(), itemId, name, options });
-      return res.status(201).json({ success: true, data: feature });
+      const feature = await Feature.findByPk(featureId);
+      if (!feature) return res.status(400).json({ success: false, message: 'Característica não encontrada.' });
+
+      const existing = await ItemFeature.findOne({ where: { itemId, featureId } });
+      if (existing) return res.status(400).json({ success: false, message: 'Item já possui essa característica.' });
+
+      const itemFeature = await ItemFeature.create({ id: uuidv4(), itemId, featureId });
+
+      return res.status(201).json({ success: true, data: itemFeature });
     } catch (error) {
-      console.error('Erro ao criar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao criar característica.' });
+      console.error('Erro ao criar associação item-característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao criar associação item-característica.' });
     }
   },
 
-  // Listar todas características de um item
-  async getAllByItem(req, res) {
+  // Buscar todas as associações item-característica
+  async getAll(req, res) {
     try {
-      const { itemId } = req.params;
+      const associations = await ItemFeature.findAll({
+        include: [
+          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          { model: Feature, as: 'feature', attributes: ['id', 'name'] }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
 
-      const features = await ItemFeature.findAll({ where: { itemId } });
-      return res.json({ success: true, data: features });
+      return res.json({ success: true, data: associations });
     } catch (error) {
-      console.error('Erro ao listar características:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao listar características.' });
+      console.error('Erro ao buscar associações item-característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar associações item-característica.' });
     }
   },
 
-  // Buscar característica pelo ID
+  // Buscar associação pelo ID
   async getById(req, res) {
     try {
       const { id } = req.params;
+      const association = await ItemFeature.findByPk(id, {
+        include: [
+          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          { model: Feature, as: 'feature', attributes: ['id', 'name'] }
+        ]
+      });
 
-      const feature = await ItemFeature.findByPk(id);
-      if (!feature) return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
+      if (!association) return res.status(404).json({ success: false, message: 'Associação não encontrada.' });
 
-      return res.json({ success: true, data: feature });
+      return res.json({ success: true, data: association });
     } catch (error) {
-      console.error('Erro ao buscar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao buscar característica.' });
+      console.error('Erro ao buscar associação item-característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar associação item-característica.' });
     }
   },
 
-  // Atualizar característica
+  // Buscar todas as associações de um item específico
+  async getByItemId(req, res) {
+    try {
+      const { itemId } = req.params;
+
+      const item = await Item.findByPk(itemId);
+      if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
+
+      const associations = await ItemFeature.findAll({
+        where: { itemId },
+        include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }],
+        order: [['createdAt', 'DESC']]
+      });
+
+      return res.json({ success: true, data: associations });
+    } catch (error) {
+      console.error('Erro ao buscar associações por item:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar associações por item.' });
+    }
+  },
+
+  // Atualizar associação
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { name, options } = req.body;
+      const { featureId } = req.body;
 
-      const feature = await ItemFeature.findByPk(id);
-      if (!feature) return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
+      const association = await ItemFeature.findByPk(id);
+      if (!association) return res.status(404).json({ success: false, message: 'Associação não encontrada.' });
 
-      // Se quiser, pode validar se o name já existe para o mesmo item antes de atualizar aqui
+      if (featureId && featureId !== association.featureId) {
+        const featureExists = await Feature.findByPk(featureId);
+        if (!featureExists) return res.status(400).json({ success: false, message: 'Característica não encontrada.' });
 
-      await feature.update({ name, options });
-      return res.json({ success: true, data: feature });
+        const alreadyExists = await ItemFeature.findOne({ where: { itemId: association.itemId, featureId } });
+        if (alreadyExists) return res.status(400).json({ success: false, message: 'Item já possui essa característica.' });
+
+        association.featureId = featureId;
+      }
+
+      await association.save();
+      return res.json({ success: true, data: association });
     } catch (error) {
-      console.error('Erro ao atualizar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao atualizar característica.' });
+      console.error('Erro ao atualizar associação item-característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao atualizar associação item-característica.' });
     }
   },
 
-  // Deletar característica
+  // Deletar associação
   async delete(req, res) {
     try {
       const { id } = req.params;
 
-      const feature = await ItemFeature.findByPk(id);
-      if (!feature) return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
+      const association = await ItemFeature.findByPk(id);
+      if (!association) return res.status(404).json({ success: false, message: 'Associação não encontrada.' });
 
-      await feature.destroy();
-      return res.json({ success: true, message: 'Característica deletada com sucesso.' });
+      await association.destroy();
+      return res.json({ success: true, message: 'Associação deletada com sucesso.' });
     } catch (error) {
-      console.error('Erro ao deletar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao deletar característica.' });
+      console.error('Erro ao deletar associação item-característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao deletar associação item-característica.' });
     }
   }
 };

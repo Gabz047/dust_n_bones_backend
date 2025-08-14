@@ -290,15 +290,8 @@ export const companyCustomizeSchemas = {
 
 // Schemas de validação para Caracteristica do item
 
-export const itemFeatureSchemas = {
+export const FeatureSchemas = {
   create: Joi.object({
-    itemId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID do item deve ser um UUID válido.',
-        'any.required': 'ID do item é obrigatório.',
-      }),
     name: Joi.string()
       .min(2)
       .max(255)
@@ -510,6 +503,301 @@ export const itemSchemas = {
         'string.guid': 'ID da filial deve ser um UUID válido.',
       }),
   }),
+};
+
+// Schemas de validação para Package 
+
+const allowedTypes = [
+    "Caixa",
+    "Envelope",
+    "Envelope Almofadado",
+    "Pallet",
+    "Container",
+    "Tubo",
+    "Saco",
+    "Caixa Térmica",
+    "Sacola",
+    "Caixa para Presente",
+    "Caixa Acrílica",
+    "Envelope Decorativo",
+    "Embalagem Blister",
+    "Skin Pack",
+    "Cartucho",
+    "Fardo",
+    "Caixa Empilhável",
+    "Caixa Organizadora",
+    "Contentor",
+    "Bag",
+    "Tambor",
+    "Engradado",
+    "Container IBC",
+    "Garrafa",
+    "Lata",
+    "Pote",
+    "Caixa Longa Vida",
+    "Embalagem a Vácuo",
+    "Balde",
+    "Filme Stretch",
+    "Filme Shrink"
+];
+
+const allowedMaterials = [
+    "Papelão",
+    "Papel",
+    "Plástico",
+    "Plástico PET",
+    "Plástico PE",
+    "Plástico PP",
+    "Plástico PVC",
+    "Plástico BOPP",
+    "Vidro",
+    "Alumínio",
+    "Aço",
+    "Madeira",
+    "Bambu",
+    "Isopor",
+    "Tecido",
+    "TNT",
+    "Juta",
+    "Borracha",
+    "Fibra Natural",
+    "Fibra Sintética",
+    "Biodegradável",
+    "Compostável"
+];
+
+export const packageSchemas = {
+    create: Joi.object({
+        name: Joi.string().min(2).max(255).required().messages({
+            'string.base': 'Nome deve ser uma string.',
+            'string.empty': 'Nome não pode ser vazio.',
+            'string.min': 'Nome deve ter pelo menos 2 caracteres.',
+            'string.max': 'Nome deve ter no máximo 255 caracteres.',
+            'any.required': 'Nome é obrigatório.'
+        }),
+        type: Joi.string().valid(...allowedTypes).required().messages({
+            'any.only': 'Tipo de embalagem inválido.',
+            'any.required': 'Tipo de embalagem é obrigatório.'
+        }),
+        material: Joi.string().valid(...allowedMaterials).required().messages({
+            'any.only': 'Material inválido.',
+            'any.required': 'Material é obrigatório.'
+        }),
+        width: Joi.number().min(0).required().messages({
+            'number.base': 'Largura deve ser um número.',
+            'number.min': 'Largura não pode ser negativa.',
+            'any.required': 'Largura é obrigatória.'
+        }),
+        height: Joi.number().min(0).required().messages({
+            'number.base': 'Altura deve ser um número.',
+            'number.min': 'Altura não pode ser negativa.',
+            'any.required': 'Altura é obrigatória.'
+        }),
+        length: Joi.number().min(0).required().messages({
+            'number.base': 'Comprimento deve ser um número.',
+            'number.min': 'Comprimento não pode ser negativo.',
+            'any.required': 'Comprimento é obrigatório.'
+        }),
+        weight: Joi.number().min(0).required().messages({
+            'number.base': 'Peso deve ser um número.',
+            'number.min': 'Peso não pode ser negativo.',
+            'any.required': 'Peso é obrigatório.'
+        }),
+    }),
+
+    update: Joi.object({
+        name: Joi.string().min(2).max(255).optional().messages({
+            'string.base': 'Nome deve ser uma string.',
+            'string.empty': 'Nome não pode ser vazio.',
+            'string.min': 'Nome deve ter pelo menos 2 caracteres.',
+            'string.max': 'Nome deve ter no máximo 255 caracteres.',
+        }),
+        type: Joi.string().valid(...allowedTypes).optional().messages({
+            'any.only': 'Tipo de embalagem inválido.',
+        }),
+        material: Joi.string().valid(...allowedMaterials).optional().messages({
+            'any.only': 'Material inválido.',
+        }),
+        width: Joi.number().min(0).optional().messages({
+            'number.base': 'Largura deve ser um número.',
+            'number.min': 'Largura não pode ser negativa.',
+        }),
+        height: Joi.number().min(0).optional().messages({
+            'number.base': 'Altura deve ser um número.',
+            'number.min': 'Altura não pode ser negativa.',
+        }),
+        length: Joi.number().min(0).optional().messages({
+            'number.base': 'Comprimento deve ser um número.',
+            'number.min': 'Comprimento não pode ser negativo.',
+        }),
+        weight: Joi.number().min(0).optional().messages({
+            'number.base': 'Peso deve ser um número.',
+            'number.min': 'Peso não pode ser negativo.',
+        }),
+    }),
+};
+
+// Schema para FeatureOption
+export const featureOptionSchema = {
+  create: Joi.object({
+    featureId: Joi.string().uuid().required().messages({
+      'string.base': 'ID da característica deve ser uma string.',
+      'string.empty': 'ID da característica não pode ser vazio.',
+      'string.guid': 'ID da característica deve ser um UUID válido.',
+      'any.required': 'ID da característica é obrigatório.'
+    }),
+    name: Joi.string().min(1).max(255).required().messages({
+      'string.base': 'Nome deve ser uma string.',
+      'string.empty': 'Nome não pode ser vazio.',
+      'string.min': 'Nome deve ter pelo menos 1 caractere.',
+      'string.max': 'Nome deve ter no máximo 255 caracteres.',
+      'any.required': 'Nome é obrigatório.'
+    })
+  }),
+
+  update: Joi.object({
+    featureId: Joi.string().uuid().optional().messages({
+      'string.base': 'ID da característica deve ser uma string.',
+      'string.guid': 'ID da característica deve ser um UUID válido.'
+    }),
+    name: Joi.string().min(1).max(255).optional().messages({
+      'string.base': 'Nome deve ser uma string.',
+      'string.min': 'Nome deve ter pelo menos 1 caractere.',
+      'string.max': 'Nome deve ter no máximo 255 caracteres.'
+    })
+  })
+};
+
+// Schema para ItemFeature (relacionamento item-característica)
+export const itemFeatureSchema = {
+  create: Joi.object({
+    itemId: Joi.string().uuid().required().messages({
+      'string.base': 'ID do item deve ser uma string.',
+      'string.empty': 'ID do item não pode ser vazio.',
+      'string.guid': 'ID do item deve ser um UUID válido.',
+      'any.required': 'ID do item é obrigatório.'
+    }),
+    featureId: Joi.string().uuid().required().messages({
+      'string.base': 'ID da característica deve ser uma string.',
+      'string.empty': 'ID da característica não pode ser vazio.',
+      'string.guid': 'ID da característica deve ser um UUID válido.',
+      'any.required': 'ID da característica é obrigatório.'
+    })
+  }),
+
+  update: Joi.object({
+    itemId: Joi.string().uuid().optional().messages({
+      'string.base': 'ID do item deve ser uma string.',
+      'string.guid': 'ID do item deve ser um UUID válido.'
+    }),
+    featureId: Joi.string().uuid().optional().messages({
+      'string.base': 'ID da característica deve ser uma string.',
+      'string.guid': 'ID da característica deve ser um UUID válido.'
+    })
+  })
+};
+
+// Schemas de validação para Project
+
+export const projectSchema = {
+  create: Joi.object({
+    name: Joi.string().min(3).max(100).required().messages({
+      'string.base': 'O nome do projeto deve ser um texto.',
+      'string.empty': 'O nome do projeto não pode ser vazio.',
+      'string.min': 'O nome do projeto deve ter no mínimo {#limit} caracteres.',
+      'string.max': 'O nome do projeto deve ter no máximo {#limit} caracteres.',
+      'any.required': 'O nome do projeto é obrigatório.'
+    }),
+    companyId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID da empresa deve ser uma string.',
+      'string.guid': 'O ID da empresa deve ser um UUID válido.',
+      'any.required': 'O ID da empresa é obrigatório.'
+    }),
+    branchId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID da filial deve ser uma string.',
+      'string.guid': 'O ID da filial deve ser um UUID válido.',
+      'any.required': 'O ID da filial é obrigatório.'
+    })
+  }),
+
+  update: Joi.object({
+    name: Joi.string().min(3).max(100).optional().messages({
+      'string.base': 'O nome do projeto deve ser um texto.',
+      'string.min': 'O nome do projeto deve ter no mínimo {#limit} caracteres.',
+      'string.max': 'O nome do projeto deve ter no máximo {#limit} caracteres.'
+    }),
+    companyId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID da empresa deve ser uma string.',
+      'string.guid': 'O ID da empresa deve ser um UUID válido.'
+    }),
+    branchId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID da filial deve ser uma string.',
+      'string.guid': 'O ID da filial deve ser um UUID válido.'
+    })
+  })
+};
+
+// Schemas de validação para Order
+
+export const orderSchema = {
+  create: Joi.object({
+    projectId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID do projeto deve ser uma string.',
+      'string.guid': 'O ID do projeto deve ser um UUID válido.',
+      'any.required': 'O ID do projeto é obrigatório.'
+    }),
+    customerId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID do cliente deve ser uma string.',
+      'string.guid': 'O ID do cliente deve ser um UUID válido.',
+      'any.required': 'O ID do cliente é obrigatório.'
+    })
+  }),
+
+  update: Joi.object({
+    projectId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID do projeto deve ser uma string.',
+      'string.guid': 'O ID do projeto deve ser um UUID válido.'
+    }),
+    customerId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID do cliente deve ser uma string.',
+      'string.guid': 'O ID do cliente deve ser um UUID válido.'
+    })
+  })
+};
+
+// Schemas de validação para Order Item
+
+export const orderItemSchema = {
+  create: Joi.object({
+    orderId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID do pedido deve ser uma string.',
+      'string.guid': 'O ID do pedido deve ser um UUID válido.',
+      'any.required': 'O ID do pedido é obrigatório.'
+    }),
+    itemId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID do item deve ser uma string.',
+      'string.guid': 'O ID do item deve ser um UUID válido.',
+      'any.required': 'O ID do item é obrigatório.'
+    }),
+    quantity: Joi.number().integer().min(1).required().messages({
+      'number.base': 'A quantidade deve ser um número.',
+      'number.integer': 'A quantidade deve ser um número inteiro.',
+      'number.min': 'A quantidade mínima é {#limit}.',
+      'any.required': 'A quantidade é obrigatória.'
+    })
+  }),
+
+  update: Joi.object({
+    itemId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID do item deve ser uma string.',
+      'string.guid': 'O ID do item deve ser um UUID válido.'
+    }),
+    quantity: Joi.number().integer().min(1).optional().messages({
+      'number.base': 'A quantidade deve ser um número.',
+      'number.integer': 'A quantidade deve ser um número inteiro.',
+      'number.min': 'A quantidade mínima é {#limit}.'
+    })
+  })
 };
 
 // Schemas de validação para User

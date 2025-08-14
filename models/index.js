@@ -10,7 +10,13 @@ import UserBranch from './UserBranch.js';
 import Customer from './Customer.js';
 import CustomerGroup from './CustomerGroup.js';
 import Item from './Item.js';
-import ItemFeature from './ItemFeature.js';
+import Feature from './Features.js';
+import Package from './Package.js'
+import ItemFeature from './ItemFeature.js'
+import FeatureOption from './FeatureOption.js';
+import Order from './Order.js';
+import OrderItem from './OrderItem.js';
+import Project from './Project.js';
 
 // Definir associações
 Account.hasMany(AuthProvider, {
@@ -149,15 +155,30 @@ CustomerGroup.belongsTo(Customer, {
     as: 'mainCustomerInGroup'
 })
 
-// Associações Item e ItemFeature
-Item.hasMany(ItemFeature, {
+// Associações Item e Feature
+
+Item.belongsToMany(Feature, {
+    through: ItemFeature,
     foreignKey: 'itemId',
-    as: 'features'
+    otherKey: 'featureId',
+    as: 'assignedFeatures'
 }); 
+
+Feature.belongsToMany(Item, {
+    through: ItemFeature,
+    foreignKey: 'featureId',
+    otherKey: 'itemId',
+    as: 'assignedItems'
+});
 
 ItemFeature.belongsTo(Item, {
     foreignKey: 'itemId',
     as: 'item'
+});
+
+ItemFeature.belongsTo(Feature, {
+    foreignKey: 'featureId',
+    as: 'feature'
 });
 
 Item.belongsTo(Company, {
@@ -180,6 +201,98 @@ Branch.hasMany(Item, {
     as: 'items'
 });
 
+// Associações Características e opções
+
+Feature.hasMany(FeatureOption, {
+    foreignKey: 'featureId',
+    as: 'options'
+});
+
+FeatureOption.belongsTo(Feature, {
+    foreignKey: 'featureId',
+    as: 'feature'
+});
+
+// Asssociações Projeto, cliente, empresa e filial
+
+Project.belongsTo(Company, {
+    foreignKey: 'companyId',
+    as: 'company'
+});
+
+Project.belongsTo(Branch, {
+    foreignKey: 'branchId',
+    as: 'branch'
+});
+
+Company.hasMany(Project, {
+    foreignKey: 'companyId',
+    as: 'projects'
+});
+
+Branch.hasMany(Project, {
+    foreignKey: 'branchId',
+    as: 'projects'
+});
+
+Project.belongsTo(Customer, {
+    foreignKey: 'customerId',
+    as: 'customer'
+});
+
+Customer.hasMany(Project, {
+    foreignKey: 'customerId',
+    as: 'projects'
+});
+
+// Associações pedido e projeto, pedido e cliente
+
+Order.belongsTo(Project, {
+    foreignKey: 'projectId',
+    as: 'project'
+});
+
+Project.hasMany(Order, {
+    foreignKey: 'projectId',
+    as: 'orders'
+});
+
+Order.belongsTo(Customer, {
+    foreignKey: 'customerId',
+    as: 'customer'
+});
+
+Customer.hasMany(Order, {
+    foreignKey: 'customerId',
+    as: 'orders'
+});
+
+// Associações pedido e item do pedido
+
+Order.belongsToMany(Item, {
+    through: OrderItem,
+    foreignKey: 'orderId',
+    otherKey: 'itemId',
+    as: 'items'
+});
+
+Item.belongsToMany(Order, {
+    through: OrderItem,
+    foreignKey: 'itemId',
+    otherKey: 'orderId',
+    as: 'orders'
+});
+
+OrderItem.belongsTo(Order, {
+    foreignKey: 'orderId',
+    as: 'order'
+});
+
+OrderItem.belongsTo(Item, {
+    foreignKey: 'itemId',
+    as: 'item'
+});
+
 // Exportar modelos e sequelize
 export {
     sequelize,
@@ -193,6 +306,12 @@ export {
     UserBranch,
     Customer,
     CustomerGroup,
+    Package,
+    Item,
+    Feature,
+    Order,
+    OrderItem,
+    Project,
 };
 
 export default {
@@ -206,5 +325,11 @@ export default {
     Branch,
     UserBranch,
     Customer,
-    CustomerGroup
+    CustomerGroup,
+    Package,
+    Item,
+    Feature,
+    Order,
+    OrderItem,
+    Project,
 };
