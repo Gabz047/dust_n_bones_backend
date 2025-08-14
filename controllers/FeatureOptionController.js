@@ -1,5 +1,5 @@
 import FeatureOption from '../models/FeatureOption.js';
-import Feature from '../models/Feature.js';
+import Feature from '../models/Features.js';
 
 export default {
   // Criar opção de característica

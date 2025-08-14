@@ -8,7 +8,6 @@ class BranchController {
         try {
             const {
                 name,
-                subdomain,
                 logo,
                 cnpj,
                 email,
@@ -25,25 +24,6 @@ class BranchController {
                 ownerId,
             } = req.body;
 
-            const subdomainINLower = subdomain.toLowerCase()
-
-            // Verificar se subdomain já existe para uma empresa
-            const existingCompany = await Company.findOne({ where: { subdomain: subdomainINLower } });
-            if (existingCompany) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Subdomínio já está em uso por uma empresa'
-                });
-            }
-
-            // Verificar se subdomain já existe para uma filial
-            const existingBranch = await Branch.findOne({ where: { subdomain: subdomainINLower } });
-            if (existingBranch) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Subdomínio já está em uso por uma filial'
-                });
-            }
 
             // Verificar se CNPJ já existe (se fornecido) por uma empresa
             if (cnpj) {
@@ -100,7 +80,6 @@ class BranchController {
             const branch = await Branch.create({
                 id: branchId,
                 name,
-                subdomain: subdomain.toLowerCase(),
                 logo,
                 cnpj,
                 email,
@@ -114,7 +93,8 @@ class BranchController {
                 description,
                 companyId,
                 maxUsers: maxUsers || 5,
-                ownerId
+                ownerId,
+                subdomain: activeCompany.subdomain
             }, { transaction });
 
             // Associar usuário à filial (tabela intermediária UserBranch)
@@ -362,20 +342,6 @@ class BranchController {
                     success: false,
                     message: 'Filial não encontrada'
                 });
-            }
-
-            // Verificar se subdomain já existe (se está sendo atualizado)
-            if (updates.subdomain && updates.subdomain !== branch.subdomain) {
-                const existingBranch = await Branch.findOne({
-                    where: { subdomain: updates.subdomain.toLowerCase() }
-                });
-                if (existingBranch) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Subdomínio já está em uso'
-                    });
-                }
-                updates.subdomain = updates.subdomain.toLowerCase();
             }
 
             // Verificar se CNPJ já existe (se está sendo atualizado)

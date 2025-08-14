@@ -110,19 +110,13 @@ export const branchSchemas = {
       'string.max': 'Nome deve ter no máximo 255 caracteres',
       'any.required': 'Nome é obrigatório'
     }),
-    subdomain: Joi.string().min(3).max(50).pattern(/^[a-z0-9-]+$/).required().messages({
-      'string.min': 'Subdomínio deve ter pelo menos 3 caracteres',
-      'string.max': 'Subdomínio deve ter no máximo 50 caracteres',
-      'string.pattern.base': 'Subdomínio deve conter apenas letras minúsculas, números e hífens',
-      'any.required': 'Subdomínio é obrigatório'
-    }),
     logo: Joi.string().uri().allow(null).optional(),
     cnpj: Joi.string().min(14).max(18).allow(null).optional(),
     email: Joi.string().email().allow(null).optional(),
     phone: Joi.string().min(10).max(15).allow(null).optional(),
     address: Joi.string().allow(null).optional(),
     city: Joi.string().allow(null).optional(),
-    state: Joi.string().length(2).allow(null).optional(),
+    state: Joi.string().allow(null).optional(),
     zipCode: Joi.string().max(10).allow(null).optional(),
     country: Joi.string().default('Brasil'),
     website: Joi.string().uri().allow(null).optional(),
@@ -140,7 +134,6 @@ export const branchSchemas = {
 
   update: Joi.object({
     name: Joi.string().min(2).max(255).optional(),
-    subdomain: Joi.string().min(3).max(50).pattern(/^[a-z0-9-]+$/).optional(),
     logo: Joi.string().uri().allow(null).optional(),
     cnpj: Joi.string().min(14).max(18).allow(null).optional(),
     email: Joi.string().email().allow(null).optional(),

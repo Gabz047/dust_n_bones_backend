@@ -18,15 +18,6 @@ Branch.init({
             len: [2, 255],
         },
     },
-    subdomain: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-        validate: {
-            len: [3, 50],
-            is: /^[a-z0-9-]+$/i,
-        },
-    },
     logo: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -65,7 +56,7 @@ Branch.init({
         allowNull: true,
     },
     state: {
-        type: DataTypes.STRING(2),
+        type: DataTypes.STRING,
         allowNull: true,
     },
     zipCode: {
@@ -117,11 +108,7 @@ Branch.init({
     modelName: 'Branch',
     tableName: 'branches',
     timestamps: true,
-    indexes: [
-        {
-            unique: true,
-            fields: ['subdomain']
-        },
+    indexes: [  
         {
             unique: true,
             fields: ['cnpj']

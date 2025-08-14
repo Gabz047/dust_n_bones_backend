@@ -312,6 +312,8 @@ export {
     Order,
     OrderItem,
     Project,
+    ItemFeature,
+    FeatureOption
 };
 
 export default {
@@ -332,4 +334,6 @@ export default {
     Order,
     OrderItem,
     Project,
+    ItemFeature,
+    FeatureOption,
 };
