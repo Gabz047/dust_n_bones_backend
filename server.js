@@ -39,16 +39,16 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS),
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS),
-  message: {
-    success: false,
-    message: 'Muitas requisições. Tente novamente mais tarde.'
-  }
-});
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS),
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS),
+//   message: {
+//     success: false,
+//     message: 'Muitas requisições. Tente novamente mais tarde.'
+//   }
+// });
 
-app.use(limiter);
+// app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

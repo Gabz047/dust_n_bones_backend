@@ -28,12 +28,14 @@ router.get(
   FeatureController.getById
 );
 
+router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), FeatureController.getAll)
+
 router.put(
   '/:id',
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin', 'manager'),
+  authorizeRoles('admin', 'manager', 'owner'),
   validateRequest(FeatureSchemas.update),
   FeatureController.update
 );

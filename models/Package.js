@@ -24,7 +24,8 @@ Package.init({
         allowNull: false,
         validate: {
             isIn: {
-                args: ["Caixa",
+                args: [[
+                    "Caixa",
                     "Envelope",
                     "Envelope Almofadado",
                     "Pallet",
@@ -55,7 +56,7 @@ Package.init({
                     "Balde",
                     "Filme Stretch",
                     "Filme Shrink"
-                ]
+                ]]
             }
         }
     },
@@ -64,7 +65,7 @@ Package.init({
         allowNull: false,
         validate: {
             isIn: {
-                args: [
+                args: [[
                     "Papelão",
                     "Papel",
                     "Plástico",
@@ -87,7 +88,7 @@ Package.init({
                     "Fibra Sintética",
                     "Biodegradável",
                     "Compostável"
-                ]
+                ]]
             }
         }
     },

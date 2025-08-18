@@ -27,6 +27,28 @@ router.get(
   CustomerGroupController.getAll
 );
 
+// Busca um grupo por um cliente principal
+
+router.get(
+  '/main-customer/:id',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  CustomerGroupController.getByMainCustomerGroup
+);
+
+// Busca um grupo por id
+
+router.get(
+  '/:id',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  CustomerGroupController.getById
+);
+
 // Atualizar os clientes comuns de um grupo
 router.put(
   '/:id/customers',

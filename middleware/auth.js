@@ -134,7 +134,7 @@ export const authorizeRoles = (...roles) => {
       });
     }
 
-    console.log(`✅ Usuário ${req.user.id} autorizado com role "${req.user.role}"`);
+    // console.log(`✅ Usuário ${req.user.id} autorizado com role "${req.user.role}"`);
     next();
   };
 };
@@ -167,7 +167,7 @@ export const authorizePermissions = (...permissions) => {
       });
     }
 
-    console.log(`✅ Usuário ${req.user.id} autorizado com permissões: [${permissions}]`);
+    // console.log(`✅ Usuário ${req.user.id} autorizado com permissões: [${permissions}]`);
     next();
   };
 };

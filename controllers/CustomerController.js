@@ -130,30 +130,42 @@ class CustomerController {
     }
 
     static async getById(req, res) {
-        try {
-            const { id } = req.params;
-            const customer = await Customer.findByPk(id);
+    try {
+        const { id } = req.params;
+        const customer = await Customer.findByPk(id);
 
-            if (!customer) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Cliente não encontrado'
-                });
-            }
-
-            return res.json({
-                success: true,
-                data: customer
-            });
-        } catch (error) {
-            console.error('Erro ao buscar cliente:', error);
-            return res.status(500).json({
+        if (!customer) {
+            return res.status(404).json({
                 success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
+                message: 'Cliente não encontrado'
             });
         }
+
+        const customerGroup = await CustomerGroup.findByPk(customer.customerGroup);
+
+        let mainCustomerInGroup = null;
+        if (customerGroup) {
+            mainCustomerInGroup = await Customer.findByPk(customerGroup.mainCustomer);
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                customer: customer,
+                customerGroup: customerGroup,
+                mainCustomerInGroup: mainCustomerInGroup
+            },
+        });
+    } catch (error) {
+        console.error('Erro ao buscar cliente:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro interno do servidor',
+            error: error.message
+        });
     }
+}
+
 
     static async update(req, res) {
         try {

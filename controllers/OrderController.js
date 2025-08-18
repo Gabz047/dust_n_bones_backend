@@ -17,14 +17,31 @@ class OrderController {
         return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
       }
 
+      const customerAlreadyInOrder = await Order.findOne({ where: { customerId: customerId, projectId: projectId } })
+      if (customerAlreadyInOrder) {
+        return res.status(400).json({ success: false, message: 'Cliente já cadastrado em um pedido deste projeto' })
+      }
+
+      const lastOrder = await Order.findOne({
+        order: [['referralId', 'DESC']],
+        transaction
+      });
+
+      // Incrementar ou começar do 1
+    const referralId = lastOrder ? lastOrder.referralId + 1 : 1;
+    
       const orderId = uuidv4();
       const order = await Order.create({
         id: orderId,
+
         projectId,
         customerId,
         status: status || 'pendente',
-        totalQuantity: totalQuantity || 0
+        totalQuantity: totalQuantity || 0,
+        referralId,
       }, { transaction });
+
+      
 
       await transaction.commit();
       return res.status(201).json({ success: true, data: order });
@@ -107,7 +124,7 @@ class OrderController {
     }
   }
 
-    static async getOrderByProject(req, res) {
+  static async getOrderByProject(req, res) {
     try {
       const { id } = req.params;
       const project = await Project.findByPk(id);
@@ -127,7 +144,7 @@ class OrderController {
     }
   }
 
-    static async getOrderByCustomer(req, res) {
+  static async getOrderByCustomer(req, res) {
     try {
       const { id } = req.params;
       const customer = await Customer.findByPk(id);

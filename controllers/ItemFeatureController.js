@@ -66,15 +66,14 @@ export default {
   // Buscar todas as associações de um item específico
   async getByItemId(req, res) {
     try {
-      const { itemId } = req.params;
+      const { id } = req.params;
 
-      const item = await Item.findByPk(itemId);
+      const item = await Item.findByPk(id);
       if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
       const associations = await ItemFeature.findAll({
-        where: { itemId },
+        where: { itemId: id },
         include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }],
-        order: [['createdAt', 'DESC']]
       });
 
       return res.json({ success: true, data: associations });
@@ -87,6 +86,8 @@ export default {
   // Atualizar associação
   async update(req, res) {
     try {
+                  console.log('atualizando 🗑️')
+
       const { id } = req.params;
       const { featureId } = req.body;
 
@@ -118,6 +119,7 @@ export default {
 
       const association = await ItemFeature.findByPk(id);
       if (!association) return res.status(404).json({ success: false, message: 'Associação não encontrada.' });
+            console.log('deletando 🗑️')
 
       await association.destroy();
       return res.json({ success: true, message: 'Associação deletada com sucesso.' });

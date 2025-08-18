@@ -101,6 +101,31 @@ export const companySchemas = {
     })
 };
 
+// Schemas de validação para Item Feature Option
+
+export const itemFeatureOptionSchemas = {
+  create: Joi.object({
+    itemFeatureId: Joi.string().uuid().required().messages({
+      'any.required': 'ID do ItemFeature é obrigatório',
+      'string.guid': 'ID do ItemFeature deve ser um UUID válido'
+    }),
+    featureOptionId: Joi.string().uuid().required().messages({
+      'any.required': 'ID da FeatureOption é obrigatório',
+      'string.guid': 'ID da FeatureOption deve ser um UUID válido'
+    }),
+  }),
+
+  update: Joi.object({
+    itemFeatureId: Joi.string().uuid().optional().messages({
+      'string.guid': 'ID do ItemFeature deve ser um UUID válido'
+    }),
+    featureOptionId: Joi.string().uuid().optional().messages({
+      'string.guid': 'ID da FeatureOption deve ser um UUID válido'
+    }),
+    active: Joi.boolean().optional()
+  })
+};
+
 // Schemas de validação para Branch
 
 export const branchSchemas = {
@@ -140,7 +165,7 @@ export const branchSchemas = {
     phone: Joi.string().min(10).max(15).allow(null).optional(),
     address: Joi.string().allow(null).optional(),
     city: Joi.string().allow(null).optional(),
-    state: Joi.string().length(2).allow(null).optional(),
+    state: Joi.string().allow(null).optional(),
     zipCode: Joi.string().max(10).allow(null).optional(),
     country: Joi.string().optional(),
     website: Joi.string().uri().allow(null).optional(),
@@ -694,22 +719,28 @@ export const itemFeatureSchema = {
 
 export const projectSchema = {
   create: Joi.object({
-    name: Joi.string().min(3).max(100).required().messages({
+    name: Joi.string().min(3).max(255).required().messages({
       'string.base': 'O nome do projeto deve ser um texto.',
       'string.empty': 'O nome do projeto não pode ser vazio.',
       'string.min': 'O nome do projeto deve ter no mínimo {#limit} caracteres.',
       'string.max': 'O nome do projeto deve ter no máximo {#limit} caracteres.',
       'any.required': 'O nome do projeto é obrigatório.'
     }),
-    companyId: Joi.string().uuid().required().messages({
-      'string.base': 'O ID da empresa deve ser uma string.',
-      'string.guid': 'O ID da empresa deve ser um UUID válido.',
-      'any.required': 'O ID da empresa é obrigatório.'
+    customerId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID do cliente deve ser uma string.',
+      'string.guid': 'O ID do cliente deve ser um UUID válido.'
     }),
-    branchId: Joi.string().uuid().required().messages({
+    companyId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID da empresa deve ser uma string.',
+      'string.guid': 'O ID da empresa deve ser um UUID válido.'
+    }),
+    branchId: Joi.string().uuid().optional().messages({
       'string.base': 'O ID da filial deve ser uma string.',
-      'string.guid': 'O ID da filial deve ser um UUID válido.',
-      'any.required': 'O ID da filial é obrigatório.'
+      'string.guid': 'O ID da filial deve ser um UUID válido.'
+    }),
+    totalQuantity: Joi.number().min(0).optional().messages({
+      'number.base': 'A quantidade total deve ser um número.',
+      'number.min': 'A quantidade total não pode ser negativa.'
     })
   }),
 
@@ -719,6 +750,10 @@ export const projectSchema = {
       'string.min': 'O nome do projeto deve ter no mínimo {#limit} caracteres.',
       'string.max': 'O nome do projeto deve ter no máximo {#limit} caracteres.'
     }),
+    customerId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID do cliente deve ser uma string.',
+      'string.guid': 'O ID do cliente deve ser um UUID válido.'
+    }),
     companyId: Joi.string().uuid().optional().messages({
       'string.base': 'O ID da empresa deve ser uma string.',
       'string.guid': 'O ID da empresa deve ser um UUID válido.'
@@ -726,9 +761,14 @@ export const projectSchema = {
     branchId: Joi.string().uuid().optional().messages({
       'string.base': 'O ID da filial deve ser uma string.',
       'string.guid': 'O ID da filial deve ser um UUID válido.'
+    }),
+    totalQuantity: Joi.number().min(0).optional().messages({
+      'number.base': 'A quantidade total deve ser um número.',
+      'number.min': 'A quantidade total não pode ser negativa.'
     })
   })
 };
+
 
 // Schemas de validação para Order
 

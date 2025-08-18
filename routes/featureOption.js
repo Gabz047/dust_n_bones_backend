@@ -14,6 +14,8 @@ router.get('/', authenticateToken, extractTenant, validateTenantAccess, authoriz
 
 router.get('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), FeatureOptionController.getById);
 
+router.get('/feature/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), FeatureOptionController.getByFeatureId);
+
 router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(featureOptionSchema.update), FeatureOptionController.update);
 
 router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), FeatureOptionController.delete);

@@ -31,7 +31,7 @@ router.get(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin', 'manager', 'employee'),
+  authorizeRoles('admin', 'manager', 'employee', 'owner'),
   ItemController.getById
 );
 
@@ -41,7 +41,7 @@ router.put(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin', 'manager'),
+  authorizeRoles('admin', 'manager', 'owner'),
   validateRequest(itemSchemas.update),
   ItemController.update
 );
@@ -52,7 +52,7 @@ router.delete(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin'),
+  authorizeRoles('admin', 'owner'),
   ItemController.delete
 );
 

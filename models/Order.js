@@ -13,6 +13,11 @@ Order.init({
     primaryKey: true,
     allowNull: false
   },
+  referralId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    unique: true,
+  },
   projectId: { 
     type: DataTypes.UUID,
     allowNull: false,
@@ -42,5 +47,6 @@ Order.init({
 
 // Relações
 // Order.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
+
 
 export default Order;

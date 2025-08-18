@@ -36,6 +36,17 @@ export default {
     }
   },
 
+    async getAll(req, res) {
+      try {
+        const features = await Feature.findAll();
+  
+        return res.json({ success: true, data: features });
+      } catch (error) {
+        console.error('Erro ao buscar itens:', error);
+        return res.status(500).json({ success: false, message: 'Erro ao buscar itens.' });
+      }
+    },
+
   // Atualizar característica
   async update(req, res) {
     try {

@@ -17,6 +17,7 @@ import FeatureOption from './FeatureOption.js';
 import Order from './Order.js';
 import OrderItem from './OrderItem.js';
 import Project from './Project.js';
+import ItemFeatureOption from './ItemFeatureOption.js';
 
 // Definir associações
 Account.hasMany(AuthProvider, {
@@ -171,6 +172,11 @@ Feature.belongsToMany(Item, {
     as: 'assignedItems'
 });
 
+Feature.hasMany(ItemFeature, {
+    foreignKey: 'featureId',
+    as: 'itemFeatures'
+})
+
 ItemFeature.belongsTo(Item, {
     foreignKey: 'itemId',
     as: 'item'
@@ -213,6 +219,7 @@ FeatureOption.belongsTo(Feature, {
     as: 'feature'
 });
 
+
 // Asssociações Projeto, cliente, empresa e filial
 
 Project.belongsTo(Company, {
@@ -244,6 +251,14 @@ Customer.hasMany(Project, {
     foreignKey: 'customerId',
     as: 'projects'
 });
+
+// ItemFeature -> ItemFeatureOption
+ItemFeature.hasMany(ItemFeatureOption, { foreignKey: 'itemFeatureId', as: 'featureOptions' });
+ItemFeatureOption.belongsTo(ItemFeature, { foreignKey: 'itemFeatureId', as: 'itemFeature' });
+
+// FeatureOption -> ItemFeatureOption
+FeatureOption.hasMany(ItemFeatureOption, { foreignKey: 'featureOptionId', as: 'itemFeatureOptions' });
+ItemFeatureOption.belongsTo(FeatureOption, { foreignKey: 'featureOptionId', as: 'featureOption' });
 
 // Associações pedido e projeto, pedido e cliente
 
@@ -313,7 +328,8 @@ export {
     OrderItem,
     Project,
     ItemFeature,
-    FeatureOption
+    FeatureOption,
+    ItemFeatureOption,
 };
 
 export default {
@@ -336,4 +352,5 @@ export default {
     Project,
     ItemFeature,
     FeatureOption,
+    ItemFeatureOption,
 };

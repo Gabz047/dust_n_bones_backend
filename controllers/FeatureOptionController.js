@@ -60,16 +60,15 @@ export default {
   // Buscar todas as opções de uma feature específica
   async getByFeatureId(req, res) {
     try {
-      const { featureId } = req.params;
-
-      const feature = await Feature.findByPk(featureId);
+      const { id } = req.params;
+      console.log('id:', id);
+      const feature = await Feature.findByPk(id);
       if (!feature) {
         return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
       }
 
       const options = await FeatureOption.findAll({
-        where: { featureId },
-        order: [['createdAt', 'DESC']]
+        where: { featureId: id },
       });
 
       return res.json({ success: true, data: options });

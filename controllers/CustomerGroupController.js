@@ -104,6 +104,114 @@ export default {
     }
     },
 
+    async getById(req, res) {
+    try {
+        const { id } = req.params;
+
+        // 1️⃣ Busca o grupo pelo ID
+        const group = await CustomerGroup.findByPk(id, {
+            include: [
+                {
+                    model: Customer,
+                    as: 'mainCustomerInGroup',
+                    attributes: ['id', 'name', 'document', 'email', 'phone']
+                },
+                {
+                    model: Customer,
+                    as: 'customersInGroup',
+                    attributes: ['id', 'name', 'document', 'email', 'phone']
+                }
+            ]
+        });
+
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: 'Grupo não encontrado.'
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: group
+        });
+
+    } catch (err) {
+        console.error('Erro ao buscar grupo por ID:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro interno do servidor',
+            error: err.message
+        });
+    }
+},
+
+async getByMainCustomerGroup(req, res) {
+    try {
+        const { id } = req.params;
+
+        // 1️⃣ Verifica se o cliente existe
+        const customer = await Customer.findByPk(id);
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Cliente não encontrado'
+            });
+        }
+
+        // 2️⃣ Verifica se ele pertence a algum grupo
+        const group = await CustomerGroup.findOne({
+            where: { id: customer.customerGroup },
+            include: [
+                {
+                    model: Customer,
+                    as: 'mainCustomerInGroup',
+                    attributes: ['id', 'name', 'document', 'email']
+                }
+            ]
+        });
+
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: 'Cliente não pertence a nenhum grupo'
+            });
+        }
+
+        // 3️⃣ Verifica se ele é o cliente principal do grupo
+        const isMainCustomer = group.mainCustomerInGroup?.id === customer.id;
+        if (!isMainCustomer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Cliente não é o cliente principal do grupo'
+            });
+        }
+
+        // 4️⃣ Busca todos os clientes do mesmo grupo
+        const customersInGroup = await Customer.findAll({
+            where: { customerGroup: group.id },
+            attributes: ['id', 'name', 'document', 'email']
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                customer,
+                group,
+                customersInGroup
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao buscar cliente principal do grupo:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro interno do servidor',
+            error: error.message
+        });
+    }
+},
+
+
     // Atualizar os clientes normais do grupo
    async updateGroupCustomers(req, res) {
     try {

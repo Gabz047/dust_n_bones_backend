@@ -19,6 +19,7 @@ import featureOptionRoutes from './featureOption.js';
 import projectRoutes from './project.js'
 import orderRoutes from './order.js';
 import orderItemRoutes from './orderItem.js';
+import ItemFeatureOptionRoutes from './itemFeatureOption.js'
 
 const router = express.Router();
 
@@ -48,7 +49,8 @@ router.get('/', (req, res) => {
             feature_options: '/api/feature-options',
             projects: '/api/projects',
             orders: '/api/orders',
-            order_items: '/api/order-items'
+            order_items: '/api/order-items',
+            item_feature_options: '/api/item-feature-options'
         }
     });
 });
@@ -58,6 +60,7 @@ router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
 
+router.use('/item-feature-options', ItemFeatureOptionRoutes)
 router.use('/projects', projectRoutes);
 router.use('/orders', orderRoutes);
 router.use('/order-items', orderItemRoutes);

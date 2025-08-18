@@ -6,7 +6,7 @@ class ProjectController {
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      const { companyId, branchId, customerId, items, totalQuantity } = req.body;
+      const { companyId, branchId, customerId, totalQuantity, name } = req.body;
 
       // Validar empresa
       const company = await Company.findByPk(companyId);
@@ -36,6 +36,7 @@ class ProjectController {
 
       const project = await Project.create({
         id: projectId,
+        name,
         companyId,
         branchId: branchId || null,
         customerId: customerId || null,

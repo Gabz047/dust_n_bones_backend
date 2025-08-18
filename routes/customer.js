@@ -36,7 +36,7 @@ router.put(
   extractTenant,
   validateTenantAccess,
   authorizeRoles('admin', 'owner'),
-  validateRequest(customerSchemas.update),
+  validateRequest(customerSchemas.update.body),
   CustomerController.update
 );
 

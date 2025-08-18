@@ -14,6 +14,14 @@ Project.init({
     primaryKey: true,
     allowNull: false
   },
+  name: {
+    type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+            len: [2, 255],
+        },
+        unique: 'unique_name_per_project',
+  },
   customerId: { 
     type: DataTypes.UUID,
     allowNull: true,
