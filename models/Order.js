@@ -38,6 +38,11 @@ Order.init({
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'
   },
+  deliveryDate: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    defaultValue: DataTypes.NOW,
+  } ,
 }, {
   sequelize,
   modelName: 'Order',

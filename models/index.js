@@ -18,6 +18,8 @@ import Order from './Order.js';
 import OrderItem from './OrderItem.js';
 import Project from './Project.js';
 import ItemFeatureOption from './ItemFeatureOption.js';
+import Status from './Status.js';
+import ProjectItem from './ProjectItem.js'
 
 // Definir associações
 Account.hasMany(AuthProvider, {
@@ -308,6 +310,48 @@ OrderItem.belongsTo(Item, {
     as: 'item'
 });
 
+User.hasMany(Status, {
+  foreignKey: 'userId',
+  as: 'statuses'
+});
+
+Status.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user'
+});
+
+// Status ↔ Order
+Order.hasMany(Status, {
+  foreignKey: 'orderId',
+  as: 'statuses'
+});
+
+Status.belongsTo(Order, {
+  foreignKey: 'orderId',
+  as: 'order'
+});
+
+// Project ↔ Item (muitos para muitos através de ProjectItem)
+Project.belongsToMany(Item, {
+  through: ProjectItem,
+  foreignKey: 'projectId',
+  otherKey: 'itemId',
+  as: 'items'
+});
+
+Item.belongsToMany(Project, {
+  through: ProjectItem,
+  foreignKey: 'itemId',
+  otherKey: 'projectId',
+  as: 'projects'
+});
+
+// Para acessos diretos
+ProjectItem.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
+ProjectItem.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
+Project.hasMany(ProjectItem, { foreignKey: 'projectId', as: 'projectItems' });
+Item.hasMany(ProjectItem, { foreignKey: 'itemId', as: 'projectItems' });
+
 // Exportar modelos e sequelize
 export {
     sequelize,
@@ -330,6 +374,8 @@ export {
     ItemFeature,
     FeatureOption,
     ItemFeatureOption,
+    Status,
+    ProjectItem,
 };
 
 export default {
@@ -353,4 +399,6 @@ export default {
     ItemFeature,
     FeatureOption,
     ItemFeatureOption,
+    Status,
+    ProjectItem,
 };

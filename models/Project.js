@@ -52,6 +52,11 @@ Project.init({
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE'
   },
+  deliveryDate: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    defaultValue: DataTypes.NOW,
+  } ,
   totalQuantity: {
     type: DataTypes.INTEGER,
     allowNull: true,

@@ -237,6 +237,37 @@ export const customerSchemas = {
   }
 };
 
+// Schemas de validação para status
+
+export const statusSchemas = {
+  create: {
+    body: Joi.object({
+      userId: Joi.string().uuid().required(),
+      orderId: Joi.string().uuid().required(),
+      status: Joi.string().valid(
+        "Criado",
+        "Em produção",
+        "Em estoque",
+        "Entregue"
+      ).required()
+    })
+  },
+
+  update: {
+    body: Joi.object({
+      status: Joi.string().valid(
+        "Criado",
+        "Em produção",
+        "Em estoque",
+        "Entregue"
+      ).optional(),
+      userId: Joi.string().uuid().optional(),
+      orderId: Joi.string().uuid().optional()
+    })
+  }
+};
+
+
 // Schemas de validação para customerGroup
 
 export const customerGroupSchemas = {
@@ -768,6 +799,24 @@ export const projectSchema = {
     })
   })
 };
+
+// Schema de validação para project item
+
+export const projectItemSchemas = {
+  create: {
+    body: Joi.object({
+      projectId: Joi.string().uuid().required(),
+      itemId: Joi.string().uuid().required(),
+      quantity: Joi.number().integer().min(1).default(1)
+    })
+  },
+  update: {
+    body: Joi.object({
+      quantity: Joi.number().integer().min(1).optional()
+    })
+  }
+};
+
 
 
 // Schemas de validação para Order

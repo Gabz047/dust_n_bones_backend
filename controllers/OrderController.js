@@ -5,7 +5,7 @@ class OrderController {
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      const { projectId, customerId, status, totalQuantity } = req.body;
+      const { projectId, customerId, status, totalQuantity, deliveryDate } = req.body;
 
       const project = await Project.findByPk(projectId);
       if (!project) {
@@ -33,7 +33,7 @@ class OrderController {
       const orderId = uuidv4();
       const order = await Order.create({
         id: orderId,
-
+        deliveryDate,
         projectId,
         customerId,
         status: status || 'pendente',

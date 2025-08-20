@@ -59,8 +59,8 @@ export default {
     try {
       const items = await Item.findAll({
         include: [
-          { model: Company, as: 'company' },
-          { model: Branch, as: 'branch' }
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] }
         ],
         order: [['createdAt', 'DESC']],
       });
