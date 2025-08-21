@@ -9,6 +9,21 @@ const router = express.Router();
 // Rotas protegidas para usuários (sem tenant obrigatório)
 router.post('/', authenticateToken, validateRequest(orderItemSchema.create), authorizeRoles('admin', 'owner'), OrderItemController.create);
 
+router.post(
+  '/batch',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  OrderItemController.createBatch
+);
+
+
+router.put('/batch/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.updateBatch);
+
+
+router.delete('/batch/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.deleteBatch);
+
 // Rotas administrativas com tenant obrigatório
 router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.getAll);
 

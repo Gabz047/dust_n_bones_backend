@@ -133,7 +133,15 @@ class OrderController {
         return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
       }
 
-      res.json({ success: true, data: project });
+      const order = await Order.findAll({
+        where: {projectId: project.id},
+        include: [
+          {model: Project, as: 'project'},
+          {model: Customer, as: 'customer'}
+        ]
+      })
+
+      res.json({ success: true, data: order });
     } catch (error) {
       console.error('Erro ao buscar pedido:', error);
       res.status(500).json({

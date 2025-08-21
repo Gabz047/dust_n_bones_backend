@@ -310,6 +310,29 @@ OrderItem.belongsTo(Item, {
     as: 'item'
 });
 
+// Associações OrderItem com ItemFeature
+OrderItem.belongsTo(ItemFeature, {
+    foreignKey: 'itemFeatureId',
+    as: 'itemFeature'
+});
+    
+ItemFeature.hasMany(OrderItem, {
+    foreignKey: 'itemFeatureId',
+    as: 'orderItems'
+});
+
+// Associações OrderItem com FeatureOption
+OrderItem.belongsTo(FeatureOption, {
+    foreignKey: 'featureOptionId',
+    as: 'featureOption'
+});
+
+FeatureOption.hasMany(OrderItem, {
+    foreignKey: 'featureOptionId',
+    as: 'orderItems'
+});
+
+
 User.hasMany(Status, {
   foreignKey: 'userId',
   as: 'statuses'

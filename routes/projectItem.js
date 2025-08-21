@@ -12,7 +12,7 @@ router.get('/', authenticateToken, ProjectItemController.getAll);
 router.post(
   '/',
   authenticateToken,
-  validateRequest(projectItemSchemas.create),
+  validateRequest(projectItemSchemas.create.body),
   authorizeRoles('admin', 'owner'),
   ProjectItemController.create
 );
@@ -20,11 +20,13 @@ router.post(
 // Buscar por ID
 router.get('/:id', authenticateToken, ProjectItemController.getById);
 
+router.get('/project/:id', authenticateToken, ProjectItemController.getByProjectId);
+
 // Atualizar
 router.put(
   '/:id',
   authenticateToken,
-  validateRequest(projectItemSchemas.update),
+  validateRequest(projectItemSchemas.update.body),
   authorizeRoles('admin', 'owner'),
   ProjectItemController.update
 );

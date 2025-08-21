@@ -71,6 +71,29 @@ class ProjectItemController {
     }
   }
 
+    static async getByProjectId(req, res) {
+    try {
+      const { id } = req.params;
+      const projectItem = await ProjectItem.findAll({
+        where: {projectId: id},
+        include: [
+          { model: Project, as: 'project', attributes: ['id', 'name'] },
+          { model: Item, as: 'item' }
+        ]
+        
+      });
+
+      if (!projectItem) {
+        return res.status(404).json({ success: false, message: 'Relação não encontrada' });
+      }
+
+      res.json({ success: true, data: projectItem });
+    } catch (error) {
+      console.error('Erro ao buscar ProjectItem:', error);
+      res.status(500).json({ success: false, message: 'Erro interno', error: error.message });
+    }
+  }
+
   static async update(req, res) {
     try {
       const { id } = req.params;

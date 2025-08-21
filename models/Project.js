@@ -53,10 +53,10 @@ Project.init({
     onUpdate: 'CASCADE'
   },
   deliveryDate: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: DataTypes.NOW,
-  } ,
+  type: DataTypes.DATEONLY,
+  allowNull: false,
+  defaultValue: () => new Date().toISOString().split("T")[0],
+},
   totalQuantity: {
     type: DataTypes.INTEGER,
     allowNull: true,

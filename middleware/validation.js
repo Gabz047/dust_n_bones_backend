@@ -832,7 +832,8 @@ export const orderSchema = {
       'string.base': 'O ID do cliente deve ser uma string.',
       'string.guid': 'O ID do cliente deve ser um UUID válido.',
       'any.required': 'O ID do cliente é obrigatório.'
-    })
+    }),
+    deliveryDate: Joi.date().required().messages({'any.required': 'Data de entrega é obrigatório'})
   }),
 
   update: Joi.object({
@@ -843,7 +844,8 @@ export const orderSchema = {
     customerId: Joi.string().uuid().optional().messages({
       'string.base': 'O ID do cliente deve ser uma string.',
       'string.guid': 'O ID do cliente deve ser um UUID válido.'
-    })
+    }),
+    deliveryDate: Joi.date().required().messages({'any.required': 'Data de entrega é obrigatório'})
   })
 };
 
@@ -861,6 +863,15 @@ export const orderItemSchema = {
       'string.guid': 'O ID do item deve ser um UUID válido.',
       'any.required': 'O ID do item é obrigatório.'
     }),
+    itemFeatureId: Joi.string().uuid().optional().allow(null).messages({
+      'string.base': 'O ID da feature do item deve ser uma string.',
+      'string.guid': 'O ID da feature do item deve ser um UUID válido.'
+    }),
+    featureOptionId: Joi.string().uuid().required().messages({
+      'string.base': 'O ID da opção de feature deve ser uma string.',
+      'string.guid': 'O ID da opção de feature deve ser um UUID válido.',
+      'any.required': 'O ID da opção de feature é obrigatório.'
+    }),
     quantity: Joi.number().integer().min(1).required().messages({
       'number.base': 'A quantidade deve ser um número.',
       'number.integer': 'A quantidade deve ser um número inteiro.',
@@ -874,6 +885,14 @@ export const orderItemSchema = {
       'string.base': 'O ID do item deve ser uma string.',
       'string.guid': 'O ID do item deve ser um UUID válido.'
     }),
+    itemFeatureId: Joi.string().uuid().optional().allow(null).messages({
+      'string.base': 'O ID da feature do item deve ser uma string.',
+      'string.guid': 'O ID da feature do item deve ser um UUID válido.'
+    }),
+    featureOptionId: Joi.string().uuid().optional().messages({
+      'string.base': 'O ID da opção de feature deve ser uma string.',
+      'string.guid': 'O ID da opção de feature deve ser um UUID válido.'
+    }),
     quantity: Joi.number().integer().min(1).optional().messages({
       'number.base': 'A quantidade deve ser um número.',
       'number.integer': 'A quantidade deve ser um número inteiro.',
@@ -881,6 +900,7 @@ export const orderItemSchema = {
     })
   })
 };
+
 
 // Schemas de validação para User
 export const userSchemas = {
