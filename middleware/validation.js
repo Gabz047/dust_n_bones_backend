@@ -812,7 +812,9 @@ export const projectItemSchemas = {
   },
   update: {
     body: Joi.object({
-      quantity: Joi.number().integer().min(1).optional()
+      projectId: Joi.string().uuid().required(),
+      itemId: Joi.string().uuid().required(),
+      quantity: Joi.number().integer().min(1).default(1)
     })
   }
 };

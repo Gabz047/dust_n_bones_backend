@@ -235,6 +235,45 @@ static async deleteBatch(req, res) {
     }
   }
 
+  static async getByProject(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Busca todos os OrderItems cujo pedido pertence ao projeto
+    const orderItems = await OrderItem.findAll({
+      include: [
+        {
+          model: Order,
+          as: 'order',
+          where: { projectId: id },
+          attributes: ['id', 'projectId']
+        },
+        { model: Item, as: 'item', attributes: ['id', 'name'] },
+        { model: ItemFeature, as: 'itemFeature' },
+        { model: FeatureOption, as: 'featureOption' }
+      ]
+    });
+
+    // Soma as quantidades por itemId
+    const totals = {};
+    orderItems.forEach((oi) => {
+      const key = oi.itemId;
+      if (!totals[key]) totals[key] = 0;
+      totals[key] += oi.quantity;
+    });
+
+    return res.json({ success: true, data: totals, totalItems: orderItems.length });
+  } catch (error) {
+    console.error('Erro ao buscar itens por projeto:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+}
+
+
   static async getByOrder(req, res) {
     try {
       const { id } = req.params;

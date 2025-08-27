@@ -33,6 +33,8 @@ router.get('/item/:id', authenticateToken, extractTenant, validateTenantAccess, 
 
 router.get('/order/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.getByOrder);
 
+router.get('/project/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.getByProject);
+
 router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(orderItemSchema.update), OrderItemController.update);
 
 router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.delete);
