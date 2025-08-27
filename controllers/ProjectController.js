@@ -7,15 +7,18 @@ class ProjectController {
     const transaction = await sequelize.transaction();
     try {
       const { companyId, branchId, customerId, totalQuantity, name, deliveryDate } = req.body;
+      let branch = null;
 
       // Validar empresa
+      if (!branchId) {
       const company = await Company.findByPk(companyId);
       if (!company || !company.active) {
         return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' });
       }
+    }
 
       // Validar filial
-      let branch = null;
+      
       if (branchId) {
         branch = await Branch.findByPk(branchId);
         if (!branch || !branch.active) {

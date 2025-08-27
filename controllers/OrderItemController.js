@@ -14,7 +14,7 @@ class OrderItemController {
     try {
       const { orderId, itemId, itemFeatureId, featureOptionId, quantity } = req.body;
 
-      
+
       const order = await Order.findByPk(orderId);
       if (!order) {
         return res.status(400).json({ success: false, message: 'Pedido não encontrado' });
@@ -56,162 +56,162 @@ class OrderItemController {
   }
 
   static async createBatch(req, res) {
-  const transaction = await sequelize.transaction();
+    const transaction = await sequelize.transaction();
 
-  try {
-    const items = req.body;
+    try {
+      const items = req.body;
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nenhum item enviado para criação em lote'
-      });
-    }
-
-    // Validação de todos os itens antes de criar
-    for (const item of items) {
-      const { orderId, itemId, itemFeatureId, featureOptionId } = item;
-
-      const order = await Order.findByPk(orderId);
-      if (!order) throw new Error(`Pedido ${orderId} não encontrado`);
-
-      const product = await Item.findByPk(itemId);
-      if (!product) throw new Error(`Item ${itemId} não encontrado`);
-
-      if (itemFeatureId) {
-        const feature = await ItemFeature.findByPk(itemFeatureId);
-        if (!feature) throw new Error(`Característica ${itemFeatureId} não encontrada`);
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nenhum item enviado para criação em lote'
+        });
       }
 
-      const option = await FeatureOption.findByPk(featureOptionId);
-      if (!option) throw new Error(`Opção ${featureOptionId} não encontrada`);
-    }
+      // Validação de todos os itens antes de criar
+      for (const item of items) {
+        const { orderId, itemId, itemFeatureId, featureOptionId } = item;
 
-    // Monta lista já com UUIDs
-    const itemsWithIds = items.map((item) => ({
-      id: uuidv4(),
-      orderId: item.orderId,
-      itemId: item.itemId,
-      itemFeatureId: item.itemFeatureId || null,
-      featureOptionId: item.featureOptionId,
-      quantity: item.quantity || 1
-    }));
+        const order = await Order.findByPk(orderId);
+        if (!order) throw new Error(`Pedido ${orderId} não encontrado`);
 
-    // Cria tudo de uma vez
-    const createdItems = await OrderItem.bulkCreate(itemsWithIds, { transaction });
+        const product = await Item.findByPk(itemId);
+        if (!product) throw new Error(`Item ${itemId} não encontrado`);
 
-    await transaction.commit();
+        if (itemFeatureId) {
+          const feature = await ItemFeature.findByPk(itemFeatureId);
+          if (!feature) throw new Error(`Característica ${itemFeatureId} não encontrada`);
+        }
 
-    return res.status(201).json({
-      success: true,
-      message: `${createdItems.length} itens criados com sucesso`,
-      data: createdItems
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao criar itens do pedido em lote:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
-  }
-}
+        const option = await FeatureOption.findByPk(featureOptionId);
+        if (!option) throw new Error(`Opção ${featureOptionId} não encontrada`);
+      }
 
-static async updateBatch(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const updates = req.body;
+      // Monta lista já com UUIDs
+      const itemsWithIds = items.map((item) => ({
+        id: uuidv4(),
+        orderId: item.orderId,
+        itemId: item.itemId,
+        itemFeatureId: item.itemFeatureId || null,
+        featureOptionId: item.featureOptionId,
+        quantity: item.quantity || 1
+      }));
 
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return res.status(400).json({
+      // Cria tudo de uma vez
+      const createdItems = await OrderItem.bulkCreate(itemsWithIds, { transaction });
+
+      await transaction.commit();
+
+      return res.status(201).json({
+        success: true,
+        message: `${createdItems.length} itens criados com sucesso`,
+        data: createdItems
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao criar itens do pedido em lote:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Nenhum item enviado para atualização em lote'
+        message: 'Erro interno do servidor',
+        error: error.message
       });
     }
-
-    const updatedItems = [];
-
-    for (const item of updates) {
-      const { id, ...fields } = item;
-
-      // Verifica se o ID foi enviado
-      if (!id) throw new Error('ID do item é obrigatório para atualização');
-
-      // Busca o registro
-      const existing = await OrderItem.findByPk(id, { transaction });
-      if (!existing) throw new Error(`Item com ID ${id} não encontrado`);
-
-      // Atualiza os campos
-      await existing.update(fields, { transaction });
-      updatedItems.push(existing);
-    }
-
-    await transaction.commit();
-
-    return res.status(200).json({
-      success: true,
-      message: `${updatedItems.length} itens atualizados com sucesso`,
-      data: updatedItems
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao atualizar itens do pedido em lote:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
   }
-}
 
-static async deleteBatch(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const { ids } = req.body;
+  static async updateBatch(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const updates = req.body;
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nenhum item enviado para atualização em lote'
+        });
+      }
+
+      const updatedItems = [];
+
+      for (const item of updates) {
+        const { id, ...fields } = item;
+
+        // Verifica se o ID foi enviado
+        if (!id) throw new Error('ID do item é obrigatório para atualização');
+
+        // Busca o registro
+        const existing = await OrderItem.findByPk(id, { transaction });
+        if (!existing) throw new Error(`Item com ID ${id} não encontrado`);
+
+        // Atualiza os campos
+        await existing.update(fields, { transaction });
+        updatedItems.push(existing);
+      }
+
+      await transaction.commit();
+
+      return res.status(200).json({
+        success: true,
+        message: `${updatedItems.length} itens atualizados com sucesso`,
+        data: updatedItems
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao atualizar itens do pedido em lote:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Nenhum ID enviado para exclusão em lote',
+        message: 'Erro interno do servidor',
+        error: error.message
       });
     }
+  }
 
-    // Verifica se todos os IDs existem antes de deletar
-    const existingItems = await OrderItem.findAll({
-      where: { id: ids },
-      transaction,
-    });
+  static async deleteBatch(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const { ids } = req.body;
 
-    if (existingItems.length !== ids.length) {
-      return res.status(404).json({
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nenhum ID enviado para exclusão em lote',
+        });
+      }
+
+      // Verifica se todos os IDs existem antes de deletar
+      const existingItems = await OrderItem.findAll({
+        where: { id: ids },
+        transaction,
+      });
+
+      if (existingItems.length !== ids.length) {
+        return res.status(404).json({
+          success: false,
+          message: 'Um ou mais IDs não foram encontrados para exclusão',
+        });
+      }
+
+      // Deleta todos os registros
+      await OrderItem.destroy({
+        where: { id: ids },
+        transaction,
+      });
+
+      await transaction.commit();
+
+      return res.status(200).json({
+        success: true,
+        message: `${ids.length} itens deletados com sucesso`,
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao deletar itens do pedido em lote:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Um ou mais IDs não foram encontrados para exclusão',
+        message: 'Erro interno do servidor',
+        error: error.message,
       });
     }
-
-    // Deleta todos os registros
-    await OrderItem.destroy({
-      where: { id: ids },
-      transaction,
-    });
-
-    await transaction.commit();
-
-    return res.status(200).json({
-      success: true,
-      message: `${ids.length} itens deletados com sucesso`,
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao deletar itens do pedido em lote:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message,
-    });
   }
-}
 
 
 
@@ -236,42 +236,48 @@ static async deleteBatch(req, res) {
   }
 
   static async getByProject(req, res) {
-  try {
-    const { id } = req.params;
+    try {
+      const { id } = req.params;
 
-    // Busca todos os OrderItems cujo pedido pertence ao projeto
-    const orderItems = await OrderItem.findAll({
-      include: [
-        {
-          model: Order,
-          as: 'order',
-          where: { projectId: id },
-          attributes: ['id', 'projectId']
-        },
-        { model: Item, as: 'item', attributes: ['id', 'name'] },
-        { model: ItemFeature, as: 'itemFeature' },
-        { model: FeatureOption, as: 'featureOption' }
-      ]
-    });
+      // Busca todos os OrderItems cujo pedido pertence ao projeto
+      const orderItems = await OrderItem.findAll({
+        include: [
+          {
+            model: Order,
+            as: 'order',
+            where: { projectId: id },
+            attributes: ['id', 'projectId']
+          },
+          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          { model: ItemFeature, as: 'itemFeature' },
+          { model: FeatureOption, as: 'featureOption' }
+        ],
+        raw: true,
+        nest: true,
+      });
 
-    // Soma as quantidades por itemId
-    const totals = {};
-    orderItems.forEach((oi) => {
-      const key = oi.itemId;
-      if (!totals[key]) totals[key] = 0;
-      totals[key] += oi.quantity;
-    });
+      // Retorna o array de orderItems completos
+      console.log(orderItems)
+      const data = orderItems.map(oi => ({
+        id: oi.id,
+        itemId: oi.itemId,
+        itemName: oi.item?.name,
+        quantity: oi.quantity,
+        featureName: oi.featureOption?.name,
+        itemFeatureId: oi.itemFeature?.id
+      }));
 
-    return res.json({ success: true, data: totals, totalItems: orderItems.length });
-  } catch (error) {
-    console.error('Erro ao buscar itens por projeto:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('Erro ao buscar itens por projeto:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
   }
-}
+
 
 
   static async getByOrder(req, res) {
