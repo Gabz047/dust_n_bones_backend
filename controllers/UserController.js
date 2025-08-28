@@ -1,5 +1,5 @@
 import e from 'cors';
-import { User, Company, Account } from '../models/index.js';
+import { User, Company, Account, UserBranch } from '../models/index.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -53,7 +53,6 @@ class UserController {
                 role: role || 'employee',
                 permissions: permissions || [],
                 companyId: req.tenant.id,
-                invitedBy: req.user ? req.user.id : null
             });
 
             // Remover password da resposta
@@ -76,7 +75,7 @@ class UserController {
     
     static async login(req, res) {
         try {
-            const { email, username, password } = req.body;
+            const { email, username, password, rememberToken } = req.body;
             
             if (!email && !username) {
                 return res.status(400).json({
@@ -185,18 +184,29 @@ class UserController {
                     entityType: entityType // Adicionar tipo da entidade para diferenciar
                 },
                 process.env.JWT_SECRET,
-                { expiresIn: process.env.JWT_EXPIRES_IN }
+                { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
             );
 
             const { password: _, ...entityData } = authenticatedEntity.toJSON();
-            
+
+            const userInBranch = await UserBranch.findOne({where: { userId: authenticatedEntity.id}})
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                // secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                secure: false,
+                sameSite: 'lax', // Protege contra CSRF
+                maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+            })
+
             res.json({
                 success: true,
                 message: 'Login realizado com sucesso',
                 data: {
-                    [entityType]: entityData, // user ou account
-                    token,
+                    [entityType]: entityData, // user ou account,
+                    ['userInBranch']: userInBranch ? true : false, // Verifica se o usuário está vinculado a uma filial ou diretamente à empresa
                     entityType,
+                    token,
                     tenant: {
                         id: req.tenant.id,
                         name: req.tenant.name,
@@ -239,13 +249,6 @@ class UserController {
                 limit: parseInt(limit),
                 offset: parseInt(offset),
                 attributes: { exclude: ['password'] },
-                include: [
-                    {
-                        model: User,
-                        as: 'inviter',
-                        attributes: ['id', 'firstName', 'lastName', 'email']
-                    }
-                ],
                 order: [['createdAt', 'DESC']]
             });
 
@@ -294,11 +297,6 @@ class UserController {
                         as: 'company',
                         attributes: ['id', 'name', 'subdomain']
                     },
-                    {
-                        model: User,
-                        as: 'inviter',
-                        attributes: ['id', 'firstName', 'lastName', 'email']
-                    }
                 ]
             });
 

@@ -15,9 +15,9 @@ router.get('/profile', authenticateToken, optionalTenant, AccountController.prof
 router.put('/profile', authenticateToken, optionalTenant, validateRequest(accountSchemas.update), AccountController.update);
 
 // Rotas administrativas com tenant obrigatório
-router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), AccountController.getAll);
+router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), AccountController.getAll);
 router.get('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), AccountController.getById);
-router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), validateRequest(accountSchemas.update), AccountController.update);
+router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(accountSchemas.update), AccountController.update);
 router.delete('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin'), AccountController.delete);
 
 export default router;

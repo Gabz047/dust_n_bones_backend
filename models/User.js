@@ -65,7 +65,7 @@ User.init({
     defaultValue: 'employee',
     validate: {
       isIn: {
-        args: [['owner', 'admin', 'manager', 'employee', 'viewer']],
+        args: [['owner', 'administrative', 'manager', 'expedition',]],
         msg: 'Role inválido',
       },
     },
@@ -103,24 +103,6 @@ User.init({
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
-  invitedBy: {
-    type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'users',
-      key: 'id',
-    },
-    onDelete: 'SET NULL',
-    onUpdate: 'CASCADE',
-  },
-  invitedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  acceptedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
 }, {
   sequelize,
   modelName: 'User',
@@ -141,9 +123,6 @@ User.init({
     {
       fields: ['role']
     },
-    {
-      fields: ['invited_by']
-    }
   ]
 });
 
@@ -177,7 +156,7 @@ User.prototype.getFullName = function () {
 
 // Método para verificar permissão
 User.prototype.hasPermission = function (permission) {
-  if (this.role === 'owner' || this.role === 'admin') {
+  if (this.role === 'owner' || this.role === 'administrative') {
     return true; // Owner e Admin têm todas as permissões
   }
   return this.permissions.includes(permission);

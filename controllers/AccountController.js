@@ -72,6 +72,14 @@ class AccountController {
 
             const { password: _, ...accountData } = account.toJSON();
 
+            res.cookie('token', token, {
+                httpOnly: true,
+                // secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+                secure: false,
+                sameSite: 'lax', // Protege contra CSRF
+                maxAge: 24 * 60 * 60 * 1000
+            })
+
             res.json({
                 success: true,
                 message: 'Login realizado com sucesso',
