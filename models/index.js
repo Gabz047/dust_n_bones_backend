@@ -20,6 +20,8 @@ import Project from './Project.js';
 import ItemFeatureOption from './ItemFeatureOption.js';
 import Status from './Status.js';
 import ProjectItem from './ProjectItem.js'
+import ProductionOrder from './ProductionOrder.js';
+import ProductionOrderItem from './ProductionOrderItem.js';
 
 // Definir associações
 Account.hasMany(AuthProvider, {
@@ -262,7 +264,7 @@ ItemFeatureOption.belongsTo(ItemFeature, { foreignKey: 'itemFeatureId', as: 'ite
 FeatureOption.hasMany(ItemFeatureOption, { foreignKey: 'featureOptionId', as: 'itemFeatureOptions' });
 ItemFeatureOption.belongsTo(FeatureOption, { foreignKey: 'featureOptionId', as: 'featureOption' });
 
-// Associações pedido e projeto, pedido e cliente
+// Associações pedido e projeto, pedido e cliente, pedido e ordem de produção
 
 Order.belongsTo(Project, {
     foreignKey: 'projectId',
@@ -285,6 +287,7 @@ Customer.hasMany(Order, {
 });
 
 // Associações pedido e item do pedido
+
 
 Order.belongsToMany(Item, {
     through: OrderItem,
@@ -375,6 +378,63 @@ ProjectItem.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
 Project.hasMany(ProjectItem, { foreignKey: 'projectId', as: 'projectItems' });
 Item.hasMany(ProjectItem, { foreignKey: 'itemId', as: 'projectItems' });
 
+// Associações Itens da Ordem de Produção
+
+// Cada item pertence a uma Ordem de Produção
+ProductionOrderItem.belongsTo(ProductionOrder, {
+  as: 'productionOrder',
+  foreignKey: 'productionOrderId'
+});
+
+// Cada item aponta para o cadastro do item base
+ProductionOrderItem.belongsTo(Item, {
+  as: 'item',
+  foreignKey: 'itemId'
+});
+
+// Se houver uma característica específica
+ProductionOrderItem.belongsTo(ItemFeature, {
+  as: 'itemFeature',
+  foreignKey: 'itemFeatureId'
+});
+
+// Se houver uma opção da característica selecionada
+ProductionOrderItem.belongsTo(FeatureOption, {
+  as: 'featureOption',
+  foreignKey: 'featureOptionId'
+});
+
+
+// Associações de ordem de produção
+
+// ProductionOrder.js
+
+// Uma OP pertence a um Projeto
+ProductionOrder.belongsTo(Project, {
+  as: 'project',
+  foreignKey: 'projectId'
+});
+
+// Uma OP pode ter um fornecedor associado
+ProductionOrder.belongsTo(Customer, {
+  as: 'supplier',
+  foreignKey: 'supplierId'
+});
+
+
+// Uma OP tem um cliente principal associado
+ProductionOrder.belongsTo(Customer, {
+  as: 'mainCustomer',
+  foreignKey: 'mainCustomerId'
+});
+
+// Uma OP possui vários itens
+ProductionOrder.hasMany(ProductionOrderItem, {
+  as: 'items',
+  foreignKey: 'productionOrderId'
+});
+
+
 // Exportar modelos e sequelize
 export {
     sequelize,
@@ -399,6 +459,8 @@ export {
     ItemFeatureOption,
     Status,
     ProjectItem,
+    ProductionOrder,
+    ProductionOrderItem,
 };
 
 export default {
@@ -424,4 +486,6 @@ export default {
     ItemFeatureOption,
     Status,
     ProjectItem,
+    ProductionOrder,
+    ProductionOrderItem,
 };

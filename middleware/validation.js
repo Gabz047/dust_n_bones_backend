@@ -48,6 +48,75 @@ export const accountSchemas = {
     })
 };
 
+// Schemas para Production Order
+export const productionOrderSchemas = {
+  create: Joi.object({
+    projectId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID do projeto deve ser um UUID válido',
+      'any.required': 'Projeto é obrigatório'
+    }),
+    orderId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID do pedido deve ser um UUID válido',
+      'any.required': 'pedido é obrigatório'
+    }),
+    supplierId: Joi.string().uuid().optional().allow(null),
+    mainCustomerId: Joi.string().uuid().optional().allow(null),
+    type: Joi.string().valid('Normal', 'Reposição').default('Normal'),
+    plannedQuantity: Joi.number().integer().min(1).required().messages({
+      'number.base': 'Quantidade planejada deve ser um número',
+      'number.min': 'Quantidade planejada deve ser no mínimo 1',
+      'any.required': 'Quantidade planejada é obrigatória'
+    }),
+    issueDate: Joi.date().optional(),
+    closeDate: Joi.date().optional().allow(null)
+  }),
+
+  update: Joi.object({
+    projectId: Joi.string().uuid().optional(),
+    orderId: Joi.string().uuid().optional(),
+    supplierId: Joi.string().uuid().optional().allow(null),
+    mainCustomerId: Joi.string().uuid().optional().allow(null),
+    type: Joi.string().valid('Normal', 'Reposição').optional(),
+    plannedQuantity: Joi.number().integer().min(1).optional(),
+    issueDate: Joi.date().optional(),
+    closeDate: Joi.date().optional().allow(null)
+  })
+};
+
+// Schemas para Production Order Item
+export const productionOrderItemSchemas = {
+  create: Joi.object({
+    productionOrderId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID da O.P. deve ser um UUID válido',
+      'any.required': 'O.P. é obrigatória'
+    }),
+    itemId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID do item deve ser um UUID válido',
+      'any.required': 'Item é obrigatório'
+    }),
+    orderItemId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID do item do pedido deve ser um UUID válido',
+      'any.required': 'Item do pedido é obrigatório'
+    }),
+    itemFeatureId: Joi.string().uuid().optional().allow(null),
+    featureOptionId: Joi.string().uuid().optional().allow(null),
+    quantity: Joi.number().integer().min(1).required().messages({
+      'number.base': 'Quantidade deve ser um número',
+      'number.min': 'Quantidade deve ser no mínimo 1',
+      'any.required': 'Quantidade é obrigatória'
+    })
+  }),
+
+  update: Joi.object({
+    productionOrderId: Joi.string().uuid().optional(),
+    itemId: Joi.string().uuid().optional(),
+    itemFeatureId: Joi.string().uuid().optional().allow(null),
+    featureOptionId: Joi.string().uuid().optional().allow(null),
+    orderItemId: Joi.string().uuid().optional().allow(null),
+    quantity: Joi.number().integer().min(1).optional()
+  })
+};
+
 // Schemas de validação para Company
 export const companySchemas = {
     create: Joi.object({

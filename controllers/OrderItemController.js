@@ -4,7 +4,8 @@ import {
   Item,
   ItemFeature,
   FeatureOption,
-  sequelize
+  sequelize,
+  Project
 } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -299,6 +300,30 @@ class OrderItemController {
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+  
+static async getByProject(req, res) {
+  try {
+    const { id } = req.params;
+
+    const rows = await OrderItem.findAll({
+      include: [
+        {
+          model: Order,
+          as: 'order',
+          where: { projectId: id } // filtro aqui dentro
+        },
+        { model: Item, as: 'item' },
+        { model: ItemFeature, as: 'itemFeature' },
+        { model: FeatureOption, as: 'featureOption' }
+      ]
+    });
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('Erro ao buscar itens por pedido:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+}
 
   static async getByItem(req, res) {
     try {
