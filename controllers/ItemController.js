@@ -16,7 +16,8 @@ export default {
         minStock,
         maxStock,
         price,
-        weight
+        weight,
+        businessItemType,
       } = req.body;
 
       let item;
@@ -31,7 +32,8 @@ export default {
         minStock,
         maxStock,
         price,
-        weight
+        weight,
+        businessItemType,
       });
     } else if (companyId) {
       item = await Item.create({
@@ -43,7 +45,8 @@ export default {
         minStock,
         maxStock,
         price,
-        weight
+        weight,
+        businessItemType,
       });
     }
 
@@ -106,7 +109,8 @@ export default {
         minStock,
         maxStock,
         price,
-        weight
+        weight,
+        businessItemType,
       } = req.body;
 
       const item = await Item.findByPk(id);
@@ -122,7 +126,8 @@ export default {
         minStock,
         maxStock,
         price,
-        weight
+        weight,
+        businessItemType,
       });
 
       return res.json({ success: true, data: item });

@@ -1,4 +1,4 @@
-import { Order, Project, Customer, sequelize } from '../models/index.js';
+import { Order, Project, Customer, ProductionOrder, sequelize } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 class OrderController {
@@ -200,6 +200,12 @@ class OrderController {
       const order = await Order.findByPk(id);
       if (!order) {
         return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
+      }
+
+      const productionOrder = await ProductionOrder.findOne({where: { projectId: order.projectId }})
+      if (productionOrder) {
+        
+          return res.status(404).json({ success: false, message: 'Pedido não pode ser apagado, pois o projeto possui uma ordem de produção!' });
       }
 
       await order.destroy(); // Exclusão definitiva

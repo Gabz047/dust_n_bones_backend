@@ -24,6 +24,7 @@ import StatusRoutes from './status.js'
 import ProjectItemRoutes from './projectItem.js'
 import ProductionOrderRoutes from './productionOrder.js'
 import ProductionOrderItemRoutes from './ProductionOrderItem.js'
+import ProductionOrderStatusRoutes from './productionOrderStatus.js'
 
 const router = express.Router();
 
@@ -58,7 +59,8 @@ router.get('/', (req, res) => {
             status: '/api/status',
             project_item: 'api/project_items',
             production_order: '/api/production_order',
-            production_order_item: '/api/production_order_item'
+            production_order_item: '/api/production_order_item',
+            production_order_status: '/api/production_order_status'
         }
     });
 });
@@ -67,6 +69,7 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+router.use('/production-order-status', ProductionOrderStatusRoutes)
 router.use('/production-orders', ProductionOrderRoutes)
 router.use('/production-order-items', ProductionOrderItemRoutes)
 router.use('/project-items', ProjectItemRoutes)

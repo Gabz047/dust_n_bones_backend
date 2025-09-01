@@ -57,6 +57,20 @@ measurementUnit: {
     },
   },
 },
+businessItemType: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  validate: {
+    isIn: {
+      args: [
+        [
+          'Confecção',
+          'Outro'
+        ]
+      ],
+    },
+  },
+},
 itemType: {
   type: DataTypes.STRING,
   allowNull: false,

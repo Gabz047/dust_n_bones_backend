@@ -1,4 +1,4 @@
-import { ProjectItem, Project, Item, sequelize } from '../models/index.js';
+import { ProjectItem, Project, Item, sequelize , ProductionOrder } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 class ProjectItemController {
@@ -118,6 +118,12 @@ class ProjectItemController {
       const projectItem = await ProjectItem.findByPk(id);
       if (!projectItem) {
         return res.status(404).json({ success: false, message: 'Relação não encontrada' });
+      }
+
+       const productionOrder = await ProductionOrder.findOne({where: { projectId: projectItem.projectId }})
+      if (productionOrder) {
+        
+          return res.status(404).json({ success: false, message: 'Item do projeto não pode ser apagado, pois o projeto possui uma ordem de produção!' });
       }
 
       await projectItem.destroy();

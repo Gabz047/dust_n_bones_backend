@@ -55,10 +55,6 @@ export const productionOrderSchemas = {
       'string.guid': 'ID do projeto deve ser um UUID válido',
       'any.required': 'Projeto é obrigatório'
     }),
-    orderId: Joi.string().uuid().required().messages({
-      'string.guid': 'ID do pedido deve ser um UUID válido',
-      'any.required': 'pedido é obrigatório'
-    }),
     supplierId: Joi.string().uuid().optional().allow(null),
     mainCustomerId: Joi.string().uuid().optional().allow(null),
     type: Joi.string().valid('Normal', 'Reposição').default('Normal'),
@@ -73,7 +69,6 @@ export const productionOrderSchemas = {
 
   update: Joi.object({
     projectId: Joi.string().uuid().optional(),
-    orderId: Joi.string().uuid().optional(),
     supplierId: Joi.string().uuid().optional().allow(null),
     mainCustomerId: Joi.string().uuid().optional().allow(null),
     type: Joi.string().valid('Normal', 'Reposição').optional(),
@@ -94,10 +89,6 @@ export const productionOrderItemSchemas = {
       'string.guid': 'ID do item deve ser um UUID válido',
       'any.required': 'Item é obrigatório'
     }),
-    orderItemId: Joi.string().uuid().required().messages({
-      'string.guid': 'ID do item do pedido deve ser um UUID válido',
-      'any.required': 'Item do pedido é obrigatório'
-    }),
     itemFeatureId: Joi.string().uuid().optional().allow(null),
     featureOptionId: Joi.string().uuid().optional().allow(null),
     quantity: Joi.number().integer().min(1).required().messages({
@@ -112,7 +103,6 @@ export const productionOrderItemSchemas = {
     itemId: Joi.string().uuid().optional(),
     itemFeatureId: Joi.string().uuid().optional().allow(null),
     featureOptionId: Joi.string().uuid().optional().allow(null),
-    orderItemId: Joi.string().uuid().optional().allow(null),
     quantity: Joi.number().integer().min(1).optional()
   })
 };
@@ -683,6 +673,32 @@ const allowedMaterials = [
     "Biodegradável",
     "Compostável"
 ];
+
+export const productionOrderStatusSchemas = {
+    create: Joi.object({
+        status: Joi.string().valid('Aberto', 'Finalizada', 'Parcial').required().messages({
+            'any.only': 'Status inválido.',
+            'any.required': 'Status é obrigatório.'
+        }),
+        productionOrderId: Joi.string().uuid().required().messages({
+            'string.guid': 'ID da ordem de produção inválido.',
+            'any.required': 'ID da ordem de produção é obrigatório.'
+        }),
+        date: Joi.date().optional().messages({
+            'date.base': 'Data inválida.'
+        })
+    }),
+
+    update: Joi.object({
+        status: Joi.string().valid('Aberto', 'Finalizada', 'Parcial').optional().messages({
+            'any.only': 'Status inválido.'
+        }),
+        date: Joi.date().optional().messages({
+            'date.base': 'Data inválida.'
+        })
+    }),
+};
+
 
 export const packageSchemas = {
     create: Joi.object({

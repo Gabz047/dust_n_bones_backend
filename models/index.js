@@ -22,6 +22,7 @@ import Status from './Status.js';
 import ProjectItem from './ProjectItem.js'
 import ProductionOrder from './ProductionOrder.js';
 import ProductionOrderItem from './ProductionOrderItem.js';
+import ProductionOrderStatus from './ProductionOrderStatus.js';
 
 // Definir associações
 Account.hasMany(AuthProvider, {
@@ -415,6 +416,11 @@ ProductionOrder.belongsTo(Project, {
   foreignKey: 'projectId'
 });
 
+Project.hasOne(ProductionOrder, {
+    as: 'productionOrder',
+    foreignKey: 'projectId'
+})
+
 // Uma OP pode ter um fornecedor associado
 ProductionOrder.belongsTo(Customer, {
   as: 'supplier',
@@ -434,6 +440,17 @@ ProductionOrder.hasMany(ProductionOrderItem, {
   foreignKey: 'productionOrderId'
 });
 
+// Associações production Order e Status
+
+ProductionOrder.hasMany(ProductionOrderStatus, {
+    as: 'status',
+    foreignKey: 'productionOrderId'
+})
+
+ProductionOrderStatus.belongsTo(ProductionOrder, {
+    as: 'productionOrder',
+    foreignKey: 'productionOrderId'
+})
 
 // Exportar modelos e sequelize
 export {
