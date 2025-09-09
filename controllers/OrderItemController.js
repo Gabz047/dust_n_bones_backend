@@ -9,6 +9,7 @@ import {
   ProductionOrder
 } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
+import ProductionOrderStatus from '../models/ProductionOrderStatus.js';
 
 class OrderItemController {
 
@@ -118,48 +119,74 @@ class OrderItemController {
     }
   }
 
-  // Atualiza múltiplos itens
-  static async updateBatch(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const updates = req.body;
-      if (!Array.isArray(updates) || updates.length === 0) {
-        return res.status(400).json({ success: false, message: 'Nenhum item enviado para atualização em lote' });
-      }
+// Atualiza múltiplos itens
+static async updateBatch(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const updates = req.body;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'Nenhum item enviado para atualização em lote' });
+    }
 
-      const updatedItems = [];
+    const updatedItems = [];
 
-      for (const item of updates) {
-        const { id, ...fields } = item;
+    for (const item of updates) {
+      const { id, ...fields } = item;
 
-        if (!id) throw new Error('ID do item é obrigatório para atualização');
+      if (!id) throw new Error('ID do item é obrigatório para atualização');
 
-        const existing = await OrderItem.findByPk(id, { transaction });
-        if (!existing) throw new Error(`Item com ID ${id} não encontrado`);
+      const existing = await OrderItem.findByPk(id, { transaction });
+      if (!existing) throw new Error(`Item com ID ${id} não encontrado`);
 
-        // Verifica se o projeto do pedido tem ProductionOrder
-        const order = await Order.findByPk(existing.orderId, { include: [{ model: Project, as: 'project', include: [{ model: ProductionOrder, as: 'productionOrder' }] }] });
-        if (order?.project?.productionOrder) {
+      // Busca o pedido com o projeto e a ordem de produção
+      const order = await Order.findByPk(existing.orderId, {
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            include: [
+              {
+                model: ProductionOrder,
+                as: 'productionOrder',
+                include: [{ model: ProductionOrderStatus, as: 'status' }]
+              }
+            ]
+          }
+        ],
+        transaction
+      });
+
+      const productionOrder = order?.project?.productionOrder;
+      console.log(productionOrder)
+      if (productionOrder) {
+        // pega o último status pela data mais recente
+      const lastStatus = productionOrder.status?.sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      )[0];
+
+        if (lastStatus?.status === 'Finalizada') {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
-            message: 'Não é possível atualizar: o item pertence a um projeto com ordem de produção ativa.'
+            message: `Não é possível atualizar o item ${id}: a ordem de produção já está finalizada.`
           });
         }
-
-        await existing.update(fields, { transaction });
-        updatedItems.push(existing);
       }
 
-      await transaction.commit();
-      return res.status(200).json({ success: true, message: `${updatedItems.length} itens atualizados com sucesso`, data: updatedItems });
-
-    } catch (error) {
-      await transaction.rollback();
-      console.error('Erro ao atualizar itens do pedido em lote:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      await existing.update(fields, { transaction });
+      updatedItems.push(existing);
     }
+
+    await transaction.commit();
+    return res.status(200).json({ success: true, message: `${updatedItems.length} itens atualizados com sucesso`, data: updatedItems });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao atualizar itens do pedido em lote:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
 
   // Deleta múltiplos itens
   static async deleteBatch(req, res) {

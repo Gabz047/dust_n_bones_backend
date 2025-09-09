@@ -68,6 +68,10 @@ ProductionOrder.init({
     type: DataTypes.INTEGER,
     allowNull: false
   },
+  deliveredQuantity: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
   issueDate: {
     type: DataTypes.DATEONLY,
     allowNull: false,

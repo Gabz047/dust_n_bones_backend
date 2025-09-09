@@ -1,4 +1,16 @@
-import { Order, Project, Customer, ProductionOrder, sequelize } from '../models/index.js';
+import { 
+  Order, 
+  Project, 
+  Customer, 
+  ProductionOrder, 
+  OrderItem,
+  Item,
+  FeatureOption,
+  OrderItemAdditionalFeatureOption,
+  ItemFeature,
+  Feature,
+  sequelize 
+} from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 class OrderController {
@@ -99,58 +111,109 @@ class OrderController {
     }
   }
 
-  static async getById(req, res) {
-    try {
-      const { id } = req.params;
-      const order = await Order.findByPk(id, {
-        include: [
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' }
-        ]
-      });
+static async getById(req, res) {
+  try {
+    const { id } = req.params;
+    const order = await Order.findByPk(id, {
+      include: [
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        {
+          model: OrderItem,
+          as: 'orderItems',
+          include: [
+            { model: Item, as: 'item' },
+            { model: FeatureOption, as: 'featureOption' }
+          ]
+        },
+        {
+          model: OrderItemAdditionalFeatureOption,
+          as: 'additionalOptions',
+          include: [
+            {
+              model: ItemFeature,
+              as: 'itemFeature',
+              attributes: ['id', 'featureId'],
+              include: [
+                { model: Feature, as: 'feature', attributes: ['name'] } // agora inclui o nome
+              ]
+            },
+            { model: FeatureOption, as: 'featureOption' },
+            { model: Item, as: 'item' }
+          ]
+        }
+      ]
+    });
 
-      if (!order) {
-        return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
-      }
-
-      res.json({ success: true, data: order });
-    } catch (error) {
-      console.error('Erro ao buscar pedido:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
     }
+
+    res.json({ success: true, data: order });
+  } catch (error) {
+    console.error('Erro ao buscar pedido:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
   }
+}
 
-  static async getOrderByProject(req, res) {
-    try {
-      const { id } = req.params;
-      const project = await Project.findByPk(id);
+static async getOrderByProject(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await Project.findByPk(id);
 
-      if (!project) {
-        return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
-      }
-
-      const order = await Order.findAll({
-        where: {projectId: project.id},
-        include: [
-          {model: Project, as: 'project'},
-          {model: Customer, as: 'customer'}
-        ]
-      })
-
-      res.json({ success: true, data: order });
-    } catch (error) {
-      console.error('Erro ao buscar pedido:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      });
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
     }
+
+    const orders = await Order.findAll({
+      where: { projectId: project.id },
+      include: [
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        {
+          model: OrderItem,
+          as: 'orderItems',
+          include: [
+            { model: Item, as: 'item' },
+            { model: FeatureOption, as: 'featureOption' }
+          ]
+        },
+        {
+          model: OrderItemAdditionalFeatureOption,
+          as: 'additionalOptions',
+          include: [
+            {
+              model: ItemFeature,
+              as: 'itemFeature',
+              attributes: ['id', 'featureId'],
+              include: [
+                { model: Feature, as: 'feature', attributes: ['name'] } // inclui o nome da feature
+              ]
+            },
+            { model: FeatureOption, as: 'featureOption' },
+            { model: Item, as: 'item' }
+          ]
+        }
+      ]
+    });
+
+    res.json({ success: true, data: orders });
+  } catch (error) {
+    console.error('Erro ao buscar pedidos do projeto:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
   }
+}
+
+
+
 
   static async getOrderByCustomer(req, res) {
     try {

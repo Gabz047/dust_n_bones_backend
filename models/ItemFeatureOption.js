@@ -31,11 +31,6 @@ ItemFeatureOption.init({
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
-    balance: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    defaultValue: 0
-  },
   dateJoined: {
     type: DataTypes.DATE,
     allowNull: true,

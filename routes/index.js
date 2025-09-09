@@ -25,6 +25,10 @@ import ProjectItemRoutes from './projectItem.js'
 import ProductionOrderRoutes from './productionOrder.js'
 import ProductionOrderItemRoutes from './ProductionOrderItem.js'
 import ProductionOrderStatusRoutes from './productionOrderStatus.js'
+import OrderItemAdditionalFeatureOptionRoutes from './OrderItemAdditionalFeatureOption.js'
+import MovementRoutes from './Movement.js'
+import StockRoutes from './stock.js'
+import MovementItemRoutes from './MovementItem.js'
 
 const router = express.Router();
 
@@ -60,7 +64,11 @@ router.get('/', (req, res) => {
             project_item: 'api/project_items',
             production_order: '/api/production_order',
             production_order_item: '/api/production_order_item',
-            production_order_status: '/api/production_order_status'
+            production_order_status: '/api/production_order_status',
+            order_item_additional_feature_options: '/api/order-item-additional-feature-options' ,
+            movements: '/api/movements',
+            movementItens: '/api/movements-itens',
+            stock: '/api/stocks'
         }
     });
 });
@@ -69,6 +77,10 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+router.use('/stocks', StockRoutes)
+router.use('/movements', MovementRoutes)
+router.use('/movement-itens', MovementItemRoutes)
+router.use('/order-item-additional-feature-options', OrderItemAdditionalFeatureOptionRoutes)
 router.use('/production-order-status', ProductionOrderStatusRoutes)
 router.use('/production-orders', ProductionOrderRoutes)
 router.use('/production-order-items', ProductionOrderItemRoutes)
