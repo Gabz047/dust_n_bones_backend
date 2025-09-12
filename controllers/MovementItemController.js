@@ -28,9 +28,7 @@ class MovementItemController {
                         model: ItemFeature,
                         as: 'itemFeature',
                         attributes: ['id'],
-                        include: [
-                            { model: Feature, as: 'feature', attributes: ['id', 'name'] }
-                        ]
+                        include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }]
                     },
                     {
                         model: StockAdditionalItem,
@@ -100,100 +98,106 @@ class MovementItemController {
     }
 
     // Helper para criar MovementItem e atualizar estoque
-   static async _createMovementItem({ movementId, itemId, itemFeatureId, quantity, additionalFeatures, productionOrderId, featureOptionId }, transaction) {
+    static async _createMovementItem({ movementId, itemId, itemFeatureId, quantity, additionalFeatures, productionOrderId, featureOptionId }, transaction) {
 
-    // Busca item e opção para mensagens
-    const [item, featureOption] = await Promise.all([
-        Item.findByPk(itemId, { attributes: ['id', 'name'], transaction }),
-        FeatureOption.findByPk(featureOptionId, { attributes: ['id', 'name'], transaction })
-    ]);
+        // Busca item e opção para mensagens
+        const [item, featureOption] = await Promise.all([
+            Item.findByPk(itemId, { attributes: ['id', 'name'], transaction }),
+            FeatureOption.findByPk(featureOptionId, { attributes: ['id', 'name'], transaction })
+        ]);
 
-    const itemName = item?.name || `ID ${itemId}`;
-    const optionName = featureOption?.name || `ID ${featureOptionId}`;
+        const itemName = item?.name || `ID ${itemId}`;
+        const optionName = featureOption?.name || `ID ${featureOptionId}`;
 
-    // ===== VALIDAÇÃO DE QUANTIDADE =====
-    if (quantity < 0) {
-        // Verifica estoque atual
-        const stockItem = await StockItem.findOne({ where: { itemId, itemFeatureId, featureOptionId }, transaction });
-        const currentQty = stockItem?.quantity || 0;
+        // ===== VALIDAÇÃO DE QUANTIDADE =====
+        if (quantity < 0) {
+            const stockItem = await StockItem.findOne({ where: { itemId, itemFeatureId, featureOptionId }, transaction });
+            const currentQty = stockItem?.quantity || 0;
 
-        if (!stockItem) {
-            throw new Error(`Não é possível remover ${-quantity} unidades: ${itemName} (${optionName}) não existe no estoque.`);
+            if (!stockItem) {
+                throw new Error(`Não é possível remover ${-quantity} unidades: ${itemName} (${optionName}) não existe no estoque.`);
+            }
+
+            if (-quantity > currentQty) {
+                throw new Error(`Não é possível remover ${-quantity} unidades do item ${itemName} (${optionName}). Estoque atual: ${currentQty}.`);
+            }
         }
 
-        if (-quantity > currentQty) {
-            throw new Error(`Não é possível remover ${-quantity} unidades do item ${itemName} (${optionName}). Estoque atual: ${currentQty}.`);
-        }
-    }
-
-    // ===== CRIA O MovementItem =====
-    const movementItem = await MovementItem.create({
-        id: uuidv4(),
-        movementId,
-        itemId,
-        itemFeatureId,
-        featureOptionId,
-        quantity,
-        additionalFeatures: additionalFeatures || []
-    }, { transaction });
-
-    // ===== ATUALIZA ESTOQUE =====
-    let stock = await Stock.findOne({ where: { itemId }, transaction });
-    if (!stock) stock = await Stock.create({ id: uuidv4(), itemId, quantity: 0 }, { transaction });
-
-    let stockItem = await StockItem.findOne({ where: { itemId, itemFeatureId, featureOptionId }, transaction });
-    if (stockItem) {
-        await stockItem.update({ quantity: stockItem.quantity + quantity }, { transaction });
-    } else {
-        stockItem = await StockItem.create({
+        // ===== CRIA O MovementItem =====
+        const movementItem = await MovementItem.create({
             id: uuidv4(),
-            stockId: stock.id,
+            movementId,
             itemId,
             itemFeatureId,
             featureOptionId,
-            quantity
+            quantity,
+            additionalFeatures: additionalFeatures || []
         }, { transaction });
-    }
 
-    // StockAdditionalItem
-    if (Array.isArray(additionalFeatures)) {
-        for (const af of additionalFeatures) {
-            const { itemFeatureId: afFeatureId, featureOptionId: afOptionId } = af;
-            if (!afFeatureId || !afOptionId) continue;
+        // ===== ATUALIZA ESTOQUE =====
+        let stock = await Stock.findOne({ where: { itemId }, transaction });
+        if (!stock) stock = await Stock.create({ id: uuidv4(), itemId, quantity: 0 }, { transaction });
 
-            const exists = await StockAdditionalItem.findOne({
-                where: { stockId: stock.id, itemFeatureId: afFeatureId, featureOptionId: afOptionId },
-                transaction
-            });
+        // Procura stockItem igual, incluindo adicionais
+        let stockItem = await StockItem.findOne({
+            where: { itemId, itemFeatureId, featureOptionId },
+            include: [{ model: StockAdditionalItem, as: 'additionalItems' }],
+            transaction
+        });
 
-            if (!exists) {
-                await StockAdditionalItem.create({
-                    id: uuidv4(),
-                    stockId: stock.id,
-                    stockItemId: stockItem.id,
-                    movementItemId: movementItem.id,
-                    itemFeatureId: afFeatureId,
-                    featureOptionId: afOptionId
-                }, { transaction });
+        let isExactMatch = true;
+        if (stockItem && Array.isArray(additionalFeatures)) {
+            const existingAF = stockItem.additionalItems.map(a => `${a.itemFeatureId}:${a.featureOptionId}`).sort();
+            const incomingAF = additionalFeatures.map(a => `${a.itemFeatureId}:${a.featureOptionId}`).sort();
+            if (JSON.stringify(existingAF) !== JSON.stringify(incomingAF)) {
+                isExactMatch = false;
             }
         }
-    }
 
-    // Atualiza quantidade total do Stock
-    const totalQuantity = await StockItem.sum('quantity', { where: { itemId }, transaction });
-    await stock.update({ quantity: totalQuantity }, { transaction });
+        if (stockItem && isExactMatch) {
+            // Atualiza quantidade se for 100% igual
+            await stockItem.update({ quantity: stockItem.quantity + quantity }, { transaction });
+        } else {
+            // Cria novo stockItem se diferente em qualquer detalhe
+            stockItem = await StockItem.create({
+                id: uuidv4(),
+                stockId: stock.id,
+                itemId,
+                itemFeatureId,
+                featureOptionId,
+                quantity
+            }, { transaction });
 
-    // Atualiza OP se houver
-    if (productionOrderId) {
-        const productionOrder = await ProductionOrder.findByPk(productionOrderId, { transaction });
-        if (productionOrder) {
-            await productionOrder.update({ deliveredQuantity: (productionOrder.deliveredQuantity || 0) + quantity }, { transaction });
+            // Cria adicionais
+            if (Array.isArray(additionalFeatures)) {
+                for (const af of additionalFeatures) {
+                    if (!af.itemFeatureId || !af.featureOptionId) continue;
+                    await StockAdditionalItem.create({
+                        id: uuidv4(),
+                        stockId: stock.id,
+                        stockItemId: stockItem.id,
+                        movementItemId: movementItem.id,
+                        itemFeatureId: af.itemFeatureId,
+                        featureOptionId: af.featureOptionId
+                    }, { transaction });
+                }
+            }
         }
+
+        // Atualiza quantidade total do Stock
+        const totalQuantity = await StockItem.sum('quantity', { where: { itemId }, transaction });
+        await stock.update({ quantity: totalQuantity }, { transaction });
+
+        // Atualiza OP se houver
+        if (productionOrderId) {
+            const productionOrder = await ProductionOrder.findByPk(productionOrderId, { transaction });
+            if (productionOrder) {
+                await productionOrder.update({ deliveredQuantity: (productionOrder.deliveredQuantity || 0) + quantity }, { transaction });
+            }
+        }
+
+        return movementItem;
     }
-
-    return movementItem;
-}
-
 
     // Listar MovementItems
     static async getAll(req, res) {

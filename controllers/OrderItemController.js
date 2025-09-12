@@ -6,7 +6,7 @@ import {
   FeatureOption,
   sequelize,
   Project,
-  ProductionOrder
+  ProductionOrder,
 } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import ProductionOrderStatus from '../models/ProductionOrderStatus.js';
@@ -14,43 +14,51 @@ import ProductionOrderStatus from '../models/ProductionOrderStatus.js';
 class OrderItemController {
 
   // Cria um único item de pedido
-  static async create(req, res) {
+ // dentro do OrderItemController
+static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { orderId, itemId, itemFeatureId, featureOptionId, quantity } = req.body;
 
+      // validações básicas
       const order = await Order.findByPk(orderId);
-      if (!order) {
-        return res.status(400).json({ success: false, message: 'Pedido não encontrado' });
-      }
+      if (!order) return res.status(400).json({ success: false, message: 'Pedido não encontrado' });
 
       const item = await Item.findByPk(itemId);
-      if (!item) {
-        return res.status(400).json({ success: false, message: 'Item não encontrado' });
-      }
+      if (!item) return res.status(400).json({ success: false, message: 'Item não encontrado' });
 
       if (itemFeatureId) {
         const feature = await ItemFeature.findByPk(itemFeatureId);
-        if (!feature) {
-          return res.status(400).json({ success: false, message: 'Característica do item não encontrada' });
-        }
+        if (!feature) return res.status(400).json({ success: false, message: 'Característica do item não encontrada' });
       }
 
       if (featureOptionId) {
         const option = await FeatureOption.findByPk(featureOptionId);
-        if (!option) {
-          return res.status(400).json({ success: false, message: 'Opção de característica não encontrada' });
-        }
+        if (!option) return res.status(400).json({ success: false, message: 'Opção de característica não encontrada' });
       }
 
-      const orderItem = await OrderItem.create({
-        id: uuidv4(),
-        orderId,
-        itemId,
-        itemFeatureId: itemFeatureId || null,
-        featureOptionId: featureOptionId || null,
-        quantity: quantity || 1
-      }, { transaction });
+      // 🔍 Verifica se já existe um item igual no pedido (mesma combinação base)
+      const existingItem = await OrderItem.findOne({
+        where: { orderId, itemId, itemFeatureId: itemFeatureId || null, featureOptionId: featureOptionId || null },
+        transaction
+      });
+
+      let orderItem;
+      if (existingItem) {
+        // já existe → só soma quantidade
+        await existingItem.update({ quantity: existingItem.quantity + (quantity || 1) }, { transaction });
+        orderItem = existingItem;
+      } else {
+        // não existe → cria novo
+        orderItem = await OrderItem.create({
+          id: uuidv4(),
+          orderId,
+          itemId,
+          itemFeatureId: itemFeatureId || null,
+          featureOptionId: featureOptionId || null,
+          quantity: quantity || 1
+        }, { transaction });
+      }
 
       await transaction.commit();
       return res.status(201).json({ success: true, data: orderItem });
@@ -66,21 +74,18 @@ class OrderItemController {
   static async createBatch(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      const items = req.body;
+      const items = req.body; // [{ orderId, itemId, itemFeatureId, featureOptionId, quantity }]
+      const createdItems = [];
 
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ success: false, message: 'Nenhum item enviado para criação em lote' });
-      }
+      for (const itemData of items) {
+        const { orderId, itemId, itemFeatureId, featureOptionId, quantity } = itemData;
 
-      // Validação de todos os itens antes de criar
-      for (const item of items) {
-        const { orderId, itemId, itemFeatureId, featureOptionId } = item;
-
+        // validações básicas
         const order = await Order.findByPk(orderId);
         if (!order) throw new Error(`Pedido ${orderId} não encontrado`);
 
-        const product = await Item.findByPk(itemId);
-        if (!product) throw new Error(`Item ${itemId} não encontrado`);
+        const item = await Item.findByPk(itemId);
+        if (!item) throw new Error(`Item ${itemId} não encontrado`);
 
         if (itemFeatureId) {
           const feature = await ItemFeature.findByPk(itemFeatureId);
@@ -91,33 +96,41 @@ class OrderItemController {
           const option = await FeatureOption.findByPk(featureOptionId);
           if (!option) throw new Error(`Opção ${featureOptionId} não encontrada`);
         }
+
+        // 🔍 Verifica se já existe item igual no pedido
+        const existingItem = await OrderItem.findOne({
+          where: { orderId, itemId, itemFeatureId: itemFeatureId || null, featureOptionId: featureOptionId || null },
+          transaction
+        });
+
+        let orderItem;
+        if (existingItem) {
+          await existingItem.update({ quantity: existingItem.quantity + (quantity || 1) }, { transaction });
+          orderItem = existingItem;
+        } else {
+          orderItem = await OrderItem.create({
+            id: uuidv4(),
+            orderId,
+            itemId,
+            itemFeatureId: itemFeatureId || null,
+            featureOptionId: featureOptionId || null,
+            quantity: quantity || 1
+          }, { transaction });
+        }
+
+        createdItems.push(orderItem);
       }
 
-      // Monta lista com UUIDs
-      const itemsWithIds = items.map(item => ({
-        id: uuidv4(),
-        orderId: item.orderId,
-        itemId: item.itemId,
-        itemFeatureId: item.itemFeatureId || null,
-        featureOptionId: item.featureOptionId || null,
-        quantity: item.quantity || 1
-      }));
-
-      const createdItems = await OrderItem.bulkCreate(itemsWithIds, { transaction });
       await transaction.commit();
-
-      return res.status(201).json({
-        success: true,
-        message: `${createdItems.length} itens criados com sucesso`,
-        data: createdItems
-      });
+      return res.status(201).json({ success: true, data: createdItems });
 
     } catch (error) {
       await transaction.rollback();
-      console.error('Erro ao criar itens do pedido em lote:', error);
+      console.error('Erro no createBatch de itens do pedido:', error);
       return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+
 
 // Atualiza múltiplos itens
 static async updateBatch(req, res) {
