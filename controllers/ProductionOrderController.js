@@ -59,7 +59,6 @@ class ProductionOrderController {
           { model: Project, as: 'project' },
           { model: Customer, as: 'supplier' },
           { model: Customer, as: 'mainCustomer' },
-          { model: Order, as: 'order' },
           {
             model: ProductionOrderItem,
             as: 'items',

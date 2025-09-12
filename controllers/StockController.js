@@ -2,13 +2,35 @@
 import { StockItem, StockAdditionalItem, Item, ItemFeature, Feature, FeatureOption, Stock } from '../models/index.js';
 
 class StockController {
-  // Helper para incluir relações
-  static getDefaultInclude() {
+  // Formatar dados
+  static formatStock(stocks) {
+    return stocks.map(stock => ({
+      id: stock.id,
+      quantity: stock.quantity,
+      item: stock.item,
+      stockItems: stock.stockItems?.map(si => ({
+        id: si.id,
+        quantity: si.quantity,
+        itemFeature: si.itemFeature,
+        featureOption: si.featureOption,
+        additionalItems: si.additionalItems?.map(ai => ({
+          stockId: ai.id,
+          itemFeatureId: ai.itemFeature?.id,
+          featureOptionId: ai.featureOption?.id
+        })) || []
+      })) || []
+    }));
+  }
+
+  // ==== INCLUDE PADRÃO ====
+  static stockInclude(whereStockItem = {}) {
     return [
       { model: Item, as: 'item', attributes: ['id', 'name'] },
       {
         model: StockItem,
         as: 'stockItems',
+        where: Object.keys(whereStockItem).length ? whereStockItem : undefined,
+        required: Object.keys(whereStockItem).length > 0,
         include: [
           {
             model: ItemFeature,
@@ -33,26 +55,6 @@ class StockController {
     ];
   }
 
-  // Formatar dados
-  static formatStock(stocks) {
-    return stocks.map(stock => ({
-      id: stock.id,
-      quantity: stock.quantity,
-      item: stock.item,
-      stockItems: stock.stockItems.map(si => ({
-        id: si.id,
-        quantity: si.quantity,
-        itemFeature: si.itemFeature,
-        featureOption: si.featureOption,
-        additionalItems: si.additionalItems.map(ai => ({
-          stockId: ai.id,
-          itemFeatureId: ai.itemFeature.id,
-          featureOptionId: ai.featureOption.id
-        }))
-      }))
-    }));
-  }
-
   // Listar todos os estoques
   static async getAll(req, res) {
     try {
@@ -62,11 +64,11 @@ class StockController {
 
       const stocks = await Stock.findAll({
         where,
-        include: this.getDefaultInclude(),
+        include: StockController.stockInclude(),
         order: [['createdAt', 'DESC']]
       });
 
-      res.json({ success: true, data: this.formatStock(stocks) });
+      res.json({ success: true, data: StockController.formatStock(stocks) });
     } catch (error) {
       console.error('Erro ao buscar estoques:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
@@ -77,11 +79,13 @@ class StockController {
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      const stock = await Stock.findByPk(id, { include: this.getDefaultInclude() });
+      const stock = await Stock.findByPk(id, {
+        include: StockController.stockInclude()
+      });
 
       if (!stock) return res.status(404).json({ success: false, message: 'Estoque não encontrado' });
 
-      res.json({ success: true, data: this.formatStock([stock])[0] });
+      res.json({ success: true, data: StockController.formatStock([stock])[0] });
     } catch (error) {
       console.error('Erro ao buscar estoque por ID:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
@@ -93,14 +97,18 @@ class StockController {
     try {
       const { itemId, itemFeatureId, featureOptionId } = req.params;
 
-      const stock = await StockItem.findOne({
-        where: { itemId, itemFeatureId, featureOptionId },
-        include: this.getDefaultInclude()
+      const stock = await Stock.findOne({
+        include: StockController.stockInclude({ itemId, itemFeatureId, featureOptionId })
       });
 
-      if (!stock) return res.status(404).json({ success: false, message: 'Estoque não encontrado para essa combinação' });
+      if (!stock) {
+        return res.status(404).json({
+          success: false,
+          message: 'Estoque não encontrado para essa combinação'
+        });
+      }
 
-      res.json({ success: true, data: this.formatStock([stock])[0] });
+      res.json({ success: true, data: StockController.formatStock([stock])[0] });
     } catch (error) {
       console.error('Erro ao buscar estoque por itemFeatureOption:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });

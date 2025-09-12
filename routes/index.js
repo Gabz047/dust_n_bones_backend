@@ -29,6 +29,7 @@ import OrderItemAdditionalFeatureOptionRoutes from './OrderItemAdditionalFeature
 import MovementRoutes from './Movement.js'
 import StockRoutes from './stock.js'
 import MovementItemRoutes from './MovementItem.js'
+import ProductionOrderItemAdditionalFeatureOptionRoutes from './productionOrderItemAdditionalFeatureOption.js';
 
 const router = express.Router();
 
@@ -68,7 +69,8 @@ router.get('/', (req, res) => {
             order_item_additional_feature_options: '/api/order-item-additional-feature-options' ,
             movements: '/api/movements',
             movementItens: '/api/movements-itens',
-            stock: '/api/stocks'
+            stock: '/api/stocks',
+            production_order_item_additional_feature_options: '/api/production-order-item-additional-feature-options'
         }
     });
 });
@@ -77,6 +79,7 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+router.use('/production-order-item-additional-feature-options', ProductionOrderItemAdditionalFeatureOptionRoutes)
 router.use('/stocks', StockRoutes)
 router.use('/movements', MovementRoutes)
 router.use('/movement-itens', MovementItemRoutes)

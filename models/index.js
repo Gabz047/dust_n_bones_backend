@@ -29,6 +29,7 @@ import MovementItem from './MovementItem.js';
 import Stock from './Stock.js';
 import StockItem from './StockItem.js';
 import StockAdditionalItem from './StockAdditionalItem.js';
+import ProductionOrderItemAdditionalFeatureOption from './ProductionOrderItemAdditionalFeatureOption.js';
 
 // ---------------------- ACCOUNT & AUTH ----------------------
 Account.hasMany(AuthProvider, { foreignKey: 'accountId', as: 'authProviders' });
@@ -185,6 +186,25 @@ FeatureOption.hasMany(StockAdditionalItem, { foreignKey: 'featureOptionId', as: 
 StockAdditionalItem.belongsTo(ItemFeature, { foreignKey: 'itemFeatureId', as: 'itemFeature' });
 StockAdditionalItem.belongsTo(FeatureOption, { foreignKey: 'featureOptionId', as: 'featureOption' });
 
+// ---------------------- PRODUCTION ORDER ITEM ADDITIONAL FEATURE OPTION ----------------------
+// ProductionOrder → ProductionOrderItemAdditionalFeatureOption
+ProductionOrderItemAdditionalFeatureOption.belongsTo(ProductionOrder, { foreignKey: 'productionOrderId', as: 'productionOrder' });
+ProductionOrder.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'productionOrderId', as: 'additionalOptionsByOrder' });
+
+// Item → ProductionOrderItemAdditionalFeatureOption
+ProductionOrderItemAdditionalFeatureOption.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
+Item.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'itemId', as: 'additionalOptionsByItem' });
+
+// ItemFeature → ProductionOrderItemAdditionalFeatureOption
+ProductionOrderItemAdditionalFeatureOption.belongsTo(ItemFeature, { foreignKey: 'itemFeatureId', as: 'itemFeature' });
+ItemFeature.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'itemFeatureId', as: 'additionalOptionsByFeature' });
+
+// FeatureOption → ProductionOrderItemAdditionalFeatureOption
+ProductionOrderItemAdditionalFeatureOption.belongsTo(FeatureOption, { foreignKey: 'featureOptionId', as: 'featureOption' });
+FeatureOption.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'featureOptionId', as: 'additionalOptionsByOption' });
+
+
+
 // ---------------------- EXPORT ----------------------
 export {
   sequelize,
@@ -212,6 +232,7 @@ export {
   ProductionOrder,
   ProductionOrderItem,
   OrderItemAdditionalFeatureOption,
+  ProductionOrderItemAdditionalFeatureOption,
   ProductionOrderStatus,
   Movement,
   MovementItem,
@@ -246,6 +267,7 @@ export default {
   ProductionOrder,
   ProductionOrderItem,
   OrderItemAdditionalFeatureOption,
+  ProductionOrderItemAdditionalFeatureOption,
   ProductionOrderStatus,
   Movement,
   MovementItem,
