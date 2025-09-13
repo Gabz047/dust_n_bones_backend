@@ -16,6 +16,9 @@ router.get(
   StockController.getAll
 );
 
+router.get('/stock-item/:id', authenticateToken, extractTenant, authorizeRoles('admin', 'owner'), StockController.getStockItemById);
+
+
 // Buscar estoque por ID
 router.get(
   '/:id',

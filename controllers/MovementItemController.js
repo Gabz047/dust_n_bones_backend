@@ -256,25 +256,43 @@ class MovementItemController {
     static async getByMovement(req, res) {
         try {
             const { movementId } = req.params;
+
             const items = await MovementItem.findAll({
                 where: { movementId },
                 include: [
                     { model: Item, as: 'item', attributes: ['id', 'name'] },
-                    { model: ItemFeature, as: 'itemFeature', attributes: ['id', 'name'] },
+                    {
+                        model: ItemFeature,
+                        as: 'itemFeature',
+                        attributes: ['id'],
+                        include: [
+                            { model: Feature, as: 'feature', attributes: ['id', 'name'] }
+                        ]
+                    },
                     {
                         model: StockAdditionalItem,
                         as: 'additionalItems',
-                        include: [{ model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] }]
+                        include: [
+                            { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] }
+                        ]
+                    },
+                    {
+                        model: FeatureOption,
+                        as: 'movementItems', // <- aqui precisa bater com o alias do belongsTo
+                        attributes: ['id', 'name']
                     }
                 ],
                 order: [['createdAt', 'DESC']]
             });
+
             res.json({ success: true, data: items });
         } catch (error) {
             console.error('Erro ao buscar MovementItems por Movement:', error);
             res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
         }
     }
+
+
 }
 
 export default MovementItemController;

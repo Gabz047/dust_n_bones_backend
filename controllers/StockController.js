@@ -3,24 +3,30 @@ import { StockItem, StockAdditionalItem, Item, ItemFeature, Feature, FeatureOpti
 
 class StockController {
   // Formatar dados
-  static formatStock(stocks) {
-    return stocks.map(stock => ({
-      id: stock.id,
-      quantity: stock.quantity,
-      item: stock.item,
-      stockItems: stock.stockItems?.map(si => ({
-        id: si.id,
-        quantity: si.quantity,
-        itemFeature: si.itemFeature,
-        featureOption: si.featureOption,
-        additionalItems: si.additionalItems?.map(ai => ({
-          stockId: ai.id,
-          itemFeatureId: ai.itemFeature?.id,
-          featureOptionId: ai.featureOption?.id
-        })) || []
+ static formatStock(stocks) {
+  return stocks.map(stock => ({
+    id: stock.id,
+    quantity: stock.quantity,
+    createdAt: stock.createdAt,  // ✅ Adicionado
+    updatedAt: stock.updatedAt,  // ✅ Adicionado
+    item: stock.item,
+    stockItems: stock.stockItems?.map(si => ({
+      id: si.id,
+      quantity: si.quantity,
+      createdAt: si.createdAt,    // ✅ Adicionado
+      updatedAt: si.updatedAt,    // ✅ Adicionado
+      itemFeature: si.itemFeature,
+      featureOption: si.featureOption,
+      additionalItems: si.additionalItems?.map(ai => ({
+        stockId: ai.id,
+        itemFeatureId: ai.itemFeature?.id,
+        featureOptionId: ai.featureOption?.id,
+        createdAt: ai.createdAt,   // ✅ Adicionado
+        updatedAt: ai.updatedAt    // ✅ Adicionado
       })) || []
-    }));
-  }
+    })) || []
+  }));
+}
 
   // ==== INCLUDE PADRÃO ====
   static stockInclude(whereStockItem = {}) {
@@ -54,6 +60,62 @@ class StockController {
       }
     ];
   }
+
+  static async getStockItemById(req, res) {
+  try {
+    const { id } = req.params;
+
+    const stockItem = await StockItem.findByPk(id, {
+      include: [
+        {
+          model: ItemFeature,
+          as: 'itemFeature',
+          include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }]
+        },
+        { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] },
+        {
+          model: StockAdditionalItem,
+          as: 'additionalItems',
+          include: [
+            {
+              model: ItemFeature,
+              as: 'itemFeature',
+              include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }]
+            },
+            { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] }
+          ]
+        }
+      ]
+    });
+
+    if (!stockItem) {
+      return res.status(404).json({ success: false, message: 'StockItem não encontrado' });
+    }
+
+    // Formata o StockItem com createdAt / updatedAt
+    const formattedItem = {
+      id: stockItem.id,
+      quantity: stockItem.quantity,
+      createdAt: stockItem.createdAt,
+      updatedAt: stockItem.updatedAt,
+      itemFeature: stockItem.itemFeature,
+      featureOption: stockItem.featureOption,
+      additionalItems: stockItem.additionalItems?.map(ai => ({
+        id: ai.id,
+        stockId: ai.stockId,
+        itemFeatureId: ai.itemFeature?.id,
+        featureOptionId: ai.featureOption?.id,
+        createdAt: ai.createdAt,
+        updatedAt: ai.updatedAt
+      })) || []
+    };
+
+    res.json({ success: true, data: formattedItem });
+  } catch (error) {
+    console.error('Erro ao buscar StockItem por ID:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+}
 
   // Listar todos os estoques
   static async getAll(req, res) {

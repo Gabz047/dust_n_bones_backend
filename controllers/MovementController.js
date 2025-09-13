@@ -1,5 +1,5 @@
 // controllers/MovementController.js
-import { Movement, User, Item, ItemFeature, Feature, ProductionOrder } from '../models/index.js';
+import { Movement, User, Item, ItemFeature, Feature, ProductionOrder, Project } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import sequelize from '../config/database.js';
 
@@ -84,7 +84,12 @@ class MovementController {
         include: [
           { model: Item, as: 'item', attributes: ['id', 'name'] },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
-          { model: ProductionOrder, as: 'productionOrder' },
+          { model: ProductionOrder, as: 'productionOrder',
+            include: [{
+              model: Project,
+              as: 'project',
+              attributes: ['id', 'name']
+            }] },
           { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
         ]
       });
@@ -147,8 +152,13 @@ class MovementController {
         include: [
           { model: Item, as: 'item', attributes: ['id', 'name'] },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
-          { model: ProductionOrder, as: 'productionOrder' },
-          { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
+          { model: ProductionOrder, as: 'productionOrder',
+            include: [{
+              model: Project,
+              as: 'project'
+            }]
+           },
+          { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
         ],
         order: [['createdAt', 'DESC']]
       });
