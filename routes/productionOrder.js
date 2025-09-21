@@ -77,6 +77,14 @@ router.put(
   ProductionOrderController.update
 );
 
+router.patch('/id',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  ProductionOrderController.patch
+)
+
 // Deletar OP
 router.delete(
   '/:id',

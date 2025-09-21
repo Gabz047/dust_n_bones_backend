@@ -2,13 +2,13 @@ import ProductionOrderStatus from '../models/ProductionOrderStatus.js';
 import ProductionOrder from '../models/ProductionOrder.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
-import Company from '../models/Company.js';
-import Branch from '../models/Branch.js';
 import Project from '../models/Project.js';
+import sequelize from '../config/database.js';
 
 class ProductionOrderStatusController {
     // Criar um novo status
     static async create(req, res) {
+        const transaction = await sequelize.transaction();
         try {
             const { status, productionOrderId, date } = req.body;
 
@@ -19,14 +19,25 @@ class ProductionOrderStatusController {
                     message: 'Ordem de produção não encontrada'
                 });
             }
+            const now = new Date();
 
             const productionOrderStatus = await ProductionOrderStatus.create({
                 id: uuidv4(),
                 status,
                 productionOrderId,
                 date
-            });
+            }, {transaction});
 
+            if (status === 'Finalizada') {
+                await productionOrder.update(
+                    { closeDate: now },
+                    { transaction }
+                )
+            }
+
+            await transaction.commit()
+
+        
             return res.status(201).json({ success: true, data: productionOrderStatus });
         } catch (error) {
             console.error('Erro ao criar status da ordem de produção:', error);

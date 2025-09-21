@@ -236,6 +236,24 @@ class ProductionOrderController {
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+
+  static async patch(req, res) {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const order = await ProductionOrder.findByPk(id);
+    if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' });
+
+    // Atualiza somente os campos enviados no body
+    await order.update(updates);
+
+    res.json({ success: true, data: order });
+  } catch (error) {
+    console.error('Erro ao atualizar O.P.:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+}
 }
 
 export default ProductionOrderController;

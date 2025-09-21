@@ -40,7 +40,7 @@ Order.init({
   },
   deliveryDate: {
   type: DataTypes.DATEONLY,
-  allowNull: false,
+  allowNull: true,
   defaultValue: () => new Date().toISOString().split("T")[0],
 },
 }, {

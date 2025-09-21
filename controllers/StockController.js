@@ -176,6 +176,40 @@ class StockController {
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+
+   static async getByMultipleItems(req, res) {
+    try {
+      // Pode receber itemIds no body ou na query
+      let itemIds = req.body.itemIds || req.query.itemIds;
+
+      if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'É necessário enviar um array de itemIds.'
+        });
+      }
+
+      // Converte para números se vierem como string
+      itemIds = itemIds.map(id => id);
+
+      const stocks = await Stock.findAll({
+        where: {
+          itemId: itemIds
+        },
+        include: StockController.stockInclude(),
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.json({ success: true, data: StockController.formatStock(stocks) });
+    } catch (error) {
+      console.error('Erro ao buscar estoques por múltiplos itens:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
 }
 
 export default StockController;

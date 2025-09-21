@@ -82,6 +82,16 @@ itemType: {
     },
   },
 },
+genre: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  validate: {
+    isIn: {
+      args: [['Unissex', 'Masculino', 'Feminino']],
+      msg: 'Gênero Inválido! Escolhas disponíveis: Unissex, Masculino e Feminino'
+    }
+  }
+},
   weight: {
     type: DataTypes.FLOAT,
     allowNull: false,

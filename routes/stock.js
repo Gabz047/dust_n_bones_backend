@@ -18,6 +18,8 @@ router.get(
 
 router.get('/stock-item/:id', authenticateToken, extractTenant, authorizeRoles('admin', 'owner'), StockController.getStockItemById);
 
+router.get('/stocks/multiple', authenticateToken, extractTenant, authorizeRoles('admin', 'owner'), StockController.getByMultipleItems);
+
 
 // Buscar estoque por ID
 router.get(

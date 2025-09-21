@@ -445,6 +445,7 @@ export const FeatureSchemas = {
 
 // Schemas de validação para Item
 
+
 export const itemSchemas = {
   create: Joi.object({
     name: Joi.string()
@@ -458,6 +459,7 @@ export const itemSchemas = {
         'string.max': 'Nome deve ter no máximo 100 caracteres.',
         'any.required': 'Nome é obrigatório.',
       }),
+
     description: Joi.string()
       .max(500)
       .allow('', null)
@@ -466,6 +468,7 @@ export const itemSchemas = {
         'string.base': 'Descrição deve ser uma string.',
         'string.max': 'Descrição deve ter no máximo 500 caracteres.',
       }),
+
     measurementUnit: Joi.string()
       .valid(
         'kg', 'g', 'mg', 'l', 'ml', 'un', 'm', 'cm', 'mm',
@@ -476,6 +479,7 @@ export const itemSchemas = {
         'any.only': 'Unidade de medida inválida.',
         'any.required': 'Unidade de medida é obrigatória.',
       }),
+
     itemType: Joi.string()
       .valid('Matérias-primas', 'Produtos em processo', 'Produto Acabado')
       .required()
@@ -483,6 +487,27 @@ export const itemSchemas = {
         'any.only': 'Tipo de item inválido.',
         'any.required': 'Tipo de item é obrigatório.',
       }),
+
+    businessItemType: Joi.string()
+      .valid('Confecção', 'Outro')
+      .required()
+      .messages({
+        'any.only': 'Tipo de negócio inválido.',
+        'any.required': 'Tipo de negócio é obrigatório.',
+      }),
+
+    genre: Joi.when('businessItemType', {
+      is: 'Confecção',
+      then: Joi.string()
+        .valid('Unissex', 'Masculino', 'Feminino')
+        .required()
+        .messages({
+          'any.only': 'Gênero inválido.',
+          'any.required': 'Gênero é obrigatório quando o tipo de negócio for Confecção.',
+        }),
+      otherwise: Joi.string().allow('', null).optional(),
+    }),
+
     weight: Joi.number()
       .min(0)
       .required()
@@ -491,6 +516,7 @@ export const itemSchemas = {
         'number.min': 'Peso não pode ser negativo.',
         'any.required': 'Peso é obrigatório.',
       }),
+
     price: Joi.number()
       .min(0)
       .required()
@@ -499,6 +525,7 @@ export const itemSchemas = {
         'number.min': 'Preço não pode ser negativo.',
         'any.required': 'Preço é obrigatório.',
       }),
+
     minStock: Joi.number()
       .integer()
       .min(0)
@@ -508,6 +535,7 @@ export const itemSchemas = {
         'number.min': 'Estoque mínimo não pode ser negativo.',
         'any.required': 'Estoque mínimo é obrigatório.',
       }),
+
     maxStock: Joi.number()
       .integer()
       .min(0)
@@ -517,6 +545,7 @@ export const itemSchemas = {
         'number.min': 'Estoque máximo não pode ser negativo.',
         'any.required': 'Estoque máximo é obrigatório.',
       }),
+
     companyId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .required()
@@ -524,6 +553,7 @@ export const itemSchemas = {
         'string.guid': 'ID da empresa deve ser um UUID válido.',
         'any.required': 'ID da empresa é obrigatório.',
       }),
+
     branchId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .optional()
@@ -544,6 +574,7 @@ export const itemSchemas = {
         'string.min': 'Nome deve ter pelo menos 3 caracteres.',
         'string.max': 'Nome deve ter no máximo 100 caracteres.',
       }),
+
     description: Joi.string()
       .max(500)
       .optional()
@@ -552,6 +583,7 @@ export const itemSchemas = {
         'string.base': 'Descrição deve ser uma string.',
         'string.max': 'Descrição deve ter no máximo 500 caracteres.',
       }),
+
     measurementUnit: Joi.string()
       .valid(
         'kg', 'g', 'mg', 'l', 'ml', 'un', 'm', 'cm', 'mm',
@@ -561,12 +593,33 @@ export const itemSchemas = {
       .messages({
         'any.only': 'Unidade de medida inválida.',
       }),
+
     itemType: Joi.string()
       .valid('Matérias-primas', 'Produtos em processo', 'Produto Acabado')
       .optional()
       .messages({
         'any.only': 'Tipo de item inválido.',
       }),
+
+    businessItemType: Joi.string()
+      .valid('Confecção', 'Outro')
+      .optional()
+      .messages({
+        'any.only': 'Tipo de negócio inválido.',
+      }),
+
+    genre: Joi.when('businessItemType', {
+      is: 'Confecção',
+      then: Joi.string()
+        .valid('Unissex', 'Masculino', 'Feminino')
+        .required()
+        .messages({
+          'any.only': 'Gênero inválido.',
+          'any.required': 'Gênero é obrigatório quando o tipo de negócio for Confecção.',
+        }),
+      otherwise: Joi.string().allow('', null).optional(),
+    }),
+
     weight: Joi.number()
       .min(0)
       .optional()
@@ -574,6 +627,7 @@ export const itemSchemas = {
         'number.base': 'Peso deve ser um número.',
         'number.min': 'Peso não pode ser negativo.',
       }),
+
     price: Joi.number()
       .min(0)
       .optional()
@@ -581,6 +635,7 @@ export const itemSchemas = {
         'number.base': 'Preço deve ser um número.',
         'number.min': 'Preço não pode ser negativo.',
       }),
+
     minStock: Joi.number()
       .integer()
       .min(0)
@@ -589,6 +644,7 @@ export const itemSchemas = {
         'number.base': 'Estoque mínimo deve ser um número inteiro.',
         'number.min': 'Estoque mínimo não pode ser negativo.',
       }),
+
     maxStock: Joi.number()
       .integer()
       .min(0)
@@ -597,12 +653,14 @@ export const itemSchemas = {
         'number.base': 'Estoque máximo deve ser um número inteiro.',
         'number.min': 'Estoque máximo não pode ser negativo.',
       }),
+
     companyId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .optional()
       .messages({
         'string.guid': 'ID da empresa deve ser um UUID válido.',
       }),
+
     branchId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .optional()
@@ -612,6 +670,7 @@ export const itemSchemas = {
       }),
   }),
 };
+
 
 // Schemas de validação para Package 
 

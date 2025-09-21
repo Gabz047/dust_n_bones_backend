@@ -87,7 +87,8 @@ const startServer = async () => {
     await Connect();
 
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: false });
+      // await sequelize.sync({ alter: false });
+      await sequelize.authenticate()
       console.log('✅ Modelos sincronizados com o banco de dados');
     }
 

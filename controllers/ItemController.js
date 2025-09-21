@@ -6,7 +6,7 @@ export default {
   // Criar um item
   async create(req, res) {
     try {
-      const {
+      let {
         companyId,
         branchId,
         name,
@@ -18,42 +18,110 @@ export default {
         price,
         weight,
         businessItemType,
+        genre,
       } = req.body;
+
+      // --- Lógica de defaults ---
+      if (!businessItemType || businessItemType === 'Outro') {
+        genre = null;
+      } else if (!genre) {
+        genre = 'Unissex';
+      }
 
       let item;
 
       if (branchId) {
-      item = await Item.create({
-        branchId,
-        name,
-        description,
-        itemType,
-        measurementUnit,
-        minStock,
-        maxStock,
-        price,
-        weight,
-        businessItemType,
-      });
-    } else if (companyId) {
-      item = await Item.create({
-        companyId,
-        name,
-        description,
-        itemType,
-        measurementUnit,
-        minStock,
-        maxStock,
-        price,
-        weight,
-        businessItemType,
-      });
-    }
+        item = await Item.create({
+          branchId,
+          name,
+          description,
+          itemType,
+          measurementUnit,
+          minStock,
+          maxStock,
+          price,
+          weight,
+          businessItemType,
+          genre,
+        });
+      } else if (companyId) {
+        item = await Item.create({
+          companyId,
+          name,
+          description,
+          itemType,
+          measurementUnit,
+          minStock,
+          maxStock,
+          price,
+          weight,
+          businessItemType,
+          genre,
+        });
+      }
 
-      return res.status(201).json({ success: true, data: item });
+      // Adiciona displayName
+      const formattedItem = {
+        ...item.toJSON(),
+        displayName: genre ? `${name} - ${genre}` : name
+      };
+
+      return res.status(201).json({ success: true, data: formattedItem });
     } catch (error) {
       console.error('Erro ao criar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao criar item.' });
+    }
+  },
+
+  // Atualizar item por id
+  async update(req, res) {
+    try {
+      const { id } = req.params;
+      let {
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight,
+        businessItemType,
+        genre,
+      } = req.body;
+
+      const item = await Item.findByPk(id);
+      if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
+
+      // --- Lógica de defaults ---
+      if (!businessItemType || businessItemType === 'Outro') {
+        genre = null;
+      } else if (!genre) {
+        genre = 'Unissex';
+      }
+
+      await item.update({
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight,
+        businessItemType,
+        genre,
+      });
+
+      const formattedItem = {
+        ...item.toJSON(),
+        displayName: genre ? `${name} - ${genre}` : name
+      };
+
+      return res.json({ success: true, data: formattedItem });
+    } catch (error) {
+      console.error('Erro ao atualizar item:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao atualizar item.' });
     }
   },
 
@@ -68,7 +136,12 @@ export default {
         order: [['createdAt', 'DESC']],
       });
 
-      return res.json({ success: true, data: items });
+      const formattedItems = items.map(item => ({
+        ...item.toJSON(),
+        displayName: item.genre ? `${item.name} - ${item.genre}` : item.name
+      }));
+
+      return res.json({ success: true, data: formattedItems });
     } catch (error) {
       console.error('Erro ao buscar itens:', error);
       return res.status(500).json({ success: false, message: 'Erro ao buscar itens.' });
@@ -86,54 +159,17 @@ export default {
         ],
       });
 
-      if (!item) {
-        return res.status(404).json({ success: false, message: 'Item não encontrado.' });
-      }
+      if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-      return res.json({ success: true, data: item });
+      const formattedItem = {
+        ...item.toJSON(),
+        displayName: item.genre ? `${item.name} - ${item.genre}` : item.name
+      };
+
+      return res.json({ success: true, data: formattedItem });
     } catch (error) {
       console.error('Erro ao buscar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao buscar item.' });
-    }
-  },
-
-  // Atualizar item por id
-  async update(req, res) {
-    try {
-      const { id } = req.params;
-      const {
-        name,
-        description,
-        itemType,
-        measurementUnit,
-        minStock,
-        maxStock,
-        price,
-        weight,
-        businessItemType,
-      } = req.body;
-
-      const item = await Item.findByPk(id);
-      if (!item) {
-        return res.status(404).json({ success: false, message: 'Item não encontrado.' });
-      }
-
-      await item.update({
-        name,
-        description,
-        itemType,
-        measurementUnit,
-        minStock,
-        maxStock,
-        price,
-        weight,
-        businessItemType,
-      });
-
-      return res.json({ success: true, data: item });
-    } catch (error) {
-      console.error('Erro ao atualizar item:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao atualizar item.' });
     }
   },
 
@@ -143,9 +179,7 @@ export default {
       const { id } = req.params;
 
       const item = await Item.findByPk(id);
-      if (!item) {
-        return res.status(404).json({ success: false, message: 'Item não encontrado.' });
-      }
+      if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
       await item.destroy();
       return res.json({ success: true, message: 'Item deletado com sucesso.' });
