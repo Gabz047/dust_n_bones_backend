@@ -30,6 +30,15 @@ import MovementRoutes from './Movement.js'
 import StockRoutes from './stock.js'
 import MovementItemRoutes from './MovementItem.js'
 import ProductionOrderItemAdditionalFeatureOptionRoutes from './productionOrderItemAdditionalFeatureOption.js';
+import BoxRoutes from './box.js';
+import BoxItemRoutes from './box-item.js';
+import DeliveryNoteRoutes from './delivery-note.js';
+import DeliveryNoteItemRoutes from './delivery-note-item.js';
+import ExpeditionRoutes from './expedition.js';
+import InvoiceRoutes from './invoice.js';
+import InvoiceItemRoutes from './invoice-item.js';
+import MovementLogEntityRoutes from './movement-log-entity.js';
+import movementLogEntityItemRoutes from './movement-log-entity-item.js';
 
 const router = express.Router();
 
@@ -70,7 +79,16 @@ router.get('/', (req, res) => {
             movements: '/api/movements',
             movementItens: '/api/movements-itens',
             stock: '/api/stocks',
-            production_order_item_additional_feature_options: '/api/production-order-item-additional-feature-options'
+            production_order_item_additional_feature_options: '/api/production-order-item-additional-feature-options',
+            boxes: '/api/boxes',
+            box_items: '/api/box-items',
+            delivery_notes: '/api/delivery-notes',
+            delivery_note_items: '/api/delivery-note-items',
+            expeditions: '/api/expeditions',
+            invoices: '/api/invoices',
+            invoice_items: '/api/invoice-items',
+            movement_log_entities: '/api/movement-log-entities',
+            movement_log_entity_items: '/api/movement-log-entity-items'
         }
     });
 });
@@ -79,6 +97,15 @@ router.get('/', (req, res) => {
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
 
 // Rotas dos módulos
+router.use('/movement-log-entities', MovementLogEntityRoutes)
+router.use('/movement-log-entity-items', movementLogEntityItemRoutes)
+router.use('/invoices', InvoiceRoutes)
+router.use('/invoice-items', InvoiceItemRoutes)
+router.use('/expeditions', ExpeditionRoutes)
+router.use('/delivery-notes', DeliveryNoteRoutes)
+router.use('/delivery-note-items', DeliveryNoteItemRoutes)
+router.use('/boxes', BoxRoutes)
+router.use('/box-items', BoxItemRoutes)
 router.use('/production-order-item-additional-feature-options', ProductionOrderItemAdditionalFeatureOptionRoutes)
 router.use('/stocks', StockRoutes)
 router.use('/movements', MovementRoutes)
