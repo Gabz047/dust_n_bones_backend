@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, BoxItem, Box, OrderItem, Item, ItemFeature, FeatureOption, User, MovementLogEntityItem, MovementLogEntity, Stock, StockItem } from '../models/index.js';
+import { sequelize, BoxItem, Box, OrderItem, Item, ItemFeature, FeatureOption, User, MovementLogEntityItem, MovementLogEntity, Stock, StockItem, Feature } from '../models/index.js';
 
 class BoxItemController {
 
@@ -279,26 +279,81 @@ class BoxItemController {
   }
 
   // ===== FILTROS SIMPLES =====
-  static async getByBox(req, res) {
-    try {
-      const { boxId } = req.params;
-      const items = await BoxItem.findAll({ where: { boxId } });
+static async getByBox(req, res) {
+  try {
+    const { boxId } = req.params;
 
-      const result = [];
-      for (const boxItem of items) {
-        const orderItem = await OrderItem.findByPk(boxItem.orderItemId);
-        const sumAllBoxes = await BoxItem.sum('quantity', {
-          where: { orderItemId: boxItem.orderItemId, featureOptionId: boxItem.featureOptionId }
-        });
-        result.push({ ...boxItem.toJSON(), remainingQuantity: orderItem.quantity - sumAllBoxes });
-      }
+    const items = await BoxItem.findAll({
+      where: { boxId },
+      attributes: ['id', 'quantity', 'featureOptionId', 'orderItemId'], // apenas o necessário do BoxItem
+      include: [
+        {
+          model: OrderItem,
+          as: 'orderItem',
+          attributes: ['id', 'quantity'], // só o que importa
+          include: [
+            {
+              model: Item,
+              as: 'item',
+              attributes: ['id', 'weight', 'price', 'name'], // PSE/weight, price e nome
+            },
+            {
+              model: ItemFeature,
+              as: 'itemFeature',
+              attributes: ['id', 'featureId'],
+              include: [
+                {
+                  model: Feature,
+                  as: 'feature',
+                  attributes: ['id', 'name'], // nome da feature
+                },
+              ],
+            },
+            {
+              model: FeatureOption,
+              as: 'featureOption',
+              attributes: ['id', 'name'], // nome da opção
+            },
+            {
+              model: BoxItem,
+              as: 'boxItems', // para somar quantidade em outras caixas
+              attributes: ['quantity', 'featureOptionId'],
+            },
+          ],
+        },
+      ],
+    });
 
-      return res.json({ success: true, data: result });
-    } catch (error) {
-      console.error('Erro ao buscar BoxItems por boxId:', error);
-      return res.status(500).json({ success: false, message: error.message });
-    }
+    const result = items.map((boxItem) => {
+      const orderItem = boxItem.orderItem;
+
+      const sumAllBoxes = orderItem?.boxItems
+        ?.filter(bi => bi.featureOptionId === boxItem.featureOptionId)
+        .reduce((acc, bi) => acc + (bi.quantity || 0), 0) || 0;
+      console.log(boxItem.orderItem.item)
+      return {
+        id: boxItem.id,
+        quantity: boxItem.quantity,
+        featureOptionId: boxItem.featureOptionId,
+        orderItemId: boxItem.orderItemId,
+        orderItemQuantity: boxItem.orderItem.quantity,
+        remainingQuantity: orderItem ? orderItem.quantity - sumAllBoxes : 0,
+        weight: orderItem?.item?.weight || 0,
+        price: orderItem?.item?.price || 0,
+        itemName: orderItem?.item?.name || 'N/A',
+        featureName: orderItem?.itemFeature?.feature?.name || 'N/A',
+        featureOptionName: orderItem?.featureOption?.name || 'N/A',
+      };
+    });
+
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erro ao buscar BoxItems por boxId:', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
+}
+
+
 
   // ===== Outros filtros similares =====
   // getByOrderItem, getByItem, getByFeatureItem, getByFeatureOption, getByUser, getByDate
