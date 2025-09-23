@@ -78,7 +78,7 @@ class BoxItemController {
 
       for (const boxId of boxIdsSet) {
         const totalQty = await BoxItem.sum('quantity', { where: { boxId }, transaction });
-        await Box.update({ qtdTotal: totalQty }, { where: { id: boxId }, transaction });
+        await Box.update({ totalQuantity: totalQty }, { where: { id: boxId }, transaction });
       }
 
       await transaction.commit();
@@ -147,7 +147,7 @@ class BoxItemController {
 
       for (const boxId of boxIdsSet) {
         const totalQty = await BoxItem.sum('quantity', { where: { boxId }, transaction });
-        await Box.update({ qtdTotal: totalQty }, { where: { id: boxId }, transaction });
+        await Box.update({ totalQuantity: totalQty }, { where: { id: boxId }, transaction });
       }
 
       await transaction.commit();
@@ -196,7 +196,7 @@ class BoxItemController {
 
       for (const boxId of boxIdsSet) {
         const totalQty = await BoxItem.sum('quantity', { where: { boxId }, transaction });
-        await Box.update({ qtdTotal: totalQty }, { where: { id: boxId }, transaction });
+        await Box.update({ totalQuantity: totalQty }, { where: { id: boxId }, transaction });
       }
 
       // Retornar remainingQuantity atualizado considerando todas as caixas
