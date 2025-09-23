@@ -1,5 +1,5 @@
 import { DataTypes, Model } from 'sequelize';
-import sequelize from '../config/database.js';
+import sequelize from '../../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import Project from '../Project.js';
 import Customer from '../Customer.js';

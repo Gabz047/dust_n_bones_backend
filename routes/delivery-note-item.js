@@ -1,7 +1,7 @@
 import express from 'express';
 import DeliveryNoteItemController from '../controllers/DeliveryNoteItemController.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
-import { validateRequest, deliveryNoteItemSchemas } from '../middleware/validation.js';
+import { validateRequest, DeliveryNoteItemSchemas } from '../middleware/validation.js';
 import { extractTenant, validateTenantAccess } from '../middleware/tenant.js';
 
 const router = express.Router();
@@ -10,7 +10,7 @@ const router = express.Router();
 router.post(
   '/batch',
   authenticateToken,
-  validateRequest(deliveryNoteItemSchemas.createBatch),
+  validateRequest(DeliveryNoteItemSchemas.createBatch),
   DeliveryNoteItemController.createBatch
 );
 
@@ -18,7 +18,7 @@ router.post(
 router.put(
   '/batch',
   authenticateToken,
-  validateRequest(deliveryNoteItemSchemas.updateBatch),
+  validateRequest(DeliveryNoteItemSchemas.updateBatch),
   DeliveryNoteItemController.updateBatch
 );
 
@@ -26,7 +26,7 @@ router.put(
 router.delete(
   '/batch',
   authenticateToken,
-  validateRequest(deliveryNoteItemSchemas.deleteBatch),
+  validateRequest(DeliveryNoteItemSchemas.deleteBatch),
   DeliveryNoteItemController.deleteBatch
 );
 

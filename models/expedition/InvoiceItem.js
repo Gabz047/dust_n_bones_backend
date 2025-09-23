@@ -1,5 +1,5 @@
 import { DataTypes, Model } from 'sequelize';
-import sequelize from '../config/database.js';
+import sequelize from '../../config/database.js';
 import Invoice from './Invoice.js';
 import Order from '../Order.js';
 import DeliveryNote from './DeliveryNote.js'; // romaneio

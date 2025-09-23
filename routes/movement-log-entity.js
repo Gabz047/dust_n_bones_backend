@@ -1,7 +1,6 @@
 import express from 'express';
 import MovementLogEntityController from '../controllers/MovementLogEntityController.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
-import { validateRequest, movementLogEntitySchemas } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -9,7 +8,7 @@ const router = express.Router();
 router.post(
   '/',
   authenticateToken,
-  validateRequest(movementLogEntitySchemas.create),
+    authorizeRoles('admin', 'manager', 'employee', 'owner'),
   MovementLogEntityController.create
 );
 
