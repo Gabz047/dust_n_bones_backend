@@ -683,7 +683,7 @@ export const expeditionSchemas = {
         'any.required': 'ID do projeto é obrigatório.',
       }),
 
-    customerId: Joi.string()
+    mainCustomerId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .required()
       .messages({
@@ -708,7 +708,7 @@ export const expeditionSchemas = {
         'string.guid': 'ID do projeto deve ser um UUID válido.',
       }),
 
-    customerId: Joi.string()
+    mainCustomerId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .optional()
       .messages({
@@ -761,10 +761,11 @@ export const boxSchemas = {
   create: Joi.object({
     deliveryNoteId: Joi.string()
       .guid({ version: ['uuidv4'] })
-      .required()
+      .optional()
+      .allow('', null)
       .messages({
         'string.guid': 'ID da Delivery Note deve ser um UUID válido.',
-        'any.required': 'ID da Delivery Note é obrigatório.',
+        
       }),
 
     projectId: Joi.string()
@@ -822,6 +823,7 @@ export const boxSchemas = {
     deliveryNoteId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .optional()
+      .allow('', null)
       .messages({
         'string.guid': 'ID da Delivery Note deve ser um UUID válido.',
       }),
@@ -1498,13 +1500,6 @@ export const boxItemSchemas = {
           'any.required': 'ID do usuário é obrigatório.',
         }),
 
-      movementLogEntityId: Joi.string()
-        .guid({ version: ['uuidv4'] })
-        .required()
-        .messages({
-          'string.guid': 'ID do movimento deve ser um UUID válido.',
-          'any.required': 'ID do movimento é obrigatório.',
-        }),
     })
   ),
 
@@ -1535,13 +1530,6 @@ export const boxItemSchemas = {
           'any.required': 'ID do usuário é obrigatório.',
         }),
 
-      movementLogEntityId: Joi.string()
-        .guid({ version: ['uuidv4'] })
-        .required()
-        .messages({
-          'string.guid': 'ID do movimento deve ser um UUID válido.',
-          'any.required': 'ID do movimento é obrigatório.',
-        }),
     })
   ),
 
@@ -1556,13 +1544,7 @@ export const boxItemSchemas = {
         'any.required': 'IDs são obrigatórios para exclusão.',
       }),
 
-    movementLogEntityId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID do movimento deve ser um UUID válido.',
-        'any.required': 'ID do movimento é obrigatório.',
-      }),
+    
   }),
 
   getByBox: Joi.object({

@@ -19,7 +19,7 @@ Box.init({
   },
   referralId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     unique: true,
   },
   deliveryNoteId: {
@@ -52,7 +52,7 @@ Box.init({
   },
   totalQuantity: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
   },
   packageId: {
     type: DataTypes.UUID,

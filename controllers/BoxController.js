@@ -11,7 +11,7 @@ class BoxController {
 
       // Validações
       const deliveryNote = await DeliveryNote.findByPk(deliveryNoteId);
-      if (!deliveryNote) return res.status(400).json({ success: false, message: 'Delivery Note não encontrada' });
+      if (!deliveryNote && deliveryNote != null) return res.status(400).json({ success: false, message: 'Delivery Note não encontrada' });
 
       const project = await Project.findByPk(projectId);
       if (!project) return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
@@ -195,29 +195,160 @@ class BoxController {
   }
 
   // Filtros
-  static async getByDeliveryNote(req, res) {
-    return this._filterByField('deliveryNoteId', req.params.deliveryNoteId, res);
+// Filtrar por DeliveryNote
+static async getByDeliveryNote(req, res) {
+  try {
+    const { deliveryNoteId } = req.params;
+    const boxes = await Box.findAll({
+      where: { deliveryNoteId },
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por deliveryNoteId:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
-  static async getByProject(req, res) {
-    return this._filterByField('projectId', req.params.projectId, res);
+// Filtrar por Project
+static async getByProject(req, res) {
+  try {
+    const { projectId } = req.params;
+    const boxes = await Box.findAll({
+      where: { projectId },
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por projectId:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
-  static async getByCustomer(req, res) {
-    return this._filterByField('customerId', req.params.customerId, res);
+// Filtrar por Customer
+static async getByCustomer(req, res) {
+  try {
+    const { customerId } = req.params;
+    const boxes = await Box.findAll({
+      where: { customerId },
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por customerId:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
-  static async getByOrder(req, res) {
-    return this._filterByField('orderId', req.params.orderId, res);
+// Filtrar por Order
+static async getByOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+    const boxes = await Box.findAll({
+      where: { orderId },
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por orderId:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
-  static async getByPackage(req, res) {
-    return this._filterByField('packageId', req.params.packageId, res);
+// Filtrar por Package
+static async getByPackage(req, res) {
+  try {
+    const { packageId } = req.params;
+    const boxes = await Box.findAll({
+      where: { packageId },
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por packageId:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
-  static async getByUser(req, res) {
-    return this._filterByField('userId', req.params.userId, res);
+// Filtrar por User
+static async getByUser(req, res) {
+  try {
+    const { userId } = req.params;
+    const boxes = await Box.findAll({
+      where: { userId },
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por userId:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
+// Filtrar por Data
+static async getByDate(req, res) {
+  try {
+    const { date } = req.params; // formato: YYYY-MM-DD
+    const boxes = await Box.findAll({
+      where: sequelize.where(sequelize.fn('DATE', sequelize.col('createdAt')), date),
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'customer' },
+        { model: Order, as: 'order' },
+        { model: Package, as: 'package' },
+        { model: User, as: 'user' }
+      ]
+    });
+    return res.json({ success: true, data: boxes });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por data:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+}
+
 
   static async getByDate(req, res) {
     try {
@@ -240,26 +371,6 @@ class BoxController {
     }
   }
 
-  // Função interna para evitar repetição
-  static async _filterByField(field, value, res) {
-    try {
-      const boxes = await Box.findAll({
-        where: { [field]: value },
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
-          { model: User, as: 'user' }
-        ]
-      });
-      return res.json({ success: true, data: boxes });
-    } catch (error) {
-      console.error(`Erro ao filtrar Boxes por ${field}:`, error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
-  }
 
 }
 

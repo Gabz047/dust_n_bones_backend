@@ -3,13 +3,14 @@ import sequelize from '../../config/database.js';
 import Invoice from './Invoice.js';
 import Order from '../Order.js';
 import DeliveryNote from './DeliveryNote.js'; // romaneio
+import { v4 as uuidv4 } from 'uuid';
 
 class InvoiceItem extends Model {}
 
 InvoiceItem.init({
   id: {
     type: DataTypes.UUID,
-    defaultValue: () => require('uuid').v4(),
+    defaultValue: uuidv4,
     primaryKey: true,
     allowNull: false,
   },

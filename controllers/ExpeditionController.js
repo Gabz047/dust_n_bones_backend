@@ -7,28 +7,26 @@ class ExpeditionController {
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      const { projectId, customerId, userId } = req.body;
+      const { projectId, mainCustomerId, userId } = req.body;
 
-      // Validações básicas
       const project = await Project.findByPk(projectId, { transaction });
       if (!project) return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
 
-      const customer = await Customer.findByPk(customerId, { transaction });
+      const customer = await Customer.findByPk(mainCustomerId, { transaction });
       if (!customer) return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
 
       const expedition = await Expedition.create({
         id: uuidv4(),
         projectId,
-        customerId,
+        mainCustomerId,
       }, { transaction });
 
-      // Cria log de movimentação (MovementLogEntity)
-      const movement = await MovementLogEntity.create({
+      await MovementLogEntity.create({
         id: uuidv4(),
         method: 'criação',
         entity: 'expedição',
         entityId: expedition.id,
-        userId: userId,
+        userId,
         status: 'aberto'
       }, { transaction });
 
@@ -47,7 +45,7 @@ class ExpeditionController {
     const transaction = await sequelize.transaction();
     try {
       const { id } = req.params;
-      const { projectId, customerId, userId } = req.body;
+      const { projectId, mainCustomerId, userId } = req.body;
 
       const expedition = await Expedition.findByPk(id, { transaction });
       if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada' });
@@ -55,18 +53,17 @@ class ExpeditionController {
       if (projectId && !await Project.findByPk(projectId, { transaction }))
         return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
 
-      if (customerId && !await Customer.findByPk(customerId, { transaction }))
+      if (mainCustomerId && !await Customer.findByPk(mainCustomerId, { transaction }))
         return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
 
-      await expedition.update({ projectId, customerId }, { transaction });
+      await expedition.update({ projectId, mainCustomerId }, { transaction });
 
-      // Cria log de movimentação (MovementLogEntity)
       await MovementLogEntity.create({
         id: uuidv4(),
         method: 'edição',
         entity: 'expedição',
         entityId: expedition.id,
-        userId: userId,
+        userId,
         status: 'aberto'
       }, { transaction });
 
@@ -85,18 +82,17 @@ class ExpeditionController {
     const transaction = await sequelize.transaction();
     try {
       const { id } = req.params;
-      const { userId } = req.body; // id do usuário que está removendo
+      const { userId } = req.body;
 
       const expedition = await Expedition.findByPk(id, { transaction });
       if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada' });
 
-      // Cria log de movimentação antes de deletar
       await MovementLogEntity.create({
         id: uuidv4(),
         method: 'remoção',
         entity: 'expedição',
         entityId: expedition.id,
-        userId: userId,
+        userId,
         status: 'aberto'
       }, { transaction });
 
@@ -118,7 +114,7 @@ class ExpeditionController {
       const expeditions = await Expedition.findAll({
         include: [
           { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' }
+          { model: Customer, as: 'mainCustomer' } // ✅ alias corrigido
         ],
         order: [['createdAt', 'DESC']]
       });
@@ -136,7 +132,7 @@ class ExpeditionController {
       const expedition = await Expedition.findByPk(id, {
         include: [
           { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' }
+          { model: Customer, as: 'mainCustomer' } // ✅ alias corrigido
         ]
       });
       if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada' });
@@ -155,7 +151,7 @@ class ExpeditionController {
         where: { projectId },
         include: [
           { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' }
+          { model: Customer, as: 'mainCustomer' } // ✅ alias corrigido
         ]
       });
       return res.json({ success: true, data: expeditions });
@@ -168,12 +164,12 @@ class ExpeditionController {
   // Busca expedições por cliente
   static async getByCustomer(req, res) {
     try {
-      const { customerId } = req.params;
+      const { mainCustomerId } = req.params;
       const expeditions = await Expedition.findAll({
-        where: { customerId },
+        where: { mainCustomerId },
         include: [
           { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' }
+          { model: Customer, as: 'mainCustomer' } // ✅ alias corrigido
         ]
       });
       return res.json({ success: true, data: expeditions });

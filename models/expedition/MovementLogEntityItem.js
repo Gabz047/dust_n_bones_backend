@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../../config/database.js';
+import { v4 as uuidv4 } from 'uuid';
 import MovementLogEntity from './MovementLogEntity.js';
 
 class MovementLogEntityItem extends Model {}
@@ -7,7 +8,7 @@ class MovementLogEntityItem extends Model {}
 MovementLogEntityItem.init({
   id: {
     type: DataTypes.UUID,
-    defaultValue: () => require('uuid').v4(),
+    defaultValue: uuidv4,
     primaryKey: true,
     allowNull: false,
   },
