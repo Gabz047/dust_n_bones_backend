@@ -30,6 +30,15 @@ import Stock from './Stock.js';
 import StockItem from './StockItem.js';
 import StockAdditionalItem from './StockAdditionalItem.js';
 import ProductionOrderItemAdditionalFeatureOption from './ProductionOrderItemAdditionalFeatureOption.js';
+import Box from './expedition/Box.js';
+import BoxItem from './expedition/BoxItem.js';
+import DeliveryNote from './expedition/DeliveryNote.js';
+import DeliveryNoteItem from './expedition/DeliveryNoteItem.js';
+import Expedition from './expedition/Expedition.js';
+import Invoice from './expedition/Invoice.js';
+import InvoiceItem from './expedition/InvoiceItem.js';
+import MovementLogEntity from './expedition/MovementLogEntity.js';
+import MovementLogEntityItem from './expedition/MovementLogEntityItem.js';
 
 // ---------------------- ACCOUNT & AUTH ----------------------
 Account.hasMany(AuthProvider, { foreignKey: 'accountId', as: 'authProviders' });
@@ -203,8 +212,98 @@ ItemFeature.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'i
 ProductionOrderItemAdditionalFeatureOption.belongsTo(FeatureOption, { foreignKey: 'featureOptionId', as: 'featureOption' });
 FeatureOption.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'featureOptionId', as: 'additionalOptionsByOption' });
 
+// Box - Box item
+
+Box.belongsTo(DeliveryNote, { as: 'deliveryNote', foreignKey: 'deliveryNoteId' });
+DeliveryNote.hasMany(Box, { as: 'boxes', foreignKey: 'deliveryNoteId' });
+
+Box.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
+Project.hasMany(Box, { as: 'boxes', foreignKey: 'projectId' });
+
+Box.belongsTo(Customer, { as: 'customer', foreignKey: 'customerId' });
+Customer.hasMany(Box, { as: 'boxes', foreignKey: 'customerId' });
+
+Box.belongsTo(Order, { as: 'order', foreignKey: 'orderId' });
+Order.hasMany(Box, { as: 'boxes', foreignKey: 'orderId' });
+
+Box.belongsTo(Package, { as: 'package', foreignKey: 'packageId' });
+Box.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+
+BoxItem.belongsTo(Box, { as: 'box', foreignKey: 'boxId' });
+Box.hasMany(BoxItem, { as: 'items', foreignKey: 'boxId' });
+
+BoxItem.belongsTo(OrderItem, { as: 'orderItem', foreignKey: 'orderItemId' });
+OrderItem.hasMany(BoxItem, { as: 'boxItems', foreignKey: 'orderItemId' });
+
+BoxItem.belongsTo(Item, { as: 'item', foreignKey: 'itemId' });
+Item.hasMany(BoxItem, { as: 'boxItems', foreignKey: 'itemId' });
+
+BoxItem.belongsTo(ItemFeature, { as: 'itemFeature', foreignKey: 'itemFeatureId' });
+ItemFeature.hasMany(BoxItem, { as: 'boxItems', foreignKey: 'itemFeatureId' });
+
+BoxItem.belongsTo(FeatureOption, { as: 'featureOption', foreignKey: 'featureOptionId' });
+FeatureOption.hasMany(BoxItem, { as: 'boxItems', foreignKey: 'featureOptionId' });
+
+BoxItem.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+
+// Delivery Note + Delivery Note Item
+
+DeliveryNote.belongsTo(Invoice, { as: 'invoice', foreignKey: 'invoiceId' });
+Invoice.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'invoiceId' });
+
+DeliveryNote.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
+Project.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'projectId' });
+
+DeliveryNote.belongsTo(Company, { as: 'company', foreignKey: 'companyId' });
+Company.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'companyId' });
+
+DeliveryNote.belongsTo(Branch, { as: 'branch', foreignKey: 'branchId' });
+Branch.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'branchId' });
+
+DeliveryNote.belongsTo(Customer, { as: 'customer', foreignKey: 'customerId' });
+Customer.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'customerId' });
+
+DeliveryNote.belongsTo(Order, { as: 'order', foreignKey: 'orderId' });
+Order.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'orderId' });
+
+DeliveryNote.belongsTo(Expedition, { as: 'expedition', foreignKey: 'expeditionId' });
+Expedition.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'expeditionId' });
+
+DeliveryNoteItem.belongsTo(DeliveryNote, { as: 'deliveryNote', foreignKey: 'deliveryNoteId' });
+DeliveryNote.hasMany(DeliveryNoteItem, { as: 'items', foreignKey: 'deliveryNoteId' });
+
+DeliveryNoteItem.belongsTo(Box, { as: 'box', foreignKey: 'boxId' });
+Box.hasMany(DeliveryNoteItem, { as: 'deliveryNoteItems', foreignKey: 'boxId' });
+
+// Expedition
+Expedition.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
+Project.hasMany(Expedition, { as: 'expeditions', foreignKey: 'projectId' });
+
+Expedition.belongsTo(Customer, { as: 'mainCustomer', foreignKey: 'mainCustomerId' });
+Customer.hasMany(Expedition, { as: 'mainExpeditions', foreignKey: 'mainCustomerId' });
 
 
+// Invoice + Invoice Item
+
+Invoice.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
+Project.hasMany(Invoice, { as: 'invoices', foreignKey: 'projectId' });
+
+Invoice.hasMany(InvoiceItem, { as: 'items', foreignKey: 'invoiceId' });
+InvoiceItem.belongsTo(Invoice, { as: 'invoice', foreignKey: 'invoiceId' });
+
+DeliveryNote.hasMany(InvoiceItem, { as: 'invoiceItems', foreignKey: 'deliveryNoteId' });
+InvoiceItem.belongsTo(DeliveryNote, { as: 'deliveryNote', foreignKey: 'deliveryNoteId' });
+
+Order.hasMany(InvoiceItem, { as: 'invoiceItems', foreignKey: 'orderId' });
+InvoiceItem.belongsTo(Order, { as: 'order', foreignKey: 'orderId' });
+
+// Movement Log Entity + Movement Log Entity Item
+
+User.hasMany(MovementLogEntity, { as: 'movementLogs', foreignKey: 'userId' });
+MovementLogEntity.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+
+MovementLogEntity.hasMany(MovementLogEntityItem, { as: 'items', foreignKey: 'movementLogEntityId' });
+MovementLogEntityItem.belongsTo(MovementLogEntity, { as: 'movementLogEntity', foreignKey: 'movementLogEntityId' });
 // ---------------------- EXPORT ----------------------
 export {
   sequelize,
@@ -239,6 +338,15 @@ export {
   Stock,
   StockItem,
   StockAdditionalItem,
+  Box,
+  BoxItem,
+  DeliveryNote,
+  DeliveryNoteItem,
+  Expedition,
+  Invoice,
+  InvoiceItem,
+  MovementLogEntity,
+  MovementLogEntityItem
 };
 
 export default {
@@ -274,4 +382,13 @@ export default {
   Stock,
   StockItem,
   StockAdditionalItem,
+  Box,
+  BoxItem,
+  DeliveryNote,
+  DeliveryNoteItem,
+  Expedition,
+  Invoice,
+  InvoiceItem,
+  MovementLogEntity,
+  MovementLogEntityItem
 };
