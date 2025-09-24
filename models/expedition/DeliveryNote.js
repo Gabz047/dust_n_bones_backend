@@ -20,7 +20,7 @@ DeliveryNote.init({
   },
   referralId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     unique: true,
   },
   invoiceId: { // fatura
@@ -39,14 +39,14 @@ DeliveryNote.init({
   },
   companyId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: { model: Company, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
   branchId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: { model: Branch, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
@@ -90,6 +90,16 @@ DeliveryNote.init({
 });
 
 // Relações
+
+DeliveryNote.beforeCreate(async (deliveryNote, options) => {
+
+  const last = await DeliveryNote.findOne({
+    order: [['referralId', 'DESC']],
+    transaction: options.transaction,
+  });
+
+  deliveryNote.referralId = last ? last.referralId + 1 : 1;
+});
 
 
 export default DeliveryNote;

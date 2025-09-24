@@ -1,43 +1,63 @@
-import { sequelize, DeliveryNote, DeliveryNoteItem, MovementLogEntity } from '../models/index.js';
+import { sequelize, DeliveryNote, DeliveryNoteItem, MovementLogEntity, MovementLogEntityItem, Box } from '../models/index.js';
 import { Op } from 'sequelize';
 
 class DeliveryNoteController {
 
   // Cria um novo Delivery Note
-  static async create(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { referralId, invoiceId, projectId, companyId, branchId, customerId, orderId, expeditionId, userId } = req.body;
+static async create(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { invoiceId, projectId, companyId, branchId, customerId, orderId, expeditionId, userId, boxes } = req.body;
 
-      const deliveryNote = await DeliveryNote.create({
-        referralId,
-        invoiceId,
-        projectId,
-        companyId,
-        branchId,
-        customerId,
-        orderId,
-        expeditionId,
-        totalQuantity: 0, // será calculado via DeliveryNoteItem
-        boxQuantity: 0
-      }, { transaction });
+    const deliveryNote = await DeliveryNote.create({
+      invoiceId,
+      projectId,
+      companyId: companyId || null,
+      branchId: branchId || (companyId ? null : /* pegar branch do user */ null),
+      customerId,
+      orderId,
+      expeditionId,
+      totalQuantity: 0,
+      boxQuantity: 0
+    }, { transaction });
 
-      // Cria movimentação
-      await MovementLogEntity.create({
-        userId,
-        method: 'criação',
+    const movementLog = await MovementLogEntity.create({
+      userId,
+      method: 'criação',
+      entity: 'romaneio',
+      entityId: deliveryNote.id,
+      status: 'finalizado'
+    }, { transaction });
+
+    // Cria os itens
+    const itemsToCreate = boxes.map(boxId => ({
+      deliveryNoteId: deliveryNote.id,
+      boxId
+    }));
+
+    for (const item of itemsToCreate) {
+      await DeliveryNoteItem.create(item, { transaction });
+      await MovementLogEntityItem.create({
         entity: 'romaneio',
         entityId: deliveryNote.id,
-        status: 'finalizado'
+        quantity: 1,
+        movementLogEntityId: movementLog.id,
+        date: new Date()
       }, { transaction });
-
-      await transaction.commit();
-      return res.status(201).json(deliveryNote);
-    } catch (error) {
-      await transaction.rollback();
-      return res.status(500).json({ error: error.message });
     }
+
+    // Atualiza totais
+    const totalQuantity = await Box.sum('totalQuantity', { where: { id: boxes }, transaction });
+    await deliveryNote.update({ boxQuantity: boxes.length, totalQuantity }, { transaction });
+
+    await transaction.commit();
+    return res.status(201).json(deliveryNote);
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({ error: error.message });
   }
+}
+
 
   // Atualiza um Delivery Note
   static async update(req, res) {
