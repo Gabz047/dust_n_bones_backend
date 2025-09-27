@@ -1,18 +1,37 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, Box, BoxItem, DeliveryNote, Project, Customer, Order, Package, User, MovementLogEntity, StockItem, Stock } from '../models/index.js';
+import { sequelize, Box, BoxItem, DeliveryNote, Project, Customer, Order, Package, User, MovementLogEntity, StockItem, Stock, Item } from '../models/index.js';
 
 class BoxController {
 
   // Helper para adicionar o último log em uma lista de boxes
   static async attachLastLog(boxes) {
-    return Promise.all(boxes.map(async (box) => {
-      const lastLog = await MovementLogEntity.findOne({
-        where: { entity: 'caixa', entityId: box.id },
-        order: [['createdAt', 'DESC']]
-      });
-      return { ...box.toJSON(), lastMovementLog: lastLog };
-    }));
-  }
+  return Promise.all(boxes.map(async (box) => {
+    // Último log
+    const lastLog = await MovementLogEntity.findOne({
+      where: { entity: 'caixa', entityId: box.id },
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Calcula peso total
+    const boxItems = await BoxItem.findAll({
+      where: { boxId: box.id },
+      include: [{ model: Item, as: 'item' }] // precisa garantir o include Item no BoxItem model
+    });
+
+    const totalWeight = boxItems.reduce((sum, bi) => {
+      const itemWeight = bi.item?.weight || 0;
+      console.log('PESSOSOOOO',itemWeight, '-', bi.quantity, 'soma:', itemWeight * bi.quantity)
+      
+      return sum + (bi.quantity * itemWeight);
+    }, 0);
+
+    return { 
+      ...box.toJSON(), 
+      lastMovementLog: lastLog, 
+      totalWeight 
+    };
+  }));
+}
 
   // Cria um novo Box
   static async create(req, res) {

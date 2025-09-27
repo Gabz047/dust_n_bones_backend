@@ -30,6 +30,11 @@ router.delete(
   DeliveryNoteController.delete
 );
 
+router.get('/:id/pdf', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), DeliveryNoteController.generatePDF);
+
+router.get('/:id/labels', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), DeliveryNoteController.generateLabels);
+
+
 // Listar todos os DeliveryNotes
 router.get(
   '/',
