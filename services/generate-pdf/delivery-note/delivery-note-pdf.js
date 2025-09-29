@@ -137,35 +137,48 @@ export async function generateDeliveryNotePDF(deliveryNote, res) {
         <section class="items-grid">
           <h3>ITENS</h3>
 
-          ${deliveryNote.items.map(item => `
-              <div class="item-category">
-                <h4>${safe(item.box?.name || 'Caixa ' + item.box.referralId)}</h4>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Item</th>
-                      <th>Qtd.</th>
-                      <th>Tamanho</th>
-                      
-                    </tr>
-                  </thead>
-                  <tbody>
-  ${item.box?.items?.map(bi => `
-    <tr>
-      <td>${safe(bi.item)}</td>
-      <td>${bi.quantity}</td>
-      <td>${safe(bi.itemFeature?.featureOption.name || '-')}</td>
-    </tr>
-  `).join('')}
-  <tr class="total-row">
-    <td colspan="2"><strong>Total</strong></td>
-    <td><strong>${item.box.totalQuantity}</strong></td>
-  </tr>
-</tbody>
-                </table>
-              </div>
-            `).join('')
-    }
+          ${deliveryNote.items.map(item => {
+  if (!item.box) return ''
+  
+  // Descobre todos os tipos de feature nessa caixa (Cor, Tamanho, Material, etc.)
+  const features = [...new Set(
+    item.box.items.map(bi => bi.itemFeature?.feature?.name).filter(Boolean)
+  )]
+
+  return `
+    <div class="item-category">
+      <h4>${safe(item.box?.name || 'Caixa ' + item.box.referralId)}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qtd.</th>
+            ${features.map(f => `<th>${safe(f)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${item.box.items.map(bi => `
+            <tr>
+              <td>${safe(bi.item)}</td>
+              <td>${bi.quantity}</td>
+              ${features.map(f => `
+                <td>${
+                  bi.itemFeature?.feature?.name === f
+                    ? safe(bi.itemFeature?.featureOption?.name)
+                    : '-'
+                }</td>
+              `).join('')}
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td colspan="${2 + features.length - 1}"><strong>Total</strong></td>
+            <td><strong>${item.box.totalQuantity}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `
+}).join('')}
         </section>
       </main>
 

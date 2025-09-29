@@ -9,6 +9,7 @@ import {
   OrderItemAdditionalFeatureOption,
   ItemFeature,
   Feature,
+  DeliveryNote,
   sequelize 
 } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -118,6 +119,7 @@ static async getById(req, res) {
       include: [
         { model: Project, as: 'project' },
         { model: Customer, as: 'customer' },
+        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'orderId', 'referralId'] },
         {
           model: OrderItem,
           as: 'orderItems',
@@ -183,22 +185,15 @@ static async getOrderByProject(req, res) {
           ]
         },
         {
-          model: OrderItemAdditionalFeatureOption,
-          as: 'additionalOptions',
+          model: DeliveryNote,
+          as: 'deliveryNotes',
+          attributes: ['id', 'referralId', 'createdAt', 'totalQuantity'], // apenas campos necessários
           include: [
-            {
-              model: ItemFeature,
-              as: 'itemFeature',
-              attributes: ['id', 'featureId'],
-              include: [
-                { model: Feature, as: 'feature', attributes: ['name'] } // inclui o nome da feature
-              ]
-            },
-            { model: FeatureOption, as: 'featureOption' },
-            { model: Item, as: 'item' }
+            { model: Customer, as: 'customer', attributes: ['id', 'name'] } // se quiser mostrar cliente no romaneio
           ]
         }
-      ]
+      ],
+      order: [['createdAt', 'DESC']]
     });
 
     res.json({ success: true, data: orders });
@@ -211,6 +206,7 @@ static async getOrderByProject(req, res) {
     });
   }
 }
+
 
 
 

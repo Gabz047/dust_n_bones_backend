@@ -199,7 +199,20 @@ class DeliveryNoteController {
   // Métodos de consulta
   static async getAll(req, res) {
     try {
-      const deliveryNotes = await DeliveryNote.findAll();
+      const deliveryNotes = await DeliveryNote.findAll({
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name']
+          },
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id','name']
+          }
+        ]
+      });
       return res.json(deliveryNotes);
     } catch (error) {
       return res.status(500).json({ error: error.message });
@@ -207,15 +220,98 @@ class DeliveryNoteController {
   }
 
   static async getById(req, res) {
-    try {
-      const { id } = req.params;
-      const deliveryNote = await DeliveryNote.findByPk(id);
-      if (!deliveryNote) return res.status(404).json({ error: 'DeliveryNote não encontrado' });
-      return res.json(deliveryNote);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
+  try {
+    const { id } = req.params;
+
+    const deliveryNote = await DeliveryNote.findByPk(id, {
+      attributes: ['id', 'referralId', 'totalQuantity', 'boxQuantity', 'createdAt', 'orderId'],
+      include: [
+        {
+          model: Expedition,
+          as: 'expedition',
+          attributes: ['id']
+        },
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name'],
+          include: [
+            {
+              model: Customer,
+              as: 'customer',
+              attributes: ['id', 'name']
+            }
+          ]
+        },
+        {
+          model: Customer,
+          as: 'customer',
+          attributes: ['id', 'name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'phone']
+        },
+        {
+          model: Box,
+          as: 'boxes',
+          attributes: ['id', 'referralId', 'totalQuantity'],
+          include: [
+            {
+              model: BoxItem,
+              as: 'items',
+              attributes: ['id', 'quantity'],
+              include: [
+                {
+                  model: Item,
+                  as: 'item',
+                  attributes: ['id', 'name', 'weight']
+                },
+                {
+                  model: ItemFeature,
+                  as: 'itemFeature',
+                  attributes: ['id'],
+                  include: [
+                    {
+                      model: Feature,
+                      as: 'feature',
+                      attributes: ['id', 'name']
+                    }
+                  ]
+                },
+                {
+                  model: FeatureOption,
+                  as: 'featureOption',
+                  attributes: ['id', 'name']
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!deliveryNote) return res.status(404).json({ error: 'DeliveryNote não encontrado' });
+
+    // Buscar último movimento do romaneio
+    const lastRomaneioLog = await MovementLogEntity.findOne({
+      where: { entity: 'romaneio', entityId: deliveryNote.id },
+      order: [['createdAt', 'DESC']]
+    });
+    deliveryNote.dataValues.lastMovementLog = lastRomaneioLog;
+
+    // Último log de cada caixa
+    for (const box of deliveryNote.boxes || []) {
+      const lastBoxLog = await MovementLogEntity.findOne({
+        where: { entity: 'caixa', entityId: box.id },
+        order: [['createdAt', 'DESC']]
+      });
+      box.dataValues.lastMovementLog = lastBoxLog;
     }
+
+    return res.json(deliveryNote);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: error.message });
   }
+}
+
 
   static async getByInvoice(req, res) {
     try {
@@ -305,6 +401,11 @@ class DeliveryNoteController {
                 ]
               }
             ]
+          },
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id', 'name']
           }
         ]
       });

@@ -9,7 +9,7 @@ const router = express.Router();
 router.post(
   '/batch',
   authenticateToken,
-  validateRequest(invoiceItemSchemas.createBatch),
+  // validateRequest(invoiceItemSchemas.createBatch),
   InvoiceItemController.createBatch
 );
 
@@ -17,7 +17,7 @@ router.post(
 router.put(
   '/batch',
   authenticateToken,
-  validateRequest(invoiceItemSchemas.updateBatch),
+  // validateRequest(invoiceItemSchemas.updateBatch),
   InvoiceItemController.updateBatch
 );
 
@@ -25,7 +25,7 @@ router.put(
 router.delete(
   '/batch',
   authenticateToken,
-  validateRequest(invoiceItemSchemas.deleteBatch),
+  // validateRequest(invoiceItemSchemas.deleteBatch),
   InvoiceItemController.deleteBatch
 );
 

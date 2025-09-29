@@ -109,39 +109,67 @@ class ExpeditionController {
   }
 
   // Lista todas as expedições
-  static async getAll(req, res) {
-    try {
-      const expeditions = await Expedition.findAll({
-        include: [
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'mainCustomer' } // ✅ alias corrigido
-        ],
-        order: [['createdAt', 'DESC']]
-      });
-      return res.json({ success: true, data: expeditions });
-    } catch (error) {
-      console.error('Erro ao listar expedições:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
+static async getAll(req, res) {
+  try {
+    const expeditions = await Expedition.findAll({
+      include: [
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'mainCustomer' }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Busca o último log para cada expedição
+    const expeditionsWithLog = await Promise.all(
+      expeditions.map(async (exp) => {
+        const lastLog = await MovementLogEntity.findOne({
+          where: { entity: 'expedição', entityId: exp.id },
+          order: [['createdAt', 'DESC']]
+        });
+        return {
+          ...exp.toJSON(),
+          lastMovementLog: lastLog ? lastLog.toJSON() : null
+        };
+      })
+    );
+
+    return res.json({ success: true, data: expeditionsWithLog });
+  } catch (error) {
+    console.error('Erro ao listar expedições:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
   // Busca expedição por ID
-  static async getById(req, res) {
-    try {
-      const { id } = req.params;
-      const expedition = await Expedition.findByPk(id, {
-        include: [
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'mainCustomer' } // ✅ alias corrigido
-        ]
-      });
-      if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada' });
-      return res.json({ success: true, data: expedition });
-    } catch (error) {
-      console.error('Erro ao buscar expedição por ID:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
+static async getById(req, res) {
+  try {
+    const { id } = req.params;
+    const expedition = await Expedition.findByPk(id, {
+      include: [
+        { model: Project, as: 'project' },
+        { model: Customer, as: 'mainCustomer' }
+      ]
+    });
+
+    if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada' });
+
+    const lastLog = await MovementLogEntity.findOne({
+      where: { entity: 'expedição', entityId: expedition.id },
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        ...expedition.toJSON(),
+        lastMovementLog: lastLog ? lastLog.toJSON() : null
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar expedição por ID:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
   // Busca expedições por projeto
   static async getByProject(req, res) {

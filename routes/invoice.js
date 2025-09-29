@@ -30,6 +30,8 @@ router.delete(
   InvoiceController.delete
 );
 
+router.get('/:id/pdf', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), InvoiceController.generatePDF);
+
 // Listar todas as faturas
 router.get(
   '/',

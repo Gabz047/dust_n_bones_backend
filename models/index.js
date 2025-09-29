@@ -285,6 +285,12 @@ Customer.hasMany(Expedition, { as: 'mainExpeditions', foreignKey: 'mainCustomerI
 
 // Invoice + Invoice Item
 
+Invoice.belongsTo(Company, { as: 'company', foreignKey: 'companyId' });
+Company.hasMany(Invoice, { as: 'invoices', foreignKey: 'companyId' });
+
+Invoice.belongsTo(Branch, { as: 'branch', foreignKey: 'branchId' });
+Branch.hasMany(Invoice, { as: 'invoices', foreignKey: 'branchId' });
+
 Invoice.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
 Project.hasMany(Invoice, { as: 'invoices', foreignKey: 'projectId' });
 

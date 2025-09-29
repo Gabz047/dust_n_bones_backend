@@ -14,6 +14,11 @@ InvoiceItem.init({
     primaryKey: true,
     allowNull: false,
   },
+   referralId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    unique: true,
+  },
   invoiceId: { 
     type: DataTypes.UUID,
     allowNull: false,
@@ -49,5 +54,9 @@ InvoiceItem.init({
 
 // Relações
 
+InvoiceItem.beforeCreate(async (box, options) => {
+  const last = await InvoiceItem.findOne({ order: [['referralId', 'DESC']], transaction: options.transaction });
+  box.referralId = last ? last.referralId + 1 : 1;
+});
 
 export default InvoiceItem;

@@ -968,9 +968,24 @@ export const invoiceSchemas = {
         'string.guid': 'ID do projeto deve ser um UUID válido.',
         'any.required': 'ID do projeto é obrigatório.',
       }),
+      companyId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .allow(null)
+      .messages({
+        'string.guid': 'ID da empresa deve ser um UUID válido.',
+      }),
+
+    branchId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .allow(null)
+      .messages({
+        'string.guid': 'ID da filial deve ser um UUID válido.',
+      }),
 
     type: Joi.string()
-      .valid('entrada', 'saida') // exemplo de tipos, ajustar conforme necessidade
+      .valid('project', 'deliveryNote', 'order') // exemplo de tipos, ajustar conforme necessidade
       .required()
       .messages({
         'any.only': 'Tipo de fatura inválido.',
@@ -1002,6 +1017,21 @@ export const invoiceSchemas = {
         'number.base': 'O total da fatura deve ser um número.',
         'number.min': 'O total da fatura não pode ser negativo.',
         'any.required': 'O total da fatura é obrigatório.',
+      }),
+      companyId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .allow(null)
+      .messages({
+        'string.guid': 'ID da empresa deve ser um UUID válido.',
+      }),
+
+    branchId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .optional()
+      .allow(null)
+      .messages({
+        'string.guid': 'ID da filial deve ser um UUID válido.',
       }),
 
     userId: Joi.string()
@@ -1050,29 +1080,20 @@ export const invoiceItemSchemas = {
   createBatch: Joi.object({
     items: Joi.array().items(
       Joi.object({
-        invoiceId: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .required()
+        invoiceId: Joi.string().guid({ version: 'uuidv4' }).required()
           .messages({
             'string.guid': 'ID da fatura deve ser um UUID válido.',
             'any.required': 'ID da fatura é obrigatório.',
           }),
-        deliveryNoteId: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .required()
+        deliveryNoteId: Joi.string().guid({ version: 'uuidv4' }).optional().allow(null)
           .messages({
             'string.guid': 'ID do romaneio deve ser um UUID válido.',
-            'any.required': 'ID do romaneio é obrigatório.',
           }),
-        orderId: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .optional()
+        orderId: Joi.string().guid({ version: 'uuidv4' }).optional().allow(null)
           .messages({
             'string.guid': 'ID do pedido deve ser um UUID válido.',
           }),
-        price: Joi.number()
-          .min(0)
-          .optional()
+        price: Joi.number().min(0).optional()
           .messages({
             'number.base': 'Preço deve ser um número.',
             'number.min': 'Preço não pode ser negativo.',
@@ -1084,9 +1105,7 @@ export const invoiceItemSchemas = {
         'array.min': 'É necessário enviar pelo menos um item.',
         'any.required': 'Array de itens é obrigatório.',
       }),
-    movementLogEntityId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
+    movementLogEntityId: Joi.string().guid({ version: 'uuidv4' }).required()
       .messages({
         'string.guid': 'ID da movimentação deve ser um UUID válido.',
         'any.required': 'ID da movimentação é obrigatório.',
@@ -1096,108 +1115,39 @@ export const invoiceItemSchemas = {
   updateBatch: Joi.object({
     items: Joi.array().items(
       Joi.object({
-        id: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .required()
+        id: Joi.string().guid({ version: 'uuidv4' }).required()
           .messages({
             'string.guid': 'ID do item deve ser um UUID válido.',
             'any.required': 'ID do item é obrigatório.',
           }),
-        invoiceId: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .optional()
-          .messages({
-            'string.guid': 'ID da fatura deve ser um UUID válido.',
-          }),
-        deliveryNoteId: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .optional()
-          .messages({
-            'string.guid': 'ID do romaneio deve ser um UUID válido.',
-          }),
-        orderId: Joi.string()
-          .guid({ version: ['uuidv4'] })
-          .optional()
-          .messages({
-            'string.guid': 'ID do pedido deve ser um UUID válido.',
-          }),
-        price: Joi.number()
-          .min(0)
-          .optional()
-          .messages({
-            'number.base': 'Preço deve ser um número.',
-            'number.min': 'Preço não pode ser negativo.',
-          }),
+        invoiceId: Joi.string().guid({ version: 'uuidv4' }).optional(),
+        deliveryNoteId: Joi.string().guid({ version: 'uuidv4' }).optional().allow(null),
+        orderId: Joi.string().guid({ version: 'uuidv4' }).optional().allow(null),
+        price: Joi.number().min(0).optional(),
       })
-    ).min(1).required()
-      .messages({
-        'array.base': 'Itens deve ser um array.',
-        'array.min': 'É necessário enviar pelo menos um item.',
-        'any.required': 'Array de itens é obrigatório.',
-      }),
-    movementLogEntityId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID da movimentação deve ser um UUID válido.',
-        'any.required': 'ID da movimentação é obrigatório.',
-      }),
+    ).min(1).required(),
+    movementLogEntityId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 
   deleteBatch: Joi.object({
     ids: Joi.array().items(
-      Joi.string().guid({ version: ['uuidv4'] })
-        .required()
-        .messages({
-          'string.guid': 'ID do item deve ser um UUID válido.',
-          'any.required': 'ID do item é obrigatório.',
-        })
-    ).min(1).required()
-      .messages({
-        'array.base': 'IDs deve ser um array.',
-        'array.min': 'É necessário enviar pelo menos um ID.',
-        'any.required': 'Array de IDs é obrigatório.',
-      }),
-    movementLogEntityId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID da movimentação deve ser um UUID válido.',
-        'any.required': 'ID da movimentação é obrigatório.',
-      }),
+      Joi.string().guid({ version: 'uuidv4' }).required()
+    ).min(1).required(),
+    movementLogEntityId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 
   getByInvoice: Joi.object({
-    invoiceId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID da fatura deve ser um UUID válido.',
-        'any.required': 'ID da fatura é obrigatório.',
-      }),
+    invoiceId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 
   getByDeliveryNote: Joi.object({
-    deliveryNoteId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID do romaneio deve ser um UUID válido.',
-        'any.required': 'ID do romaneio é obrigatório.',
-      }),
+    deliveryNoteId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 
   getByOrder: Joi.object({
-    orderId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID do pedido deve ser um UUID válido.',
-        'any.required': 'ID do pedido é obrigatório.',
-      }),
+    orderId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 };
-
 
 // Schemas de validação para DeliveryNoteItem
 
