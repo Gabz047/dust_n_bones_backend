@@ -1,4 +1,4 @@
-import { sequelize, InvoiceItem, MovementLogEntityItem, DeliveryNote, Box, BoxItem, FeatureOption, ItemFeature, Feature, OrderItem, Order, Item, Customer } from '../models/index.js';
+import { sequelize, InvoiceItem, Invoice, MovementLogEntityItem, DeliveryNote, Box, BoxItem, FeatureOption, ItemFeature, Feature, OrderItem, Order, Item, Customer } from '../models/index.js';
 import { calculateQuantityAndPrice, groupItems } from '../utils/invoice.js';
 
 class InvoiceItemController {
@@ -25,11 +25,19 @@ class InvoiceItemController {
         }, { transaction });
 
         if (item.deliveryNoteId) {
-  await DeliveryNote.update(
-    { invoiceId: item.invoiceId },
-    { where: { id: item.deliveryNoteId }, transaction }
-  )
-}
+          await DeliveryNote.update(
+            { invoiceId: item.invoiceId },
+            { where: { id: item.deliveryNoteId }, transaction }
+          );
+        }
+
+        if (item.invoiceId) {
+          const totalInvoicePrice = await InvoiceItem.sum('price', {
+            where: { invoiceId: item.invoiceId },
+            transaction
+          });
+          await Invoice.update({ totalPrice: totalInvoicePrice }, { where: { id: item.invoiceId }, transaction });
+        }
 
         // Cria o log com quantidade correta
         await MovementLogEntityItem.create({
@@ -73,13 +81,21 @@ class InvoiceItemController {
           orderId: item.orderId ?? invoiceItem.orderId,
           price: totalPrice
         }, { transaction });
-        
+
+        if (invoiceItem.invoiceId) {
+          const totalInvoicePrice = await InvoiceItem.sum('price', {
+            where: { invoiceId: invoiceItem.invoiceId },
+            transaction
+          });
+          await Invoice.update({ totalPrice: totalInvoicePrice }, { where: { id: invoiceItem.invoiceId }, transaction });
+        }
+
         if (invoiceItem.deliveryNoteId) {
-  await DeliveryNote.update(
-    { invoiceId: invoiceItem.invoiceId },
-    { where: { id: invoiceItem.deliveryNoteId }, transaction }
-  )
-}
+          await DeliveryNote.update(
+            { invoiceId: invoiceItem.invoiceId },
+            { where: { id: invoiceItem.deliveryNoteId }, transaction }
+          )
+        }
 
         // Atualiza o log
         await MovementLogEntityItem.create({
@@ -121,6 +137,14 @@ class InvoiceItemController {
             { invoiceId: null },
             { where: { id: invoiceItem.deliveryNoteId }, transaction }
           );
+        }
+
+        if (invoiceItem.invoiceId) {
+          const totalInvoicePrice = await InvoiceItem.sum('price', {
+            where: { invoiceId: invoiceItem.invoiceId },
+            transaction
+          }) || 0; // se não tiver mais nenhum item, coloca 0
+          await Invoice.update({ totalPrice: totalInvoicePrice }, { where: { id: invoiceItem.invoiceId }, transaction });
         }
 
         // Deleta o item

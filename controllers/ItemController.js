@@ -2,8 +2,22 @@ import Item from '../models/Item.js';
 import Company from '../models/Company.js';
 import Branch from '../models/Branch.js';
 
+// Helper para gerar o name com gênero
+function buildItemName(name, businessItemType, genre) {
+  // Remove qualquer sufixo existente " - <algo>"
+  name = name.replace(/\s-\s.*$/, '');
+
+  // Se businessItemType for Outro ou vazio, retorna só o nome
+  if (!businessItemType || businessItemType === 'Outro') {
+    return name;
+  }
+
+  // Se houver gênero, adiciona ao nome
+  return `${name} - ${genre || 'Unissex'}`;
+}
+
 export default {
-  // Criar um item
+  // Criar item
   async create(req, res) {
     try {
       let {
@@ -21,59 +35,41 @@ export default {
         genre,
       } = req.body;
 
-      // --- Lógica de defaults ---
       if (!businessItemType || businessItemType === 'Outro') {
         genre = null;
       } else if (!genre) {
         genre = 'Unissex';
       }
 
-      let item;
+      console.log(price)
 
-      if (branchId) {
-        item = await Item.create({
-          branchId,
-          name,
-          description,
-          itemType,
-          measurementUnit,
-          minStock,
-          maxStock,
-          price,
-          weight,
-          businessItemType,
-          genre,
-        });
-      } else if (companyId) {
-        item = await Item.create({
-          companyId,
-          name,
-          description,
-          itemType,
-          measurementUnit,
-          minStock,
-          maxStock,
-          price,
-          weight,
-          businessItemType,
-          genre,
-        });
-      }
+      name = buildItemName(name, businessItemType, genre);
 
-      // Adiciona displayName
-      const formattedItem = {
-        ...item.toJSON(),
-        displayName: genre ? `${name} - ${genre}` : name
+      const itemData = {
+        name,
+        description,
+        itemType,
+        measurementUnit,
+        minStock,
+        maxStock,
+        price,
+        weight,
+        businessItemType,
+        genre,
       };
 
-      return res.status(201).json({ success: true, data: formattedItem });
+      const item = branchId
+        ? await Item.create({ branchId, ...itemData })
+        : await Item.create({ companyId, ...itemData });
+
+      return res.status(201).json({ success: true, data: item });
     } catch (error) {
       console.error('Erro ao criar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao criar item.' });
     }
   },
 
-  // Atualizar item por id
+  // Atualizar item
   async update(req, res) {
     try {
       const { id } = req.params;
@@ -93,12 +89,15 @@ export default {
       const item = await Item.findByPk(id);
       if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-      // --- Lógica de defaults ---
+      console.log(price)
+
       if (!businessItemType || businessItemType === 'Outro') {
         genre = null;
       } else if (!genre) {
         genre = 'Unissex';
       }
+
+      name = buildItemName(name, businessItemType, genre);
 
       await item.update({
         name,
@@ -113,71 +112,55 @@ export default {
         genre,
       });
 
-      const formattedItem = {
-        ...item.toJSON(),
-        displayName: genre ? `${name} - ${genre}` : name
-      };
-
-      return res.json({ success: true, data: formattedItem });
+      return res.json({ success: true, data: item });
     } catch (error) {
       console.error('Erro ao atualizar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao atualizar item.' });
     }
   },
 
-  // Buscar todos os itens com relacionamentos
+  // Buscar todos os itens
   async getAll(req, res) {
     try {
       const items = await Item.findAll({
         include: [
           { model: Company, as: 'company', attributes: ['id', 'name'] },
-          { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
         ],
         order: [['createdAt', 'DESC']],
       });
 
-      const formattedItems = items.map(item => ({
-        ...item.toJSON(),
-        displayName: item.genre ? `${item.name} - ${item.genre}` : item.name
-      }));
-
-      return res.json({ success: true, data: formattedItems });
+      return res.json({ success: true, data: items });
     } catch (error) {
       console.error('Erro ao buscar itens:', error);
       return res.status(500).json({ success: false, message: 'Erro ao buscar itens.' });
     }
   },
 
-  // Buscar item por id com relacionamentos
+  // Buscar item por ID
   async getById(req, res) {
     try {
       const { id } = req.params;
       const item = await Item.findByPk(id, {
         include: [
           { model: Company, as: 'company' },
-          { model: Branch, as: 'branch' }
+          { model: Branch, as: 'branch' },
         ],
       });
 
       if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-      const formattedItem = {
-        ...item.toJSON(),
-        displayName: item.genre ? `${item.name} - ${item.genre}` : item.name
-      };
-
-      return res.json({ success: true, data: formattedItem });
+      return res.json({ success: true, data: item });
     } catch (error) {
       console.error('Erro ao buscar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao buscar item.' });
     }
   },
 
-  // Deletar item por id
+  // Deletar item
   async delete(req, res) {
     try {
       const { id } = req.params;
-
       const item = await Item.findByPk(id);
       if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
@@ -187,5 +170,5 @@ export default {
       console.error('Erro ao deletar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao deletar item.' });
     }
-  }
+  },
 };

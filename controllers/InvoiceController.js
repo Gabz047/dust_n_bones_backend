@@ -11,85 +11,114 @@ class InvoiceController {
 static async create(req, res) {
   const transaction = await sequelize.transaction();
   try {
-    const { projectId, type, userId, companyId, branchId } = req.body;
-    if (!projectId || !type || !userId) {
-      return res.status(400).json({ error: 'projectId, type e userId são obrigatórios' });
+    const { projectId, type, deliveryNoteIds, companyId, customerId, userId } = req.body;
+
+    // Busca romaneios: se não vier lista, pega todos do projeto
+    let romaneios = [];
+    if (Array.isArray(deliveryNoteIds) && deliveryNoteIds.length > 0) {
+      romaneios = await DeliveryNote.findAll({
+        where: { id: deliveryNoteIds },
+        transaction
+      });
+    } else {
+      romaneios = await DeliveryNote.findAll({
+        where: { projectId },
+        transaction
+      });
     }
 
-    // Verifica se já existe fatura para o projeto
-    const existingInvoice = await Invoice.findOne({ where: { projectId }, transaction });
-    if (existingInvoice) return res.status(400).json({ error: 'Este projeto já possui uma fatura vinculada' });
-
-    // Verifica se há romaneio já vinculado a outra fatura
-    const linkedDN = await DeliveryNote.findOne({
-      where: { projectId, invoiceId: { [Op.ne]: null } },
-      transaction
-    });
-    if (linkedDN) return res.status(400).json({ error: 'Existe um romaneio deste projeto vinculado a uma fatura' });
+    if (romaneios.length === 0) {
+      return res.status(400).json({ error: 'Nenhum romaneio encontrado para gerar a fatura' });
+    }
 
     // Cria a fatura
     const invoice = await Invoice.create({
+    
       projectId,
       type,
-      totalPrice: 0,
       companyId: companyId || null,
-      branchId: branchId || (companyId ? null : null),
+      customerId: customerId || null,
+      date: new Date(),
+      totalPrice: 0
     }, { transaction });
 
-    // Cria o movimento da fatura
+    // Log principal
     const movementLog = await MovementLogEntity.create({
+      userId,
+      method: 'criação',
+      projectId,
       entity: 'fatura',
       entityId: invoice.id,
-      method: 'criação',
-      status: 'aberto',
-      userId,
       date: new Date()
     }, { transaction });
 
     let totalInvoicePrice = 0;
 
-    // Só cria InvoiceItems automaticamente se o tipo for "project"
-    if (type === 'project') {
-      // Busca todos os romaneios do projeto
-      const deliveryNotes = await DeliveryNote.findAll({ where: { projectId }, transaction });
+    // Percorre os romaneios selecionados ou todos do projeto
+    for (const dn of romaneios) {
+  let dnTotalPrice = 0;
+  let dnTotalQuantity = 0;
 
-      for (const dn of deliveryNotes) {
-        const { totalQuantity, totalPrice } = await calculateQuantityAndPrice(dn.id, transaction);
-
-        const invoiceItem = await InvoiceItem.create({
-          invoiceId: invoice.id,
-          deliveryNoteId: dn.id,
-          orderId: dn.orderId || null,
-          price: totalPrice
-        }, { transaction });
-
-        // Cria log dos itens
-        await MovementLogEntityItem.create({
-          movementLogEntityId: movementLog.id,
-          entity: 'fatura',
-          entityId: invoiceItem.id,
-          quantity: totalQuantity,
-          date: new Date()
-        }, { transaction });
-
-        // Atualiza o romaneio com a fatura
-        await DeliveryNote.update(
-          { invoiceId: invoice.id },
-          { where: { id: dn.id }, transaction }
-        );
-
-        totalInvoicePrice += totalPrice;
+  const boxes = await Box.findAll({
+    where: { deliveryNoteId: dn.id },
+    include: [
+      {
+        model: BoxItem,
+        as: 'items',
+        include: [
+          { model: Item, as: 'item', attributes: ['id', 'name', 'price'] }
+        ]
       }
-    }
+    ],
+    transaction
+  });
 
-    // Atualiza a fatura com o total calculado (se não for project, fica 0)
+  for (const box of boxes) {
+    for (const bi of box.items) {
+      const unitPrice = bi.item?.price || 0;
+      const lineTotal = unitPrice * bi.quantity;
+
+      dnTotalPrice += lineTotal;
+      dnTotalQuantity += bi.quantity;
+    }
+  }
+
+  // Só cria InvoiceItem se type for 'project'
+  if (type === 'project') {
+    const invoiceItem = await InvoiceItem.create({
+      invoiceId: invoice.id,
+      deliveryNoteId: dn.id,
+      orderId: dn.orderId || null,
+      price: dnTotalPrice
+    }, { transaction });
+
+    await dn.update({ invoiceId: invoice.id }, { transaction });
+
+    // Cria log
+    await MovementLogEntityItem.create({
+      userId,
+      movementLogEntityId: movementLog.id,
+      entity: 'fatura',
+      method: 'criação',
+      entityId: invoiceItem.id,
+      quantity: dnTotalQuantity,
+      date: new Date()
+    }, { transaction });
+  }
+
+  totalInvoicePrice += dnTotalPrice;
+}
+
+    // Atualiza preço total
     await invoice.update({ totalPrice: totalInvoicePrice }, { transaction });
 
     await transaction.commit();
     return res.status(201).json(invoice);
+
   } catch (error) {
     await transaction.rollback();
-    return res.status(500).json({ error: error.message });
+    console.error(error);
+    return res.status(500).json({ error: 'Erro ao criar fatura' });
   }
 }
 
@@ -163,7 +192,7 @@ static async create(req, res) {
   static async getAll(req, res) {
     try {
       const invoices = await Invoice.findAll({
-        attributes: ['id', 'projectId', 'type', 'totalPrice'],
+        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
         include: [
           { model: Project, as: 'project', attributes: ['id', 'name'] },
           { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
@@ -192,10 +221,15 @@ static async create(req, res) {
     try {
       const { id } = req.params;
       const invoice = await Invoice.findByPk(id, {
-        attributes: ['id', 'projectId', 'type', 'totalPrice'],
+        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
         include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'] },
-          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+          { model: Project, as: 'project', attributes: ['id', 'name'], include: [
+            { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+          ] },
+          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId', 'totalQuantity'], include: [
+            { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+          ] },
+          
         ]
       });
 

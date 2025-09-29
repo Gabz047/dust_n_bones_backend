@@ -971,7 +971,7 @@ export const invoiceSchemas = {
       companyId: Joi.string()
       .guid({ version: ['uuidv4'] })
       .optional()
-      .allow(null)
+      
       .messages({
         'string.guid': 'ID da empresa deve ser um UUID válido.',
       }),
@@ -1010,38 +1010,38 @@ export const invoiceSchemas = {
   }),
 
   update: Joi.object({
-    totalPrice: Joi.number()
-      .min(0)
-      .required()
-      .messages({
-        'number.base': 'O total da fatura deve ser um número.',
-        'number.min': 'O total da fatura não pode ser negativo.',
-        'any.required': 'O total da fatura é obrigatório.',
-      }),
-      companyId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .optional()
-      .allow(null)
-      .messages({
-        'string.guid': 'ID da empresa deve ser um UUID válido.',
-      }),
-
-    branchId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .optional()
-      .allow(null)
-      .messages({
-        'string.guid': 'ID da filial deve ser um UUID válido.',
-      }),
-
-    userId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID do usuário deve ser um UUID válido.',
-        'any.required': 'ID do usuário é obrigatório.',
-      }),
-  }),
+  projectId: Joi.string()
+    .guid({ version: ['uuidv4'] })
+    .optional()
+    .messages({
+      'string.guid': 'ID do projeto deve ser um UUID válido.',
+    }),
+  type: Joi.string()
+    .valid('project', 'deliveryNote', 'order')
+    .optional()
+    .messages({
+      'any.only': 'Tipo de fatura inválido.'
+    }),
+  totalPrice: Joi.number()
+    .min(0)
+    .required()
+    .messages({
+      'number.base': 'O total da fatura deve ser um número.',
+      'number.min': 'O total da fatura não pode ser negativo.',
+      'any.required': 'O total da fatura é obrigatório.',
+    }),
+  companyId: Joi.string()
+    .guid({ version: ['uuidv4'] })
+    .optional()
+    .allow(null),
+  branchId: Joi.string()
+    .guid({ version: ['uuidv4'] })
+    .optional()
+    .allow(null),
+  userId: Joi.string()
+    .guid({ version: ['uuidv4'] })
+    .required()
+}),
 
   delete: Joi.object({
     userId: Joi.string()

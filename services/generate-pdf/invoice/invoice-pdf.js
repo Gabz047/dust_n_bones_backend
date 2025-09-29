@@ -10,6 +10,8 @@ export async function generateInvoicePDF(invoice, res) {
   const page = await browser.newPage()
   console.log(invoice)
 
+  const formatMoney = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0)
+
   const safe = (value) => (value ? value : '')
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : ''
 
@@ -139,14 +141,14 @@ export async function generateInvoicePDF(invoice, res) {
               `).join('')}
               <td>${safe(it.quantity)}</td>
               <td>${safe(it.unitPrice)}</td>
-              <td>${safe(it.totalPrice)}</td>
+              <td>${safe(it.totalPrice.toFixed(2))}</td>
             </tr>
           `).join('')}
         </tbody>
         <tfoot>
           <tr>
             <td colspan="${1 + allFeatures.length + 2}" class="subtotal-label">Subtotal</td>
-            <td class="subtotal-value">${safe(dnTotal)}</td>
+            <td class="subtotal-value">${safe(formatMoney(dnTotal))}</td>
           </tr>
         </tfoot>
       </table>
@@ -157,10 +159,10 @@ export async function generateInvoicePDF(invoice, res) {
 
       <section class="invoice-summary">
         <div class="summary-details">
-          <p><span>Subtotal Geral:</span> <span>R$ ${safe(invoice.totalPrice)}</span></p>
+          <p><span>Subtotal Geral:</span> <span>R$ ${safe(formatMoney(invoice.totalPrice))}</span></p>
           <p><span>Descontos:</span> <span>- R$ ${safe(invoice.discount)}</span></p>
           <p><span>Frete/Impostos:</span> <span>R$ ${safe(invoice.taxShipping)}</span></p>
-          <p class="total-due"><span>VALOR TOTAL:</span> <span>R$ ${safe(invoice.totalPrice)}</span></p>
+          <p class="total-due"><span>VALOR TOTAL:</span> <span>R$ ${safe(formatMoney(invoice.totalPrice))}</span></p>
         </div>
       </section>
 
