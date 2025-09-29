@@ -1131,9 +1131,9 @@ export const invoiceItemSchemas = {
 
   deleteBatch: Joi.object({
     ids: Joi.array().items(
-      Joi.string().guid({ version: 'uuidv4' }).required()
+      Joi.string().uuid().required()
     ).min(1).required(),
-    movementLogEntityId: Joi.string().guid({ version: 'uuidv4' }).required(),
+    movementLogEntityId: Joi.string().uuid().required(),
   }),
 
   getByInvoice: Joi.object({

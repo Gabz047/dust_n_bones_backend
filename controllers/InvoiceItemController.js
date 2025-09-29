@@ -1,9 +1,9 @@
 import { sequelize, InvoiceItem, MovementLogEntityItem, DeliveryNote, Box, BoxItem, FeatureOption, ItemFeature, Feature, OrderItem, Order, Item, Customer } from '../models/index.js';
-import { calculateQuantityAndPrice } from '../utils/invoice.js';
+import { calculateQuantityAndPrice, groupItems } from '../utils/invoice.js';
 
 class InvoiceItemController {
 
-   static async createBatch(req, res) {
+  static async createBatch(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { items, movementLogEntityId } = req.body;
@@ -23,6 +23,13 @@ class InvoiceItemController {
           orderId: item.orderId,
           price: totalPrice
         }, { transaction });
+
+        if (item.deliveryNoteId) {
+  await DeliveryNote.update(
+    { invoiceId: item.invoiceId },
+    { where: { id: item.deliveryNoteId }, transaction }
+  )
+}
 
         // Cria o log com quantidade correta
         await MovementLogEntityItem.create({
@@ -66,6 +73,13 @@ class InvoiceItemController {
           orderId: item.orderId ?? invoiceItem.orderId,
           price: totalPrice
         }, { transaction });
+        
+        if (invoiceItem.deliveryNoteId) {
+  await DeliveryNote.update(
+    { invoiceId: invoiceItem.invoiceId },
+    { where: { id: invoiceItem.deliveryNoteId }, transaction }
+  )
+}
 
         // Atualiza o log
         await MovementLogEntityItem.create({
@@ -101,6 +115,13 @@ class InvoiceItemController {
       for (const id of ids) {
         const invoiceItem = await InvoiceItem.findByPk(id, { transaction });
         if (!invoiceItem) continue;
+
+        if (invoiceItem.deliveryNoteId) {
+          await DeliveryNote.update(
+            { invoiceId: null },
+            { where: { id: invoiceItem.deliveryNoteId }, transaction }
+          );
+        }
 
         // Deleta o item
         await invoiceItem.destroy({ transaction });
@@ -159,136 +180,85 @@ class InvoiceItemController {
   }
 
   // Busca por Invoice
-  // Busca por Invoice com todos os relacionamentos detalhados
-  // Busca por Invoice com totalQuantity e totalPrice calculados
-static async getByInvoice(req, res) {
-  try {
-    const { invoiceId } = req.params;
 
-    const items = await InvoiceItem.findAll({
-      where: { invoiceId },
-      include: [
-        {
-          model: DeliveryNote,
-          as: 'deliveryNote',
-          attributes: ['id', 'referralId'],
-          include: [
-            {
-              model: Box,
-              as: 'boxes',
-              attributes: ['id', 'referralId'],
-              include: [
-                {
-                  model: Customer,
-                  as: 'customer',
-                  attributes: ['name']
-                },
-                {
-                  model: BoxItem,
-                  as: 'items',
-                  attributes: ['id', 'quantity'],
-                  include: [
-                    {
-                      model: Item,
-                      as: 'item',
-                      attributes: ['price', 'id', 'name']
-                    },
-                    {
-                      model: FeatureOption,
-                      as: 'featureOption',
-                      attributes: ['id', 'name'],
-                    },
-                    {
-                      model: ItemFeature,
-                      as: 'itemFeature',
-                      attributes: ['id'],
-                      include: [
-                        {
-                          model: Feature,
-                          as: 'feature',
-                          attributes: ['id', 'name']
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          model: Order,
-          as: 'order',
-          attributes: ['id', 'referralId'],
-          include: [
-            {
-              model: Customer,
-              as: 'customer',
-              attributes: ['name']
-            },
-            {
-              model: OrderItem,
-              as: 'orderItems',
-              attributes: ['id', 'quantity'],
-              include: [
-                {
-                  model: Item,
-                  as: 'item',
-                  attributes: ['price', 'id', 'name']
-                },
-                {
-                  model: FeatureOption,
-                  as: 'featureOption',
-                  attributes: ['id', 'name'],
-                },
-                {
-                  model: ItemFeature,
-                  as: 'itemFeature',
-                  attributes: ['id'],
-                  include: [
-                    {
-                      model: Feature,
-                      as: 'feature',
-                      attributes: ['id', 'name']
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    });
 
-    // Calcula totalQuantity e totalPrice para cada InvoiceItem
-    const itemsWithTotals = items.map(item => {
-      let totalQuantity = 0;
-      let totalPrice = 0;
 
-      if (item.deliveryNote?.boxes) {
-        for (const box of item.deliveryNote.boxes) {
-          for (const boxItem of box.items) {
-            const quantity = boxItem.quantity || 0;
-            const price = boxItem.item?.price || 0;
-            totalQuantity += quantity;
-            totalPrice += quantity * price;
+  static async getByInvoice(req, res) {
+    try {
+      const { invoiceId } = req.params
+
+      const invoiceItems = await InvoiceItem.findAll({
+        where: { invoiceId },
+        include: [
+          {
+            model: DeliveryNote,
+            as: 'deliveryNote',
+            attributes: ['id', 'referralId'],
+            include: [
+              {
+                model: Box,
+                as: 'boxes',
+                attributes: ['id', 'referralId'],
+                include: [
+                  { model: Customer, as: 'customer', attributes: ['name'] },
+                  {
+                    model: BoxItem,
+                    as: 'items',
+                    attributes: ['id', 'quantity'],
+                    include: [
+                      { model: Item, as: 'item', attributes: ['id', 'name', 'price'] },
+                      { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] },
+                      { model: ItemFeature, as: 'itemFeature', attributes: ['id'], include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            model: Order,
+            as: 'order',
+            attributes: ['id', 'referralId'],
+            include: [
+              { model: Customer, as: 'customer', attributes: ['name'] },
+              {
+                model: OrderItem,
+                as: 'orderItems',
+                attributes: ['id', 'quantity'],
+                include: [
+                  { model: Item, as: 'item', attributes: ['id', 'name', 'price'] },
+                  { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] },
+                  { model: ItemFeature, as: 'itemFeature', attributes: ['id'], include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] }
+                ]
+              }
+            ]
           }
+        ]
+      })
+
+      // Agrupa BoxItems dentro de cada InvoiceItem
+      const groupedInvoiceItems = invoiceItems.map(ii => {
+        // DeliveryNote → Boxes → Items
+        if (ii.deliveryNote?.boxes) {
+          ii.deliveryNote.boxes = ii.deliveryNote.boxes.map(box => ({
+            ...box.toJSON?.() || box,
+            items: groupItems(box.items)
+          }))
         }
-      }
 
-      return {
-        ...item.toJSON(),
-        totalQuantity,
-        totalPrice
-      };
-    });
+        // Order → OrderItems
+        if (ii.order?.orderItems) {
+          ii.order.orderItems = groupItems(ii.order.orderItems)
+        }
 
-    return res.json(itemsWithTotals);
+        return ii
+      })
 
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+      return res.json(groupedInvoiceItems)
+    } catch (error) {
+      return res.status(500).json({ error: error.message })
+    }
   }
-}
 
 
 

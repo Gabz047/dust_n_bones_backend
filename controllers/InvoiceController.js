@@ -7,47 +7,52 @@ class InvoiceController {
 
   // Cria uma nova fatura
   // dentro do InvoiceController
-  static async create(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { projectId, type, userId, companyId, branchId } = req.body;
-      if (!projectId || !type || !userId) {
-        return res.status(400).json({ error: 'projectId, type e userId são obrigatórios' });
-      }
+  // Cria uma nova fatura
+static async create(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { projectId, type, userId, companyId, branchId } = req.body;
+    if (!projectId || !type || !userId) {
+      return res.status(400).json({ error: 'projectId, type e userId são obrigatórios' });
+    }
 
-      // Verifica se já existe fatura para o projeto
-      const existingInvoice = await Invoice.findOne({ where: { projectId }, transaction });
-      if (existingInvoice) return res.status(400).json({ error: 'Este projeto já possui uma fatura vinculada' });
+    // Verifica se já existe fatura para o projeto
+    const existingInvoice = await Invoice.findOne({ where: { projectId }, transaction });
+    if (existingInvoice) return res.status(400).json({ error: 'Este projeto já possui uma fatura vinculada' });
 
-      // Verifica se há romaneio já vinculado a outra fatura
-      const linkedDN = await DeliveryNote.findOne({
-        where: { projectId, invoiceId: { [Op.ne]: null } },
-        transaction
-      });
-      if (linkedDN) return res.status(400).json({ error: 'Existe um romaneio deste projeto vinculado a uma fatura' });
+    // Verifica se há romaneio já vinculado a outra fatura
+    const linkedDN = await DeliveryNote.findOne({
+      where: { projectId, invoiceId: { [Op.ne]: null } },
+      transaction
+    });
+    if (linkedDN) return res.status(400).json({ error: 'Existe um romaneio deste projeto vinculado a uma fatura' });
 
-      // Cria a fatura
-      const invoice = await Invoice.create({
-        projectId, type, totalPrice: 0, companyId: companyId || null,
-        branchId: branchId || (companyId ? null : null),
-      }, { transaction });
+    // Cria a fatura
+    const invoice = await Invoice.create({
+      projectId,
+      type,
+      totalPrice: 0,
+      companyId: companyId || null,
+      branchId: branchId || (companyId ? null : null),
+    }, { transaction });
 
-      // Cria o movimento da fatura
-      const movementLog = await MovementLogEntity.create({
-        entity: 'fatura',
-        entityId: invoice.id,
-        method: 'criação',
-        status: 'aberto',
-        userId,
-        date: new Date()
-      }, { transaction });
+    // Cria o movimento da fatura
+    const movementLog = await MovementLogEntity.create({
+      entity: 'fatura',
+      entityId: invoice.id,
+      method: 'criação',
+      status: 'aberto',
+      userId,
+      date: new Date()
+    }, { transaction });
 
+    let totalInvoicePrice = 0;
+
+    // Só cria InvoiceItems automaticamente se o tipo for "project"
+    if (type === 'project') {
       // Busca todos os romaneios do projeto
       const deliveryNotes = await DeliveryNote.findAll({ where: { projectId }, transaction });
 
-      let totalInvoicePrice = 0;
-
-      // Para cada romaneio cria um InvoiceItem
       for (const dn of deliveryNotes) {
         const { totalQuantity, totalPrice } = await calculateQuantityAndPrice(dn.id, transaction);
 
@@ -67,24 +72,27 @@ class InvoiceController {
           date: new Date()
         }, { transaction });
 
-          await DeliveryNote.update(
-        { invoiceId: invoice.id },         // campos a atualizar
-        { where: { id: dn.id }, transaction }  // filtro e transação
-      );
+        // Atualiza o romaneio com a fatura
+        await DeliveryNote.update(
+          { invoiceId: invoice.id },
+          { where: { id: dn.id }, transaction }
+        );
 
         totalInvoicePrice += totalPrice;
       }
-
-      // Atualiza a fatura com o total calculado
-      await invoice.update({ totalPrice: totalInvoicePrice }, { transaction });
-    
-      await transaction.commit();
-      return res.status(201).json(invoice);
-    } catch (error) {
-      await transaction.rollback();
-      return res.status(500).json({ error: error.message });
     }
+
+    // Atualiza a fatura com o total calculado (se não for project, fica 0)
+    await invoice.update({ totalPrice: totalInvoicePrice }, { transaction });
+
+    await transaction.commit();
+    return res.status(201).json(invoice);
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({ error: error.message });
   }
+}
+
 
   // Atualiza fatura existente
   static async update(req, res) {
@@ -310,31 +318,49 @@ class InvoiceController {
         } : null,
         deliveryNotes: (invoice.deliveryNotes || []).map(dn => {
           let dnTotal = 0;
-          const items = [];
+          const itemsMap = {}; // Mapa temporário para agrupar itens
 
           (dn.boxes || []).forEach(box => {
-            (box.items || []).forEach(bi => {
-              const price = (bi.item?.price || 0) * bi.quantity;
-              dnTotal += price;
-              items.push({
-                quantity: bi.quantity,
-                item: bi.item?.name,
-                unitPrice: bi.item?.price,
-                totalPrice: price,
-                itemFeature: bi.itemFeature ? { feature: { name: bi.itemFeature.feature?.name } } : null,
-                featureOption: bi.featureOption?.name || null
-              });
-            });
-          });
+  (box.items || []).forEach(bi => {
+    // Se bi.itemFeature for array, percorre todos
+    const features = Array.isArray(bi.itemFeature) ? bi.itemFeature : [bi.itemFeature];
+    
+    features.forEach(f => {
+      // Cada feature pode ter uma featureOption
+      const featureOptionName = bi.featureOption?.name || f?.featureOption?.name || null;
+      const key = `${bi.item?.id}-${featureOptionName || ''}`;
+
+      const unitPrice = bi.item?.price || 0;
+      const totalPriceItem = unitPrice * bi.quantity;
+
+      if (!itemsMap[key]) {
+        itemsMap[key] = {
+          quantity: bi.quantity,
+          item: bi.item?.name,
+          unitPrice,
+          totalPrice: totalPriceItem,
+          itemFeature: f ? { feature: { name: f.feature?.name } } : null,
+          featureOption: featureOptionName
+        };
+      } else {
+        itemsMap[key].quantity += bi.quantity;
+        itemsMap[key].totalPrice += totalPriceItem;
+      }
+
+      dnTotal += totalPriceItem;
+    });
+  });
+});
 
           return {
             id: dn.id,
             referralId: dn.referralId,
             customer: dn.customer ? { id: dn.customer.id, name: dn.customer.name } : null,
             total: dnTotal,
-            items
+            items: Object.values(itemsMap) // Converte o map em array
           };
         })
+
       };
 
       await generateInvoicePDF(slimInvoice, res);

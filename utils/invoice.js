@@ -52,3 +52,26 @@ export async function calculateQuantityAndPrice(deliveryNoteId, transaction) {
 
   return { totalQuantity, totalPrice };
 }
+
+export function groupItems(items) {
+    const grouped = []
+
+    items.forEach(item => {
+      const existing = grouped.find(
+        gi =>
+          gi.item.id === item.item.id &&
+          gi.featureOption?.id === item.featureOption?.id
+      )
+      if (existing) {
+        existing.quantity += item.quantity || 0
+        existing.totalPrice += (item.item?.price || 0) * (item.quantity || 0)
+      } else {
+        grouped.push({
+          ...item.toJSON?.() || item,
+          totalPrice: (item.item?.price || 0) * (item.quantity || 0)
+        })
+      }
+    })
+
+    return grouped
+  }

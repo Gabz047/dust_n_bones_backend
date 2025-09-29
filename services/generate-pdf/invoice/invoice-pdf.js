@@ -86,55 +86,74 @@ export async function generateInvoicePDF(invoice, res) {
         </div>
       </section>
 
-      ${invoice.deliveryNotes?.map(itemSection => {
-        // Descobre todas as features únicas para este romaneio
-        const allFeatures = [...new Set(
-          (itemSection.items || [])
-            .map(it => it.itemFeature?.feature)
-            .filter(Boolean)
-            .map(f => f.name)
-        )];
+      ${invoice.deliveryNotes?.map(dn => {
+    let dnTotal = 0;
+    const itemsMap = {}; // Agrupa por item + featureOption
 
-        return `
-        <section class="item-section">
-          <h3 class="section-title">Itens do Romaneio: ${safe(itemSection.referralId)} - ${safe(itemSection.customer.name)}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Produto</th>
-                ${allFeatures.map(f => `<th>${safe(f)}</th>`).join('')}
-                <th>Quantidade</th>
-                <th>Valor Unitário (R$)</th>
-                <th>Total (R$)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemSection.items?.map(it => `
-                <tr>
-                  <td>${safe(it.item)}</td>
-                  ${allFeatures.map(f => `
-                    <td>${
-                      it.itemFeature?.feature?.name === f
-                        ? safe(it.featureOption)
-                        : '-'
-                    }</td>
-                  `).join('')}
-                  <td>${safe(it.quantity)}</td>
-                  <td>${safe(it.unitPrice)}</td>
-                  <td>${safe(it.totalPrice)}</td>
-                </tr>
+    (dn.items || []).forEach(it => {
+      const key = `${it.item}-${it.featureOption || ''}`;
+      if (!itemsMap[key]) {
+        itemsMap[key] = {
+          quantity: it.quantity,
+          item: it.item,
+          unitPrice: it.unitPrice,
+          totalPrice: it.totalPrice,
+          itemFeature: it.itemFeature,
+          featureOption: it.featureOption
+        };
+      } else {
+        itemsMap[key].quantity += it.quantity;
+        itemsMap[key].totalPrice += it.totalPrice;
+      }
+      dnTotal += it.totalPrice;
+    });
+
+    const groupedItems = Object.values(itemsMap);
+
+    // Descobre todas as features únicas para este romaneio
+    const allFeatures = [...new Set(
+      groupedItems
+        .map(it => it.itemFeature?.feature?.name)
+        .filter(Boolean)
+    )];
+
+    return `
+    <section class="item-section">
+      <h3 class="section-title">Itens do Romaneio: ${safe(dn.referralId)} - ${safe(dn.customer?.name)}</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Produto</th>
+            ${allFeatures.map(f => `<th>${safe(f)}</th>`).join('')}
+            <th>Quantidade</th>
+            <th>Valor Unitário (R$)</th>
+            <th>Total (R$)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${groupedItems.map(it => `
+            <tr>
+              <td>${safe(it.item)}</td>
+              ${allFeatures.map(f => `
+                <td>${it.itemFeature?.feature?.name === f ? safe(it.featureOption) : '-'}</td>
               `).join('')}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="${1 + allFeatures.length + 2}" class="subtotal-label">Subtotal</td>
-                <td class="subtotal-value">${safe(itemSection.total)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
-        `
-      }).join('')}
+              <td>${safe(it.quantity)}</td>
+              <td>${safe(it.unitPrice)}</td>
+              <td>${safe(it.totalPrice)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="${1 + allFeatures.length + 2}" class="subtotal-label">Subtotal</td>
+            <td class="subtotal-value">${safe(dnTotal)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  `;
+  }).join('')}
+
 
       <section class="invoice-summary">
         <div class="summary-details">
@@ -164,7 +183,7 @@ export async function generateInvoicePDF(invoice, res) {
   const pdfBuffer = await page.pdf({
     format: 'A4',
     printBackground: true,
-    margin: { top:'20px', bottom:'20px', left:'20px', right:'20px' }
+    margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
   })
 
   await browser.close()
