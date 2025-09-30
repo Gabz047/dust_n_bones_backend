@@ -23,6 +23,7 @@ class DeliveryNoteItemController {
           entity: 'romaneio',
           entityId: item.deliveryNoteId,
           quantity: 1,
+          status: 'aberto',
           movementLogEntityId,
           date: new Date()
         }, { transaction });
@@ -60,6 +61,7 @@ class DeliveryNoteItemController {
 
         await MovementLogEntityItem.create({
           entity: 'romaneio',
+          status: 'aberto',
           entityId: existing.deliveryNoteId,
           quantity: 1,
           movementLogEntityId,

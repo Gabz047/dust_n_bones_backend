@@ -196,6 +196,8 @@ class DeliveryNoteController {
     }
   }
 
+  
+
   // Métodos de consulta
   static async getAll(req, res) {
     try {
@@ -316,7 +318,13 @@ class DeliveryNoteController {
   static async getByInvoice(req, res) {
     try {
       const { invoiceId } = req.params;
-      const deliveryNotes = await DeliveryNote.findAll({ where: { invoiceId } });
+      const deliveryNotes = await DeliveryNote.findAll({ where: { invoiceId }, include: [
+        {
+          model: Customer,
+          as: 'customer',
+          attributes: ['name']
+        }
+      ] });
       return res.json(deliveryNotes);
     } catch (error) {
       return res.status(500).json({ error: error.message });

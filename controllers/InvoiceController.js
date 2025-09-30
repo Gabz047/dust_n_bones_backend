@@ -238,10 +238,10 @@ static async create(req, res) {
       const lastMovement = await MovementLogEntity.findOne({
         where: { entity: 'fatura', entityId: id },
         order: [['date', 'DESC']],
-        attributes: ['id']
+        attributes: ['id', 'status']
       });
 
-      return res.json({ ...invoice.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null });
+      return res.json({ ...invoice.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement : null });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
