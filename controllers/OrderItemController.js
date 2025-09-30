@@ -72,64 +72,70 @@ static async create(req, res) {
 
   // Cria múltiplos itens de pedido
   static async createBatch(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const items = req.body; // [{ orderId, itemId, itemFeatureId, featureOptionId, quantity }]
-      const createdItems = [];
+  const transaction = await sequelize.transaction();
+  try {
+    const items = req.body; 
+    const createdItems = [];
 
-      for (const itemData of items) {
-        const { orderId, itemId, itemFeatureId, featureOptionId, quantity } = itemData;
+    // 1️⃣ Buscar todos os itens já existentes de uma vez
+    const existingItems = await OrderItem.findAll({
+      where: {
+        [sequelize.Op.or]: items.map(i => ({
+          orderId: i.orderId,
+          itemId: i.itemId,
+          itemFeatureId: i.itemFeatureId || null,
+          featureOptionId: i.featureOptionId || null
+        }))
+      },
+      transaction
+    });
 
-        // validações básicas
-        const order = await Order.findByPk(orderId);
-        if (!order) throw new Error(`Pedido ${orderId} não encontrado`);
-
-        const item = await Item.findByPk(itemId);
-        if (!item) throw new Error(`Item ${itemId} não encontrado`);
-
-        if (itemFeatureId) {
-          const feature = await ItemFeature.findByPk(itemFeatureId);
-          if (!feature) throw new Error(`Característica ${itemFeatureId} não encontrada`);
-        }
-
-        if (featureOptionId) {
-          const option = await FeatureOption.findByPk(featureOptionId);
-          if (!option) throw new Error(`Opção ${featureOptionId} não encontrada`);
-        }
-
-        // 🔍 Verifica se já existe item igual no pedido
-        const existingItem = await OrderItem.findOne({
-          where: { orderId, itemId, itemFeatureId: itemFeatureId || null, featureOptionId: featureOptionId || null },
-          transaction
-        });
-
-        let orderItem;
-        if (existingItem) {
-          await existingItem.update({ quantity: existingItem.quantity + (quantity || 1) }, { transaction });
-          orderItem = existingItem;
-        } else {
-          orderItem = await OrderItem.create({
-            id: uuidv4(),
-            orderId,
-            itemId,
-            itemFeatureId: itemFeatureId || null,
-            featureOptionId: featureOptionId || null,
-            quantity: quantity || 1
-          }, { transaction });
-        }
-
-        createdItems.push(orderItem);
-      }
-
-      await transaction.commit();
-      return res.status(201).json({ success: true, data: createdItems });
-
-    } catch (error) {
-      await transaction.rollback();
-      console.error('Erro no createBatch de itens do pedido:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    // 2️⃣ Map para acesso rápido
+    const existingMap = new Map();
+    for (const ei of existingItems) {
+      const key = `${ei.orderId}-${ei.itemId}-${ei.itemFeatureId || ''}-${ei.featureOptionId || ''}`;
+      existingMap.set(key, ei);
     }
+
+    // 3️⃣ Separar itens novos e atualizar quantidade dos existentes
+    const itemsToInsert = [];
+
+    for (const i of items) {
+      const key = `${i.orderId}-${i.itemId}-${i.itemFeatureId || ''}-${i.featureOptionId || ''}`;
+      const existing = existingMap.get(key);
+
+      if (existing) {
+        // soma quantidade
+        existing.quantity += i.quantity || 1;
+        await existing.save({ transaction });
+        createdItems.push(existing);
+      } else {
+        itemsToInsert.push({
+          id: uuidv4(),
+          orderId: i.orderId,
+          itemId: i.itemId,
+          itemFeatureId: i.itemFeatureId || null,
+          featureOptionId: i.featureOptionId || null,
+          quantity: i.quantity || 1
+        });
+      }
+    }
+
+    // 4️⃣ Bulk create dos novos itens
+    if (itemsToInsert.length) {
+      const newItems = await OrderItem.bulkCreate(itemsToInsert, { transaction });
+      createdItems.push(...newItems);
+    }
+
+    await transaction.commit();
+    return res.status(201).json({ success: true, data: createdItems });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro no createBatch de itens do pedido:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
 
 
 // Atualiza múltiplos itens
