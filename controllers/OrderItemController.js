@@ -10,7 +10,7 @@ import {
 } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import ProductionOrderStatus from '../models/ProductionOrderStatus.js';
-
+import { Op } from 'sequelize';
 class OrderItemController {
 
   // Cria um único item de pedido
@@ -80,7 +80,7 @@ static async create(req, res) {
     // 1️⃣ Buscar todos os itens já existentes de uma vez
     const existingItems = await OrderItem.findAll({
       where: {
-        [sequelize.Op.or]: items.map(i => ({
+        [Op.or]: items.map(i => ({
           orderId: i.orderId,
           itemId: i.itemId,
           itemFeatureId: i.itemFeatureId || null,
