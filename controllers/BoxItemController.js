@@ -362,16 +362,46 @@ static async getByBox(req, res) {
   static async getByOrderItem(req, res) {
     try {
       const { orderItemId } = req.params;
-      const items = await BoxItem.findAll({ where: { orderItemId } });
 
-      const result = [];
-      for (const boxItem of items) {
-        const orderItem = await OrderItem.findByPk(boxItem.orderItemId);
-        const sumAllBoxes = await BoxItem.sum('quantity', {
-          where: { orderItemId: boxItem.orderItemId, featureOptionId: boxItem.featureOptionId }
-        });
-        result.push({ ...boxItem.toJSON(), remainingQuantity: orderItem.quantity - sumAllBoxes });
+      // Busca o OrderItem uma única vez
+      const orderItem = await OrderItem.findByPk(orderItemId, {
+        attributes: ['id', 'quantity']
+      });
+      if (!orderItem) {
+        return res.status(404).json({ success: false, message: 'OrderItem não encontrado' });
       }
+
+      // Busca todos os BoxItems do OrderItem em uma única consulta
+      const items = await BoxItem.findAll({
+        where: { orderItemId },
+        order: [['createdAt', 'DESC']],
+        raw: true // retorna objetos simples
+      });
+
+      if (!items.length) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // Calcula a soma por featureOptionId em uma única consulta agrupada
+      const sums = await BoxItem.findAll({
+        where: { orderItemId },
+        attributes: [
+          'featureOptionId',
+          [sequelize.fn('SUM', sequelize.col('quantity')), 'sumQty']
+        ],
+        group: ['featureOptionId'],
+        raw: true
+      });
+
+      const sumMap = Object.fromEntries(
+        sums.map(s => [String(s.featureOptionId), Number(s.sumQty)])
+      );
+
+      // Monta o resultado no mesmo formato, adicionando remainingQuantity
+      const result = items.map(row => ({
+        ...row,
+        remainingQuantity: orderItem.quantity - (sumMap[String(row.featureOptionId)] || 0)
+      }));
 
       return res.json({ success: true, data: result });
     } catch (error) {
