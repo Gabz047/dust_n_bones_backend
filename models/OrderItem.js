@@ -64,6 +64,7 @@ OrderItem.init({
   sequelize,
   modelName: 'OrderItem',
   tableName: 'order_items',
+  indexes: [{ unique: true, fields: ['order_id', 'item_id', 'item_feature_id', 'feature_option_id'] }],
   timestamps: true
 });
 
