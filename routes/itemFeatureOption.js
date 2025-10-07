@@ -15,6 +15,15 @@ router.post(
   ItemFeatureOptionController.create
 );
 
+router.get(
+  '/by-item-features',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  ItemFeatureOptionController.getByItemFeatures
+);
+
 // Buscar todas (com tenant obrigatório)
 router.get(
   '/',

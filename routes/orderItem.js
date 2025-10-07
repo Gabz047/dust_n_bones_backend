@@ -18,6 +18,8 @@ router.post(
   OrderItemController.createBatch
 );
 
+router.get('/orderIds', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.getByOrderIds);
+
 
 router.put('/batch/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), OrderItemController.updateBatch);
 5

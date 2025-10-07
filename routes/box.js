@@ -14,6 +14,14 @@ router.post(
   BoxController.create
 );
 
+router.get(
+  '/orderIds',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'manager', 'employee', 'owner'),
+  BoxController.getByOrderIds
+);
 // Listar todos os Boxes
 router.get(
   '/',

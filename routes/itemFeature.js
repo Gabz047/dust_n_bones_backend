@@ -11,6 +11,8 @@ router.post('/', authenticateToken, validateRequest(itemFeatureSchema.create), a
 
 router.get('/item/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ItemFeatureController.getByItemId);
 
+router.get('/item-ids', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ItemFeatureController.getByItemIds);
+
 // Rotas administrativas com tenant obrigatório
 router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ItemFeatureController.getAll);
 

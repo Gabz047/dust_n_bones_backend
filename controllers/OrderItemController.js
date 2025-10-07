@@ -7,6 +7,7 @@ import {
   sequelize,
   Project,
   ProductionOrder,
+  User
 } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import ProductionOrderStatus from '../models/ProductionOrderStatus.js';
@@ -315,6 +316,49 @@ static async updateBatch(req, res) {
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+
+  static async getByOrderIds(req, res) {
+    console.log('================================================ORDER IDS===================================', req.body, req.query);
+    try {
+      let orderIds = req.body.orderIds || req.query.orderIds;
+
+      if (!orderIds || (Array.isArray(orderIds) && orderIds.length === 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'É necessário enviar um array de orderIds.',
+        });
+      }
+
+      orderIds = orderIds.map(id => id);
+
+      const orderItems = await OrderItem.findAll({
+        where: { orderId:  orderIds  },
+        include: [
+          { model: Order, as: 'order' },
+          { model: Item, as: 'item' },
+          { model: ItemFeature, as: 'itemFeature' },
+          { model: FeatureOption, as: 'featureOption' },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      if (!orderItems.length) {
+        return res.status(404).json({
+          success: false,
+          message: 'Nenhum OrderItem encontrado para os orderIds informados.',
+        });
+      }
+
+      return res.json({ success: true, data: orderItems });
+    } catch (error) {
+      console.error('Erro ao buscar OrderItems por múltiplos orderIds:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Erro interno do servidor',
+      });
+    }
+  }
+
 
   static async getByItem(req, res) {
     try {

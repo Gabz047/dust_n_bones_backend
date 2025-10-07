@@ -40,6 +40,15 @@ router.get(
   BoxItemController.getAll
 );
 
+router.get(
+  '/by-box-ids',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  BoxItemController.getByBoxIds
+);
+
 // Buscar BoxItem por ID
 router.get(
   '/:id',

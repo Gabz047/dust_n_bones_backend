@@ -1,5 +1,6 @@
 import { Item, Feature, ItemFeature } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
 
 export default {
   // Criar associação item-característica
@@ -62,6 +63,48 @@ export default {
       return res.status(500).json({ success: false, message: 'Erro ao buscar associação item-característica.' });
     }
   },
+
+   async getByItemIds(req, res) {
+  try {
+    let itemIds = req.body.itemIds || req.query.itemIds;
+
+    if (!itemIds || (Array.isArray(itemIds) && itemIds.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'É necessário enviar um array de itemIds.'
+      });
+    }
+
+   itemIds = itemIds.map(id => id)
+
+    const items = await ItemFeature.findAll({
+      where: { itemId: itemIds  },
+      include: [
+        {
+          model: Feature,
+          as: 'feature',
+          attributes: ['id', 'name'],
+        }
+      ],
+      order: [[{ model: Feature, as: 'feature' }, 'name', 'ASC']]
+    });
+
+    if (!items.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum item encontrado para os IDs informados'
+      });
+    }
+
+    return res.json({ success: true, data: items });
+
+  } catch (error) {
+    console.error('Erro ao buscar itens por múltiplos IDs:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+},
+
+
 
   // Buscar todas as associações de um item específico
   async getByItemId(req, res) {

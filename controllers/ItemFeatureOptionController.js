@@ -3,6 +3,7 @@ import ItemFeature from '../models/ItemFeature.js';
 import Feature from '../models/Features.js';
 import { v4 as uuidv4 } from 'uuid';
 import FeatureOption from '../models/FeatureOption.js';
+import { Op } from 'sequelize';
 
 export default {
     // Criar ItemFeatureOption
@@ -28,6 +29,62 @@ export default {
             return res.status(500).json({ success: false, message: 'Erro ao criar ItemFeatureOption.' });
         }
     },
+
+    async getByItemFeatures(req, res) {
+  try {
+    let itemFeatureIds = req.body.itemFeatureIds || req.query.itemFeatureIds;
+
+    if (!itemFeatureIds || (Array.isArray(itemFeatureIds) && itemFeatureIds.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'É necessário enviar um array de itemFeatureIds.'
+      });
+    }
+
+    itemFeatureIds = itemFeatureIds.map(id => id)
+
+    const itemFeatureOptions = await ItemFeatureOption.findAll({
+      where: { itemFeatureId:  itemFeatureIds },
+      include: [
+        {
+          model: ItemFeature,
+          as: 'itemFeature',
+          include: [
+            {
+              model: Feature,
+              as: 'feature',
+              attributes: ['id', 'name']
+            }
+          ]
+        },
+        {
+          model: FeatureOption,
+          as: 'featureOption',
+          attributes: ['id', 'name']
+        }
+      ],
+      // Ordena pelo nome da Feature associada
+      order: [[{ model: ItemFeature, as: 'itemFeature' }, { model: Feature, as: 'feature' }, 'name', 'ASC']]
+    });
+
+    if (!itemFeatureOptions.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum registro encontrado para os IDs informados.'
+      });
+    }
+
+    return res.json({ success: true, data: itemFeatureOptions });
+
+  } catch (error) {
+    console.error('Erro ao buscar ItemFeatureOptions por múltiplos itemFeatureIds:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar ItemFeatureOptions por múltiplos itemFeatureIds.'
+    });
+  }
+},
+
 
     // Buscar por ID
     async getById(req, res) {

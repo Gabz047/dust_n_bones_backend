@@ -78,6 +78,15 @@ Box.init({
   modelName: 'Box',
   tableName: 'boxes',
   timestamps: true,
+  indexes: [
+    { fields: ['deliveryNoteId'] },         // Busca por romaneio
+    { fields: ['projectId'] },              // Busca por projeto
+    { fields: ['customerId'] },             // Busca por cliente
+    { fields: ['orderId'] },                // Busca por pedido
+    { fields: ['referralId'] },             // Ordenação/busca por número de caixa
+    { fields: ['date'] },                   // Relatórios por data
+    { fields: ['projectId', 'customerId'] } // Índice composto para consultas filtrando projeto + cliente
+  ]
 });
 
 // Hook para gerar referralId incremental
@@ -85,6 +94,5 @@ Box.beforeCreate(async (box, options) => {
   const last = await Box.findOne({ order: [['referralId', 'DESC']], transaction: options.transaction });
   box.referralId = last ? last.referralId + 1 : 1;
 });
-
 
 export default Box;
