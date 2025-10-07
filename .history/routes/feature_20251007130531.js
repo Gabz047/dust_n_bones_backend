@@ -45,7 +45,7 @@ router.delete(
   authenticateToken,
   extractTenant,
   validateTenantAccess,
-  authorizeRoles('admin', 'owner'),
+  authorizeRoles('admin'),
   FeatureController.delete
 );
 

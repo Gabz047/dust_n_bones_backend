@@ -32,18 +32,9 @@ DeliveryNoteItem.init({
   modelName: 'DeliveryNoteItem',
   tableName: 'delivery_note_items',
   timestamps: true,
-
-  // Índices para otimizar consultas
-  indexes: [
-    // Busca rápida por romaneio
-    { fields: ['deliveryNoteId'] },
-
-    // Busca rápida por caixa
-    { fields: ['boxId'] },
-
-    // Evita duplicidade entre romaneio e caixa (opcional, se não puder repetir)
-    { unique: true, fields: ['deliveryNoteId', 'boxId'] },
-  ],
 });
+
+// Relações
+
 
 export default DeliveryNoteItem;

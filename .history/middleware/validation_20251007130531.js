@@ -1747,38 +1747,29 @@ export const packageSchemas = {
 export const featureOptionSchema = {
   create: Joi.object({
     featureId: Joi.string().uuid().required().messages({
-      'any.required': 'ID da Feature é obrigatório',
-      'string.guid': 'ID da Feature deve ser um UUID válido'
+      'string.base': 'ID da característica deve ser uma string.',
+      'string.empty': 'ID da característica não pode ser vazio.',
+      'string.guid': 'ID da característica deve ser um UUID válido.',
+      'any.required': 'ID da característica é obrigatório.'
     }),
-    options: Joi.array().items(
-      Joi.string().min(1).max(255).required().messages({
-        'any.required': 'O nome da opção é obrigatório',
-        'string.base': 'O nome da opção deve ser uma string',
-        'string.min': 'O nome da opção deve ter ao menos 1 caractere',
-        'string.max': 'O nome da opção deve ter no máximo 255 caracteres'
-      })
-    ).min(1).required().messages({
-      'array.base': 'Options deve ser um array',
-      'array.min': 'É necessário enviar pelo menos uma opção',
-      'any.required': 'Options é obrigatório'
+    name: Joi.string().min(1).max(255).required().messages({
+      'string.base': 'Nome deve ser uma string.',
+      'string.empty': 'Nome não pode ser vazio.',
+      'string.min': 'Nome deve ter pelo menos 1 caractere.',
+      'string.max': 'Nome deve ter no máximo 255 caracteres.',
+      'any.required': 'Nome é obrigatório.'
     })
   }),
 
   update: Joi.object({
     featureId: Joi.string().uuid().optional().messages({
-      'string.guid': 'ID da Feature deve ser um UUID válido'
+      'string.base': 'ID da característica deve ser uma string.',
+      'string.guid': 'ID da característica deve ser um UUID válido.'
     }),
     name: Joi.string().min(1).max(255).optional().messages({
-      'string.base': 'O nome da opção deve ser uma string',
-      'string.min': 'O nome da opção deve ter ao menos 1 caractere',
-      'string.max': 'O nome da opção deve ter no máximo 255 caracteres'
-    })
-  }),
-
-  delete: Joi.object({
-    id: Joi.string().uuid().required().messages({
-      'any.required': 'ID da opção é obrigatório',
-      'string.guid': 'ID da opção deve ser um UUID válido'
+      'string.base': 'Nome deve ser uma string.',
+      'string.min': 'Nome deve ter pelo menos 1 caractere.',
+      'string.max': 'Nome deve ter no máximo 255 caracteres.'
     })
   })
 };

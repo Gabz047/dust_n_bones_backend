@@ -73,22 +73,9 @@ BoxItem.init({
   modelName: 'BoxItem',
   tableName: 'box_items',
   timestamps: true,
-
-  indexes: [
-    // Índices individuais
-    { fields: ['boxId'] },
-    { fields: ['itemId'] },
-    { fields: ['orderItemId'] },
-    { fields: ['userId'] },
-    { fields: ['date'] },
-
-    // Índices compostos para acelerar consultas específicas
-    { fields: ['boxId', 'itemId'] },              // usado para buscas por itens dentro de uma caixa
-    { fields: ['itemId', 'itemFeatureId'] },      // para joins e filtros por item e feature
-    { fields: ['boxId', 'itemFeatureId'] },       // usado quando carrega itens detalhados por caixa
-    { fields: ['boxId', 'featureOptionId'] },     // otimiza quando há variações
-    { fields: ['itemFeatureId', 'featureOptionId'] }, // ajuda quando busca por combinações de opções
-  ],
 });
+
+// Relações
+
 
 export default BoxItem;

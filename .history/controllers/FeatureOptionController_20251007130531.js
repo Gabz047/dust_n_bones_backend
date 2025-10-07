@@ -1,54 +1,24 @@
 import FeatureOption from '../models/FeatureOption.js';
 import Feature from '../models/Features.js';
-import sequelize from '../config/database.js';
+
 export default {
   // Criar opção de característica
-async create(req, res) {
-    const transaction = await sequelize.transaction();
+  async create(req, res) {
     try {
-      const { featureId, options } = req.body; // options: array de nomes
-
-      if (!featureId) {
-        return res.status(400).json({ success: false, message: 'featureId não fornecido.' });
-      }
-      if (!Array.isArray(options) || !options.length) {
-        return res.status(400).json({ success: false, message: 'Nenhuma opção fornecida.' });
-      }
+      const { featureId, name } = req.body;
 
       // Verifica se a feature existe
-      const feature = await Feature.findByPk(featureId, { transaction });
+      const feature = await Feature.findByPk(featureId);
       if (!feature) {
-        await transaction.rollback();
-        return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
+        return res.status(400).json({ success: false, message: 'Característica não encontrada' });
       }
 
-      // Buscar opções já existentes para evitar duplicidade
-      const existingOptions = await FeatureOption.findAll({
-        where: { featureId, name: options },
-        transaction
-      });
-      const existingNames = existingOptions.map(o => o.name);
+      const featureOption = await FeatureOption.create({ featureId, name });
 
-      // Filtrar apenas as opções novas
-      const newOptionsData = options
-        .filter(name => !existingNames.includes(name))
-        .map(name => ({ featureId, name }));
-
-      if (!newOptionsData.length) {
-        await transaction.rollback();
-        return res.status(400).json({ success: false, message: 'Nenhuma opção nova para criar (todas duplicadas).' });
-      }
-
-      // Criar todas as novas opções de uma vez
-      const createdOptions = await FeatureOption.bulkCreate(newOptionsData, { transaction });
-
-      await transaction.commit();
-
-      return res.status(201).json({ success: true, data: createdOptions });
+      return res.status(201).json({ success: true, data: featureOption });
     } catch (error) {
-      await transaction.rollback();
-      console.error('Erro ao criar opções de característica em batch:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao criar opções de característica.' });
+      console.error('Erro ao criar opção de característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao criar opção de característica.' });
     }
   },
 

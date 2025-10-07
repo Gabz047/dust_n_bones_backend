@@ -38,24 +38,9 @@ ItemFeature.init({
     }
 }, {
     sequelize,
-    modelName: 'ItemFeature',
+    modelName: 'ItemFeatures',
     tableName: 'item_features',
     timestamps: true,
-    indexes: [
-        {
-            unique: true,
-            fields: ['itemId', 'featureId'],
-            name: 'uniq_item_feature'
-        },
-        {
-            fields: ['itemId'],
-            name: 'idx_item_id'
-        },
-        {
-            fields: ['featureId'],
-            name: 'idx_feature_id'
-        }
-    ]
 });
 
 export default ItemFeature;

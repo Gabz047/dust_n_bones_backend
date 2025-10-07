@@ -23,7 +23,7 @@ DeliveryNote.init({
     allowNull: true,
     unique: true,
   },
-  invoiceId: {
+  invoiceId: { // fatura
     type: DataTypes.UUID,
     allowNull: true,
     references: { model: Invoice, key: 'id' },
@@ -87,28 +87,19 @@ DeliveryNote.init({
   modelName: 'DeliveryNote',
   tableName: 'delivery_notes',
   timestamps: true,
-  indexes: [
-    { fields: ['invoiceId'] },
-    { fields: ['projectId'] },
-    { fields: ['customerId'] },
-    { fields: ['orderId'] },
-    { fields: ['expeditionId'] },
-
-    { fields: ['companyId', 'branchId'] },
-    { fields: ['projectId', 'customerId'] },
-    { fields: ['orderId', 'customerId'] },
-
-    { fields: ['referralId'], unique: true },
-  ],
 });
 
-// Geração incremental do referralId
+// Relações
+
 DeliveryNote.beforeCreate(async (deliveryNote, options) => {
+
   const last = await DeliveryNote.findOne({
     order: [['referralId', 'DESC']],
     transaction: options.transaction,
   });
+
   deliveryNote.referralId = last ? last.referralId + 1 : 1;
 });
+
 
 export default DeliveryNote;
