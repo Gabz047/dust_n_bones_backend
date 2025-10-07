@@ -73,7 +73,7 @@ ProductionOrderItem.init({
     { fields: ['itemId'] },
     { fields: ['itemFeatureId'] },
     { fields: ['featureOptionId'] },
-    { fields: ['productionOrderId', 'itemId'] } 
+    { fields: ['productionOrderId', 'itemId'] } // índice composto útil se você filtra por ambos
   ]
 });
 

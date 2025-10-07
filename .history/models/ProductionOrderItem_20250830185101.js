@@ -67,14 +67,7 @@ ProductionOrderItem.init({
   sequelize,
   modelName: 'ProductionOrderItem',
   tableName: 'production_order_items',
-  timestamps: true,
-  indexes: [
-    { fields: ['productionOrderId'] },
-    { fields: ['itemId'] },
-    { fields: ['itemFeatureId'] },
-    { fields: ['featureOptionId'] },
-    { fields: ['productionOrderId', 'itemId'] } 
-  ]
+  timestamps: true
 });
 
 export default ProductionOrderItem;

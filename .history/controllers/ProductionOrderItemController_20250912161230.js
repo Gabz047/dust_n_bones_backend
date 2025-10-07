@@ -34,95 +34,85 @@ class ProductionOrderItemController {
 
     // Criar vários itens em batch
   static async createBatch(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const items = req.body;
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Nenhum item enviado para criação em lote' });
+    const transaction = await sequelize.transaction();
+    try {
+      const items = req.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Nenhum item enviado para criação em lote' });
+      }
+
+      for (const item of items) {
+        const { itemId, itemFeatureId, featureOptionId } = item;
+
+        const product = await Item.findByPk(itemId);
+        if (!product) throw new Error(`Item ${itemId} não encontrado`);
+
+        if (itemFeatureId) {
+          const feature = await ItemFeature.findByPk(itemFeatureId);
+          if (!feature) throw new Error(`Característica ${itemFeatureId} não encontrada`);
+        }
+
+        if (featureOptionId) {
+          const option = await FeatureOption.findByPk(featureOptionId);
+          if (!option) throw new Error(`Opção ${featureOptionId} não encontrada`);
+        }
+      }
+
+      const itemsWithIds = items.map(item => ({
+        id: uuidv4(),
+        productionOrderId: item.productionOrderId,
+        itemId: item.itemId,
+        itemFeatureId: item.itemFeatureId || null,
+        featureOptionId: item.featureOptionId || null,
+        quantity: item.quantity || 1
+      }));
+
+      const createdItems = await ProductionOrderItem.bulkCreate(itemsWithIds, { transaction });
+
+      await transaction.commit();
+
+      return res.status(201).json({
+        success: true,
+        message: `${createdItems.length} itens criados com sucesso`,
+        data: createdItems
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao criar itens do pedido em lote:', error);
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
-
-    // Extrair IDs
-    const itemIds = items.map(i => i.itemId);
-    const featureIds = items.map(i => i.itemFeatureId).filter(Boolean);
-    const optionIds = items.map(i => i.featureOptionId).filter(Boolean);
-
-    // Buscar todos de uma vez (evita N+1)
-    const products = await Item.findAll({ where: { id: itemIds }, transaction });
-    const features = featureIds.length ? await ItemFeature.findAll({ where: { id: featureIds }, transaction }) : [];
-    const options = optionIds.length ? await FeatureOption.findAll({ where: { id: optionIds }, transaction }) : [];
-
-    // Criar maps para validação rápida
-    const productMap = new Map(products.map(p => [p.id, p]));
-    const featureMap = new Map(features.map(f => [f.id, f]));
-    const optionMap = new Map(options.map(o => [o.id, o]));
-
-    // Validar itens
-    for (const item of items) {
-      if (!productMap.has(item.itemId)) throw new Error(`Item ${item.itemId} não encontrado`);
-      if (item.itemFeatureId && !featureMap.has(item.itemFeatureId)) throw new Error(`Característica ${item.itemFeatureId} não encontrada`);
-      if (item.featureOptionId && !optionMap.has(item.featureOptionId)) throw new Error(`Opção ${item.featureOptionId} não encontrada`);
-    }
-
-    // Preparar dados para bulkCreate
-    const itemsWithIds = items.map(item => ({
-      id: uuidv4(),
-      productionOrderId: item.productionOrderId,
-      itemId: item.itemId,
-      itemFeatureId: item.itemFeatureId || null,
-      featureOptionId: item.featureOptionId || null,
-      quantity: item.quantity || 1
-    }));
-
-    const createdItems = await ProductionOrderItem.bulkCreate(itemsWithIds, { transaction });
-    await transaction.commit();
-
-    return res.status(201).json({
-      success: true,
-      message: `${createdItems.length} itens criados com sucesso`,
-      data: createdItems
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao criar itens do pedido em lote:', error);
-    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
-}
 
-// Atualizar vários itens em batch (otimizado)
-static async updateBatch(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const updates = req.body;
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return res.status(400).json({ success: false, message: 'Nenhum item enviado para atualização em lote' });
+  // Atualizar vários itens em batch
+  static async updateBatch(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const updates = req.body;
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({ success: false, message: 'Nenhum item enviado para atualização em lote' });
+      }
+
+      const updatedItems = [];
+      for (const item of updates) {
+        const { id, ...fields } = item;
+        if (!id) throw new Error('ID do item é obrigatório para atualização');
+
+        await ProductionOrderItem.update(item, { where: { id }, transaction });
+        updatedItems.push(item);
+      }
+
+      await transaction.commit();
+      return res.status(200).json({
+        success: true,
+        message: `${updatedItems.length} itens atualizados com sucesso`,
+        data: updatedItems
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao atualizar itens do pedido em lote:', error);
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
-
-    // Extrair IDs e buscar todos de uma vez
-    const ids = updates.map(u => u.id);
-    const existingItems = await ProductionOrderItem.findAll({ where: { id: ids }, transaction });
-
-    if (existingItems.length !== ids.length) {
-      return res.status(404).json({ success: false, message: 'Um ou mais IDs não foram encontrados para atualização' });
-    }
-
-    // Atualizar cada item em paralelo, mas dentro da mesma transação
-    await Promise.all(updates.map(update => {
-      return ProductionOrderItem.update(update, { where: { id: update.id }, transaction });
-    }));
-
-    await transaction.commit();
-
-    return res.status(200).json({
-      success: true,
-      message: `${updates.length} itens atualizados com sucesso`,
-      data: updates
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao atualizar itens do pedido em lote:', error);
-    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
-}
 
   // Deletar vários itens em batch
   static async deleteBatch(req, res) {

@@ -53,14 +53,6 @@ StockItem.init({
   modelName: 'StockItem',
   tableName: 'stock_items',
   timestamps: true,
-  indexes: [
-    { fields: ['itemId'] },
-    { fields: ['stockId'] },
-    { fields: ['itemFeatureId'] },
-    { fields: ['featureOptionId'] },
-    { fields: ['stockId', 'itemId'] }, // útil se você filtra por stock + item
-    { fields: ['itemId', 'itemFeatureId', 'featureOptionId'] } // útil se você filtra por item + feature + option
-  ]
 });
 
 export default StockItem;

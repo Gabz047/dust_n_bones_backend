@@ -704,12 +704,11 @@ static async generateLabels(req, res) {
       }))
     };
 
-    // const zpl = generateLabelsZPL(slimNote);
-    res.json({success: true, data: slimNote})
-    // console.log(zpl)
+    const zpl = generateLabelsZPL(slimNote);
+    console.log(zpl)
 
-    // res.setHeader('Content-Type', 'text/plain'); // Zebra aceita plain/text
-    // res.send(zpl);
+    res.setHeader('Content-Type', 'text/plain'); // Zebra aceita plain/text
+    res.send(zpl);
 
   } catch (error) {
     console.error(error);
