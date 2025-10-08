@@ -27,6 +27,7 @@ BoxItem.init({
     references: { model: OrderItem, key: 'id' },
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
+    field: 'order_item_id',
   },
   boxId: {
     type: DataTypes.UUID,
@@ -34,6 +35,7 @@ BoxItem.init({
     references: { model: Box, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'box_id',
   },
   itemId: {
     type: DataTypes.UUID,
@@ -41,6 +43,7 @@ BoxItem.init({
     references: { model: Item, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'item_id',
   },
   itemFeatureId: {
     type: DataTypes.UUID,
@@ -48,6 +51,7 @@ BoxItem.init({
     references: { model: ItemFeature, key: 'id' },
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
+    field: 'item_feature_id',
   },
   featureOptionId: {
     type: DataTypes.UUID,
@@ -55,6 +59,7 @@ BoxItem.init({
     references: { model: FeatureOption, key: 'id' },
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
+    field: 'feature_option_id',
   },
   userId: {
     type: DataTypes.UUID,
@@ -62,6 +67,7 @@ BoxItem.init({
     references: { model: User, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'user_id',
   },
   date: {
     type: DataTypes.DATE,
@@ -73,21 +79,18 @@ BoxItem.init({
   modelName: 'BoxItem',
   tableName: 'box_items',
   timestamps: true,
-
+  underscored: true, // ✅ importantíssimo
   indexes: [
-    // Índices individuais
-    { fields: ['boxId'] },
-    { fields: ['itemId'] },
-    { fields: ['orderItemId'] },
-    { fields: ['userId'] },
+    { fields: ['box_id'] },
+    { fields: ['item_id'] },
+    { fields: ['order_item_id'] },
+    { fields: ['user_id'] },
     { fields: ['date'] },
-
-    // Índices compostos para acelerar consultas específicas
-    { fields: ['boxId', 'itemId'] },              // usado para buscas por itens dentro de uma caixa
-    { fields: ['itemId', 'itemFeatureId'] },      // para joins e filtros por item e feature
-    { fields: ['boxId', 'itemFeatureId'] },       // usado quando carrega itens detalhados por caixa
-    { fields: ['boxId', 'featureOptionId'] },     // otimiza quando há variações
-    { fields: ['itemFeatureId', 'featureOptionId'] }, // ajuda quando busca por combinações de opções
+    { fields: ['box_id', 'item_id'] },
+    { fields: ['item_id', 'item_feature_id'] },
+    { fields: ['box_id', 'item_feature_id'] },
+    { fields: ['box_id', 'feature_option_id'] },
+    { fields: ['item_feature_id', 'feature_option_id'] },
   ],
 });
 

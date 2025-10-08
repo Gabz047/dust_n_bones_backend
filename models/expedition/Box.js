@@ -28,6 +28,7 @@ Box.init({
     references: { model: DeliveryNote, key: 'id' },
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
+    field: 'delivery_note_id',
   },
   projectId: {
     type: DataTypes.UUID,
@@ -35,6 +36,7 @@ Box.init({
     references: { model: Project, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'project_id',
   },
   customerId: {
     type: DataTypes.UUID,
@@ -42,6 +44,7 @@ Box.init({
     references: { model: Customer, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'customer_id',
   },
   orderId: {
     type: DataTypes.UUID,
@@ -49,10 +52,12 @@ Box.init({
     references: { model: Order, key: 'id' },
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
+    field: 'order_id',
   },
   totalQuantity: {
     type: DataTypes.INTEGER,
     allowNull: true,
+    field: 'total_quantity',
   },
   packageId: {
     type: DataTypes.UUID,
@@ -60,6 +65,7 @@ Box.init({
     references: { model: Package, key: 'id' },
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
+    field: 'package_id',
   },
   userId: {
     type: DataTypes.UUID,
@@ -67,6 +73,7 @@ Box.init({
     references: { model: User, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'user_id',
   },
   date: {
     type: DataTypes.DATE,
@@ -77,17 +84,19 @@ Box.init({
   sequelize,
   modelName: 'Box',
   tableName: 'boxes',
+  underscored: true, // converte camelCase para snake_case automaticamente
   timestamps: true,
   indexes: [
-    { fields: ['deliveryNoteId'] },         // Busca por romaneio
-    { fields: ['projectId'] },              // Busca por projeto
-    { fields: ['customerId'] },             // Busca por cliente
-    { fields: ['orderId'] },                // Busca por pedido
-    { fields: ['referralId'] },             // Ordenação/busca por número de caixa
-    { fields: ['date'] },                   // Relatórios por data
-    { fields: ['projectId', 'customerId'] } // Índice composto para consultas filtrando projeto + cliente
+    { fields: ['delivery_note_id'] },
+    { fields: ['project_id'] },
+    { fields: ['customer_id'] },
+    { fields: ['order_id'] },
+    { fields: ['referral_id'] },
+    { fields: ['date'] },
+    { fields: ['project_id', 'customer_id'] }
   ]
 });
+
 
 // Hook para gerar referralId incremental
 Box.beforeCreate(async (box, options) => {

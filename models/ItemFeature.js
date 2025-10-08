@@ -20,6 +20,7 @@ ItemFeature.init({
         },
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
+        field: 'item_id', // mapeamento correto para o banco
     },
     featureId: {
         type: DataTypes.UUID,
@@ -30,11 +31,13 @@ ItemFeature.init({
         },
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
+        field: 'feature_id', // mapeamento correto para o banco
     },
     dateJoined: {
         type: DataTypes.DATE,
         allowNull: true,
         defaultValue: DataTypes.NOW,
+        field: 'date_joined',
     }
 }, {
     sequelize,
@@ -44,15 +47,15 @@ ItemFeature.init({
     indexes: [
         {
             unique: true,
-            fields: ['itemId', 'featureId'],
+            fields: ['item_id', 'feature_id'], // nomes corretos do banco
             name: 'uniq_item_feature'
         },
         {
-            fields: ['itemId'],
+            fields: ['item_id'],
             name: 'idx_item_id'
         },
         {
-            fields: ['featureId'],
+            fields: ['feature_id'],
             name: 'idx_feature_id'
         }
     ]

@@ -72,6 +72,22 @@ Customer.belongsTo(CustomerGroup, { foreignKey: 'customerGroup', as: 'customerGr
 CustomerGroup.hasMany(Customer, { foreignKey: 'customerGroup', as: 'customersInGroup' });
 CustomerGroup.belongsTo(Customer, { foreignKey: 'mainCustomer', as: 'mainCustomerInGroup' });
 
+// Customer ↔ Company
+Customer.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
+Company.hasMany(Customer, { foreignKey: 'companyId', as: 'customers' });
+
+// Customer ↔ Branch
+Customer.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+Branch.hasMany(Customer, { foreignKey: 'branchId', as: 'customers' });
+
+// CustomerGroup ↔ Company
+CustomerGroup.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
+Company.hasMany(CustomerGroup, { foreignKey: 'companyId', as: 'customerGroups' });
+
+// CustomerGroup ↔ Branch
+CustomerGroup.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+Branch.hasMany(CustomerGroup, { foreignKey: 'branchId', as: 'customerGroups' });
+
 // ---------------------- ITEM & FEATURE ----------------------
 Item.belongsToMany(Feature, { through: ItemFeature, foreignKey: 'itemId', otherKey: 'featureId', as: 'assignedFeatures' });
 Feature.belongsToMany(Item, { through: ItemFeature, foreignKey: 'featureId', otherKey: 'itemId', as: 'assignedItems' });
@@ -82,6 +98,13 @@ Item.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
 Item.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
 Company.hasMany(Item, { foreignKey: 'companyId', as: 'items' });
 Branch.hasMany(Item, { foreignKey: 'branchId', as: 'items' });
+// Feature ↔ Company
+Feature.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
+Company.hasMany(Feature, { foreignKey: 'companyId', as: 'features' });
+
+// Feature ↔ Branch
+Feature.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+Branch.hasMany(Feature, { foreignKey: 'branchId', as: 'features' });
 
 // Feature ↔ FeatureOption
 Feature.hasMany(FeatureOption, { foreignKey: 'featureId', as: 'options' });
@@ -211,6 +234,14 @@ ItemFeature.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'i
 // FeatureOption → ProductionOrderItemAdditionalFeatureOption
 ProductionOrderItemAdditionalFeatureOption.belongsTo(FeatureOption, { foreignKey: 'featureOptionId', as: 'featureOption' });
 FeatureOption.hasMany(ProductionOrderItemAdditionalFeatureOption, { foreignKey: 'featureOptionId', as: 'additionalOptionsByOption' });
+
+// Package ↔ Company
+Package.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
+Company.hasMany(Package, { foreignKey: 'companyId', as: 'packages' });
+
+// Package ↔ Branch
+Package.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+Branch.hasMany(Package, { foreignKey: 'branchId', as: 'packages' });
 
 // Box - Box item
 

@@ -1,4 +1,3 @@
-// models/StockItem.js
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +17,7 @@ StockItem.init({
   itemId: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'item_id', // <--- nome real da coluna no banco
     references: { model: Item, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
@@ -25,6 +25,7 @@ StockItem.init({
   stockId: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'stock_id',
     references: { model: Stock, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
@@ -32,6 +33,7 @@ StockItem.init({
   itemFeatureId: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'item_feature_id',
     references: { model: ItemFeature, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
@@ -39,6 +41,7 @@ StockItem.init({
   featureOptionId: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'feature_option_id',
     references: { model: FeatureOption, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
@@ -54,12 +57,12 @@ StockItem.init({
   tableName: 'stock_items',
   timestamps: true,
   indexes: [
-    { fields: ['itemId'] },
-    { fields: ['stockId'] },
-    { fields: ['itemFeatureId'] },
-    { fields: ['featureOptionId'] },
-    { fields: ['stockId', 'itemId'] }, // útil se você filtra por stock + item
-    { fields: ['itemId', 'itemFeatureId', 'featureOptionId'] } // útil se você filtra por item + feature + option
+    { fields: ['item_id'] },
+    { fields: ['stock_id'] },
+    { fields: ['item_feature_id'] },
+    { fields: ['feature_option_id'] },
+    { fields: ['stock_id', 'item_id'] },
+    { fields: ['item_id', 'item_feature_id', 'feature_option_id'] }
   ]
 });
 

@@ -6,7 +6,6 @@ import ProductionOrder from './ProductionOrder.js';
 import Item from './Item.js';
 import ItemFeature from './ItemFeature.js';
 import FeatureOption from './FeatureOption.js';
-import OrderItem from './OrderItem.js';
 
 class ProductionOrderItem extends Model {}
 
@@ -20,6 +19,7 @@ ProductionOrderItem.init({
   productionOrderId: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'production_order_id',
     references: {
       model: ProductionOrder,
       key: 'id'
@@ -30,6 +30,7 @@ ProductionOrderItem.init({
   itemId: {
     type: DataTypes.UUID,
     allowNull: false,
+    field: 'item_id',
     references: {
       model: Item,
       key: 'id'
@@ -37,10 +38,10 @@ ProductionOrderItem.init({
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE'
   },
-
   itemFeatureId: {
     type: DataTypes.UUID,
     allowNull: true,
+    field: 'item_feature_id',
     references: {
       model: ItemFeature,
       key: 'id'
@@ -51,6 +52,7 @@ ProductionOrderItem.init({
   featureOptionId: {
     type: DataTypes.UUID,
     allowNull: true,
+    field: 'feature_option_id',
     references: {
       model: FeatureOption,
       key: 'id'
@@ -69,11 +71,11 @@ ProductionOrderItem.init({
   tableName: 'production_order_items',
   timestamps: true,
   indexes: [
-    { fields: ['productionOrderId'] },
-    { fields: ['itemId'] },
-    { fields: ['itemFeatureId'] },
-    { fields: ['featureOptionId'] },
-    { fields: ['productionOrderId', 'itemId'] } 
+    { fields: ['production_order_id'], name: 'production_order_items_production_order_id_idx' },
+    { fields: ['item_id'], name: 'production_order_items_item_id_idx' },
+    { fields: ['item_feature_id'], name: 'production_order_items_item_feature_id_idx' },
+    { fields: ['feature_option_id'], name: 'production_order_items_feature_option_id_idx' },
+    { fields: ['production_order_id', 'item_id'], name: 'production_order_items_prod_order_item_idx' }
   ]
 });
 

@@ -19,6 +19,7 @@ DeliveryNoteItem.init({
     references: { model: DeliveryNote, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'delivery_note_id', // ⚠️ corrige o nome da coluna no DB
   },
   boxId: { // id da caixa
     type: DataTypes.UUID,
@@ -26,23 +27,20 @@ DeliveryNoteItem.init({
     references: { model: Box, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+    field: 'box_id', // ⚠️ corrige o nome da coluna no DB
   },
 }, {
   sequelize,
   modelName: 'DeliveryNoteItem',
   tableName: 'delivery_note_items',
   timestamps: true,
+  underscored: true, // ⚠️ transforma automaticamente camelCase em snake_case
 
   // Índices para otimizar consultas
   indexes: [
-    // Busca rápida por romaneio
-    { fields: ['deliveryNoteId'] },
-
-    // Busca rápida por caixa
-    { fields: ['boxId'] },
-
-    // Evita duplicidade entre romaneio e caixa (opcional, se não puder repetir)
-    { unique: true, fields: ['deliveryNoteId', 'boxId'] },
+    { fields: ['delivery_note_id'] }, // ⚠️ nomes em snake_case
+    { fields: ['box_id'] },
+    { unique: true, fields: ['delivery_note_id', 'box_id'] },
   ],
 });
 

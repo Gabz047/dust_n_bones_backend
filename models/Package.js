@@ -120,6 +120,27 @@ Package.init({
             min: 0
         }
     }
+    ,
+     companyId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'companies',
+      key: 'id',
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+  },
+  branchId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'branches',
+      key: 'id',
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+  }
 
 }, {
     sequelize,

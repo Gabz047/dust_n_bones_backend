@@ -36,6 +36,26 @@ MovementLogEntity.init({
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
+   companyId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'companies',
+      key: 'id',
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+  },
+  branchId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'branches',
+      key: 'id',
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+  },
   date: {
     type: DataTypes.DATE,
     allowNull: false,
