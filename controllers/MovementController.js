@@ -91,7 +91,8 @@ class MovementController {
           },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
           { model: ProductionOrder, as: 'productionOrder', include: [{ model: Project, as: 'project', attributes: ['id', 'name'] }] },
-          { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
+          { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
+          { model: Account, as: 'account', attributes: ['id', 'username', 'email'] }
         ],
         limit,
         offset,
@@ -152,7 +153,8 @@ class MovementController {
           },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
           { model: ProductionOrder, as: 'productionOrder' },
-          { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
+          { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
+          { model: Account, as: 'account', attributes: ['id', 'username', 'email'] }
         ],
         order: [['createdAt', 'DESC']]
       });

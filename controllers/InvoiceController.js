@@ -1,4 +1,4 @@
-import { sequelize, Invoice, DeliveryNote, MovementLogEntity, Project, InvoiceItem, Box, BoxItem, ItemFeature, Item, FeatureOption, Feature, Order, Customer, OrderItem, MovementLogEntityItem, Company, Branch, DeliveryNoteItem, } from '../models/index.js';
+import { sequelize, Invoice, DeliveryNote, MovementLogEntity, Project, InvoiceItem, Box, BoxItem, ItemFeature, Item, FeatureOption, Feature, Order, Customer, OrderItem, User, Account, MovementLogEntityItem, Company, Branch } from '../models/index.js';
 import { calculateQuantityAndPrice } from '../utils/invoice.js';
 import { generateInvoicePDF } from '../services/generate-pdf/invoice/invoice-pdf.js';
 import { Op } from 'sequelize';
@@ -6,15 +6,12 @@ import { Op } from 'sequelize';
 class InvoiceController {
 
   // Cria uma nova fatura
-  // dentro do InvoiceController
-  // Cria uma nova fatura
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { projectId, type, deliveryNoteIds, userId } = req.body;
       const { companyId, branchId } = req.context;
 
-      // Busca romaneios
       let romaneios = [];
       const dnWhere = {
         ...(deliveryNoteIds?.length ? { id: deliveryNoteIds } : { projectId }),
@@ -23,13 +20,12 @@ class InvoiceController {
       };
 
       romaneios = await DeliveryNote.findAll({ where: dnWhere, transaction });
-
       if (romaneios.length === 0) {
         return res.status(400).json({ error: 'Nenhum romaneio encontrado para gerar a fatura' });
       }
 
-      // Cria fatura
       const invoice = await Invoice.create({
+        
         projectId,
         type,
         companyId: companyId || null,
@@ -38,15 +34,31 @@ class InvoiceController {
         totalPrice: 0
       }, { transaction });
 
-      // Log principal
-      const movementLog = await MovementLogEntity.create({
-        userId,
+      // Preparar dados do log
+      let movementData = {
+        
         method: 'criação',
-        projectId,
         entity: 'fatura',
         entityId: invoice.id,
+        status: 'aberto',
         date: new Date()
-      }, { transaction });
+      };
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      const movementLog = await MovementLogEntity.create(movementData, { transaction });
 
       let totalInvoicePrice = 0;
 
@@ -72,7 +84,6 @@ class InvoiceController {
           for (const bi of box.items) {
             const unitPrice = bi.item?.price || 0;
             const lineTotal = unitPrice * bi.quantity;
-
             dnTotalPrice += lineTotal;
             dnTotalQuantity += bi.quantity;
           }
@@ -88,15 +99,33 @@ class InvoiceController {
 
           await dn.update({ invoiceId: invoice.id }, { transaction });
 
-          await MovementLogEntityItem.create({
-            userId,
-            movementLogEntityId: movementLog.id,
-            entity: 'fatura',
+          // Log do item
+          let movementItemData = {
+          
             method: 'criação',
+            entity: 'fatura',
             entityId: invoiceItem.id,
+            movementLogEntityId: movementLog.id,
             quantity: dnTotalQuantity,
+            status: 'aberto',
             date: new Date()
-          }, { transaction });
+          };
+
+          // Verifica User ou Account novamente
+          const userItem = await User.findByPk(userId);
+          if (userItem) {
+            movementItemData.userId = userId;
+          } else {
+            const accountItem = await Account.findByPk(userId);
+            if (accountItem) {
+              movementItemData.accountId = userId;
+            } else {
+              await transaction.rollback();
+              return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+            }
+          }
+
+          await MovementLogEntityItem.create(movementItemData, { transaction });
         }
 
         totalInvoicePrice += dnTotalPrice;
@@ -126,22 +155,30 @@ class InvoiceController {
 
       await invoice.update({ totalPrice }, { transaction });
 
-      const deliveryNotes = await DeliveryNote.findAll({ where: { invoiceId: invoice.id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, transaction });
-      for (const dn of deliveryNotes) {
-        await dn.update({ invoiceId: invoice.id }, { transaction });
-      }
-
-      await MovementLogEntity.create({
+      const movementData = {
+      
+        method: 'edição',
         entity: 'fatura',
         entityId: invoice.id,
-        method: 'edição',
         status: 'aberto',
-        userId,
-        companyId,
-        branchId,
         date: new Date()
-      }, { transaction });
+      };
 
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction });
       await transaction.commit();
       return res.json(invoice);
     } catch (error) {
@@ -163,17 +200,29 @@ class InvoiceController {
 
       await invoice.destroy({ transaction });
 
-      await MovementLogEntity.create({
+      const movementData = {
+        method: 'remoção',
         entity: 'fatura',
         entityId: id,
-        method: 'remoção',
         status: 'aberto',
-        userId,
-        companyId,
-        branchId,
         date: new Date()
-      }, { transaction });
+      };
 
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction });
       await transaction.commit();
       return res.json({ message: 'Fatura deletada com sucesso' });
     } catch (error) {
