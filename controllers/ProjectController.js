@@ -11,14 +11,13 @@ class ProjectController {
 
       // Validar empresa
       if (!branchId) {
-      const company = await Company.findByPk(companyId);
-      if (!company || !company.active) {
-        return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' });
+        const company = await Company.findByPk(companyId);
+        if (!company || !company.active) {
+          return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' });
+        }
       }
-    }
 
       // Validar filial
-      
       if (branchId) {
         branch = await Branch.findByPk(branchId);
         if (!branch || !branch.active) {
@@ -47,7 +46,6 @@ class ProjectController {
         totalQuantity: totalQuantity || 0
       }, { transaction });
 
-
       await transaction.commit();
       return res.status(201).json({ success: true, data: project });
     } catch (error) {
@@ -61,6 +59,7 @@ class ProjectController {
     }
   }
 
+  // GET: Listar todos os projetos com filtro de contexto
   static async getAll(req, res) {
     try {
       const page = parseInt(req.query.page) || 1;
@@ -71,8 +70,14 @@ class ProjectController {
       const where = {};
       if (active !== undefined) where.active = active === 'true';
 
+      const { companyId, branchId } = req.context;
+
       const { count, rows } = await Project.findAndCountAll({
-        where,
+        where: {
+          ...where,
+          companyId,
+          ...(branchId ? { branchId } : {})
+        },
         include: [
           { model: Company, as: 'company' },
           { model: Branch, as: 'branch' },
@@ -105,10 +110,18 @@ class ProjectController {
     }
   }
 
+  // GET: Buscar projeto por ID com filtro de contexto
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      const project = await Project.findByPk(id, {
+      const { companyId, branchId } = req.context;
+
+      const project = await Project.findOne({
+        where: {
+          id,
+          companyId,
+          ...(branchId ? { branchId } : {})
+        },
         include: [
           { model: Company, as: 'company' },
           { model: Branch, as: 'branch' },
@@ -161,10 +174,12 @@ class ProjectController {
         return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
       }
 
-      const productionOrder = await ProductionOrder.findOne({where: { projectId: id }})
+      const productionOrder = await ProductionOrder.findOne({ where: { projectId: id } });
       if (productionOrder) {
-        
-          return res.status(404).json({ success: false, message: 'Projeto não pode ser apagado, pois possui uma ordem de produção!' });
+        return res.status(404).json({
+          success: false,
+          message: 'Projeto não pode ser apagado, pois possui uma ordem de produção!'
+        });
       }
 
       await project.destroy();

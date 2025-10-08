@@ -15,6 +15,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 
 class OrderController {
+  // Criar pedido
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
@@ -30,9 +31,9 @@ class OrderController {
         return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
       }
 
-      const customerAlreadyInOrder = await Order.findOne({ where: { customerId: customerId, projectId: projectId } })
+      const customerAlreadyInOrder = await Order.findOne({ where: { customerId, projectId } });
       if (customerAlreadyInOrder) {
-        return res.status(400).json({ success: false, message: 'Cliente já cadastrado em um pedido deste projeto' })
+        return res.status(400).json({ success: false, message: 'Cliente já cadastrado em um pedido deste projeto' });
       }
 
       const lastOrder = await Order.findOne({
@@ -40,9 +41,8 @@ class OrderController {
         transaction
       });
 
-      // Incrementar ou começar do 1
-    const referralId = lastOrder ? lastOrder.referralId + 1 : 1;
-    
+      const referralId = lastOrder ? lastOrder.referralId + 1 : 1;
+
       const orderId = uuidv4();
       const order = await Order.create({
         id: orderId,
@@ -53,8 +53,6 @@ class OrderController {
         totalQuantity: totalQuantity || 0,
         referralId,
       }, { transaction });
-
-      
 
       await transaction.commit();
       return res.status(201).json({ success: true, data: order });
@@ -69,6 +67,7 @@ class OrderController {
     }
   }
 
+  // Buscar todos os pedidos (GET) filtrando por company/branch do projeto
   static async getAll(req, res) {
     try {
       const page = parseInt(req.query.page) || 1;
@@ -79,10 +78,19 @@ class OrderController {
       const where = {};
       if (status) where.status = status;
 
+      const { companyId, branchId } = req.context;
+
       const { count, rows } = await Order.findAndCountAll({
         where,
         include: [
-          { model: Project, as: 'project' },
+          { 
+            model: Project, 
+            as: 'project',
+            where: {
+              ...(companyId && { companyId }),
+              ...(branchId && { branchId })
+            }
+          },
           { model: Customer, as: 'customer' }
         ],
         limit,
@@ -112,115 +120,57 @@ class OrderController {
     }
   }
 
-static async getById(req, res) {
-  try {
-    const { id } = req.params;
-    const order = await Order.findByPk(id, {
-      include: [
-        { model: Project, as: 'project' },
-        { model: Customer, as: 'customer' },
-        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'orderId', 'referralId'] },
-        {
-          model: OrderItem,
-          as: 'orderItems',
-          include: [
-            { model: Item, as: 'item' },
-            { model: FeatureOption, as: 'featureOption' }
-          ]
-        },
-        {
-          model: OrderItemAdditionalFeatureOption,
-          as: 'additionalOptions',
-          include: [
-            {
-              model: ItemFeature,
-              as: 'itemFeature',
-              attributes: ['id', 'featureId'],
-              include: [
-                { model: Feature, as: 'feature', attributes: ['name'] } // agora inclui o nome
-              ]
-            },
-            { model: FeatureOption, as: 'featureOption' },
-            { model: Item, as: 'item' }
-          ]
-        }
-      ]
-    });
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
-    }
-
-    res.json({ success: true, data: order });
-  } catch (error) {
-    console.error('Erro ao buscar pedido:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
-  }
-}
-
-static async getOrderByProject(req, res) {
-  try {
-    const { id } = req.params;
-    const project = await Project.findByPk(id);
-
-    if (!project) {
-      return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
-    }
-
-    const orders = await Order.findAll({
-      where: { projectId: project.id },
-      include: [
-        { model: Project, as: 'project' },
-        { model: Customer, as: 'customer' },
-        {
-          model: OrderItem,
-          as: 'orderItems',
-          include: [
-            { model: Item, as: 'item' },
-            { model: FeatureOption, as: 'featureOption' }
-          ]
-        },
-        {
-          model: DeliveryNote,
-          as: 'deliveryNotes',
-          attributes: ['id', 'referralId', 'createdAt', 'totalQuantity'], // apenas campos necessários
-          include: [
-            { model: Customer, as: 'customer', attributes: ['id', 'name'] } // se quiser mostrar cliente no romaneio
-          ]
-        }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
-
-    res.json({ success: true, data: orders });
-  } catch (error) {
-    console.error('Erro ao buscar pedidos do projeto:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
-  }
-}
-
-
-
-
-
-  static async getOrderByCustomer(req, res) {
+  // Buscar pedido por ID (GET) filtrando por company/branch do projeto
+  static async getById(req, res) {
     try {
       const { id } = req.params;
-      const customer = await Customer.findByPk(id);
+      const { companyId, branchId } = req.context;
 
-      if (!customer) {
-        return res.status(404).json({ success: false, message: 'Cliente não encontrado' });
+      const order = await Order.findOne({
+        where: { id },
+        include: [
+          { 
+            model: Project, 
+            as: 'project',
+            where: {
+              ...(companyId && { companyId }),
+              ...(branchId && { branchId })
+            }
+          },
+          { model: Customer, as: 'customer' },
+          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'orderId', 'referralId'] },
+          {
+            model: OrderItem,
+            as: 'orderItems',
+            include: [
+              { model: Item, as: 'item' },
+              { model: FeatureOption, as: 'featureOption' }
+            ]
+          },
+          {
+            model: OrderItemAdditionalFeatureOption,
+            as: 'additionalOptions',
+            include: [
+              {
+                model: ItemFeature,
+                as: 'itemFeature',
+                attributes: ['id', 'featureId'],
+                include: [
+                  { model: Feature, as: 'feature', attributes: ['name'] }
+                ]
+              },
+              { model: FeatureOption, as: 'featureOption' },
+              { model: Item, as: 'item' }
+            ]
+          }
+        ]
+      });
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
       }
 
-      res.json({ success: true, data: customer });
+      res.json({ success: true, data: order });
     } catch (error) {
       console.error('Erro ao buscar pedido:', error);
       res.status(500).json({
@@ -231,6 +181,105 @@ static async getOrderByProject(req, res) {
     }
   }
 
+  // Buscar pedidos por projeto (GET) filtrando por company/branch
+  static async getOrderByProject(req, res) {
+    try {
+      const { id } = req.params;
+      const { companyId, branchId } = req.context;
+
+      const orders = await Order.findAll({
+        where: { projectId: id },
+        include: [
+          { 
+            model: Project, 
+            as: 'project',
+            where: {
+              ...(companyId && { companyId }),
+              ...(branchId && { branchId })
+            }
+          },
+          { model: Customer, as: 'customer' },
+          {
+            model: OrderItem,
+            as: 'orderItems',
+            include: [
+              { model: Item, as: 'item' },
+              { model: FeatureOption, as: 'featureOption' }
+            ]
+          },
+          {
+            model: DeliveryNote,
+            as: 'deliveryNotes',
+            attributes: ['id', 'referralId', 'createdAt', 'totalQuantity'],
+            include: [
+              { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+            ]
+          }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.json({ success: true, data: orders });
+    } catch (error) {
+      console.error('Erro ao buscar pedidos do projeto:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
+
+  // Buscar pedidos por cliente (GET) filtrando por company/branch do projeto
+  static async getOrderByCustomer(req, res) {
+    try {
+      const { id } = req.params;
+      const { companyId, branchId } = req.context;
+
+      const orders = await Order.findAll({
+        where: {},
+        include: [
+          { 
+            model: Project, 
+            as: 'project',
+            where: {
+              ...(companyId && { companyId }),
+              ...(branchId && { branchId })
+            }
+          },
+          { model: Customer, as: 'customer', where: { id } },
+          {
+            model: OrderItem,
+            as: 'orderItems',
+            include: [
+              { model: Item, as: 'item' },
+              { model: FeatureOption, as: 'featureOption' }
+            ]
+          },
+          {
+            model: DeliveryNote,
+            as: 'deliveryNotes',
+            attributes: ['id', 'referralId', 'createdAt', 'totalQuantity'],
+            include: [
+              { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+            ]
+          }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.json({ success: true, data: orders });
+    } catch (error) {
+      console.error('Erro ao buscar pedidos do cliente:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
+
+  // Atualizar pedido (PUT/PATCH) – permanece inalterado
   static async update(req, res) {
     try {
       const { id } = req.params;
@@ -253,6 +302,7 @@ static async getOrderByProject(req, res) {
     }
   }
 
+  // Deletar pedido (DELETE) – permanece inalterado
   static async delete(req, res) {
     try {
       const { id } = req.params;
@@ -261,13 +311,12 @@ static async getOrderByProject(req, res) {
         return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
       }
 
-      const productionOrder = await ProductionOrder.findOne({where: { projectId: order.projectId }})
+      const productionOrder = await ProductionOrder.findOne({ where: { projectId: order.projectId } });
       if (productionOrder) {
-        
-          return res.status(404).json({ success: false, message: 'Pedido não pode ser apagado, pois o projeto possui uma ordem de produção!' });
+        return res.status(404).json({ success: false, message: 'Pedido não pode ser apagado, pois o projeto possui uma ordem de produção!' });
       }
 
-      await order.destroy(); // Exclusão definitiva
+      await order.destroy();
       res.json({ success: true, message: 'Pedido removido com sucesso' });
     } catch (error) {
       console.error('Erro ao deletar pedido:', error);

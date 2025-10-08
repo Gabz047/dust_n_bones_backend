@@ -8,134 +8,125 @@ class InvoiceController {
   // Cria uma nova fatura
   // dentro do InvoiceController
   // Cria uma nova fatura
-static async create(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const { projectId, type, deliveryNoteIds, companyId, customerId, userId } = req.body;
+  static async create(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const { projectId, type, deliveryNoteIds, userId } = req.body;
+      const { companyId, branchId } = req.context;
 
-    // Busca romaneios: se não vier lista, pega todos do projeto
-    let romaneios = [];
-    if (Array.isArray(deliveryNoteIds) && deliveryNoteIds.length > 0) {
-      romaneios = await DeliveryNote.findAll({
-        where: { id: deliveryNoteIds },
-        transaction
-      });
-    } else {
-      romaneios = await DeliveryNote.findAll({
-        where: { projectId },
-        transaction
-      });
-    }
+      // Busca romaneios
+      let romaneios = [];
+      const dnWhere = {
+        ...(deliveryNoteIds?.length ? { id: deliveryNoteIds } : { projectId }),
+        ...(companyId ? { companyId } : {}),
+        ...(branchId ? { branchId } : {})
+      };
 
-    if (romaneios.length === 0) {
-      return res.status(400).json({ error: 'Nenhum romaneio encontrado para gerar a fatura' });
-    }
+      romaneios = await DeliveryNote.findAll({ where: dnWhere, transaction });
 
-    // Cria a fatura
-    const invoice = await Invoice.create({
-    
-      projectId,
-      type,
-      companyId: companyId || null,
-      customerId: customerId || null,
-      date: new Date(),
-      totalPrice: 0
-    }, { transaction });
-
-    // Log principal
-    const movementLog = await MovementLogEntity.create({
-      userId,
-      method: 'criação',
-      projectId,
-      entity: 'fatura',
-      entityId: invoice.id,
-      date: new Date()
-    }, { transaction });
-
-    let totalInvoicePrice = 0;
-
-    // Percorre os romaneios selecionados ou todos do projeto
-    for (const dn of romaneios) {
-  let dnTotalPrice = 0;
-  let dnTotalQuantity = 0;
-
-  const boxes = await Box.findAll({
-    where: { deliveryNoteId: dn.id },
-    include: [
-      {
-        model: BoxItem,
-        as: 'items',
-        include: [
-          { model: Item, as: 'item', attributes: ['id', 'name', 'price'] }
-        ]
+      if (romaneios.length === 0) {
+        return res.status(400).json({ error: 'Nenhum romaneio encontrado para gerar a fatura' });
       }
-    ],
-    transaction
-  });
 
-  for (const box of boxes) {
-    for (const bi of box.items) {
-      const unitPrice = bi.item?.price || 0;
-      const lineTotal = unitPrice * bi.quantity;
+      // Cria fatura
+      const invoice = await Invoice.create({
+        projectId,
+        type,
+        companyId: companyId || null,
+        branchId: branchId || null,
+        date: new Date(),
+        totalPrice: 0
+      }, { transaction });
 
-      dnTotalPrice += lineTotal;
-      dnTotalQuantity += bi.quantity;
+      // Log principal
+      const movementLog = await MovementLogEntity.create({
+        userId,
+        method: 'criação',
+        projectId,
+        entity: 'fatura',
+        entityId: invoice.id,
+        date: new Date()
+      }, { transaction });
+
+      let totalInvoicePrice = 0;
+
+      for (const dn of romaneios) {
+        let dnTotalPrice = 0;
+        let dnTotalQuantity = 0;
+
+        const boxes = await Box.findAll({
+          where: { deliveryNoteId: dn.id },
+          include: [
+            {
+              model: BoxItem,
+              as: 'items',
+              include: [
+                { model: Item, as: 'item', attributes: ['id', 'name', 'price'] }
+              ]
+            }
+          ],
+          transaction
+        });
+
+        for (const box of boxes) {
+          for (const bi of box.items) {
+            const unitPrice = bi.item?.price || 0;
+            const lineTotal = unitPrice * bi.quantity;
+
+            dnTotalPrice += lineTotal;
+            dnTotalQuantity += bi.quantity;
+          }
+        }
+
+        if (type === 'project') {
+          const invoiceItem = await InvoiceItem.create({
+            invoiceId: invoice.id,
+            deliveryNoteId: dn.id,
+            orderId: dn.orderId || null,
+            price: dnTotalPrice
+          }, { transaction });
+
+          await dn.update({ invoiceId: invoice.id }, { transaction });
+
+          await MovementLogEntityItem.create({
+            userId,
+            movementLogEntityId: movementLog.id,
+            entity: 'fatura',
+            method: 'criação',
+            entityId: invoiceItem.id,
+            quantity: dnTotalQuantity,
+            date: new Date()
+          }, { transaction });
+        }
+
+        totalInvoicePrice += dnTotalPrice;
+      }
+
+      await invoice.update({ totalPrice: totalInvoicePrice }, { transaction });
+      await transaction.commit();
+      return res.status(201).json(invoice);
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error(error);
+      return res.status(500).json({ error: 'Erro ao criar fatura' });
     }
   }
-
-  // Só cria InvoiceItem se type for 'project'
-  if (type === 'project') {
-    const invoiceItem = await InvoiceItem.create({
-      invoiceId: invoice.id,
-      deliveryNoteId: dn.id,
-      orderId: dn.orderId || null,
-      price: dnTotalPrice
-    }, { transaction });
-
-    await dn.update({ invoiceId: invoice.id }, { transaction });
-
-    // Cria log
-    await MovementLogEntityItem.create({
-      userId,
-      movementLogEntityId: movementLog.id,
-      entity: 'fatura',
-      method: 'criação',
-      entityId: invoiceItem.id,
-      quantity: dnTotalQuantity,
-      date: new Date()
-    }, { transaction });
-  }
-
-  totalInvoicePrice += dnTotalPrice;
-}
-
-    // Atualiza preço total
-    await invoice.update({ totalPrice: totalInvoicePrice }, { transaction });
-
-    await transaction.commit();
-    return res.status(201).json(invoice);
-
-  } catch (error) {
-    await transaction.rollback();
-    console.error(error);
-    return res.status(500).json({ error: 'Erro ao criar fatura' });
-  }
-}
-
 
   // Atualiza fatura existente
   static async update(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { id } = req.params;
-      const { totalPrice, userId, companyId, branchId } = req.body;
+      const { totalPrice, userId } = req.body;
+      const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findByPk(id, { transaction });
+      const invoice = await Invoice.findOne({ where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, transaction });
       if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
 
       await invoice.update({ totalPrice }, { transaction });
 
-      const deliveryNotes = await DeliveryNote.findAll({ where: { invoiceId: invoice.id }, transaction });
+      const deliveryNotes = await DeliveryNote.findAll({ where: { invoiceId: invoice.id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, transaction });
       for (const dn of deliveryNotes) {
         await dn.update({ invoiceId: invoice.id }, { transaction });
       }
@@ -165,8 +156,9 @@ static async create(req, res) {
     try {
       const { id } = req.params;
       const { userId } = req.body;
+      const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findByPk(id, { transaction });
+      const invoice = await Invoice.findOne({ where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, transaction });
       if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
 
       await invoice.destroy({ transaction });
@@ -177,6 +169,8 @@ static async create(req, res) {
         method: 'remoção',
         status: 'aberto',
         userId,
+        companyId,
+        branchId,
         date: new Date()
       }, { transaction });
 
@@ -188,124 +182,165 @@ static async create(req, res) {
     }
   }
 
-  // Busca todas as faturas
-  static async getAll(req, res) {
-    try {
-      const invoices = await Invoice.findAll({
-        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
-        include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'] },
-          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-        ]
-      });
+ // Busca todas as faturas (GET) filtrando por company/branch do projeto
+static async getAll(req, res) {
+  try {
+    const { companyId, branchId } = req.context;
 
-      const result = await Promise.all(
-        invoices.map(async inv => {
-          const lastMovement = await MovementLogEntity.findOne({
-            where: { entity: 'fatura', entityId: inv.id },
-            order: [['date', 'DESC']],
-            attributes: ['id']
-          });
-          return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
-        })
-      );
+    const invoices = await Invoice.findAll({
+      attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
+      include: [
+        { 
+          model: Project, 
+          as: 'project',
+          where: {
+            ...(companyId && { companyId }),
+            ...(branchId && { branchId })
+          },
+          attributes: ['id', 'name']
+        },
+        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+      ]
+    });
 
-      return res.json(result);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await Promise.all(
+      invoices.map(async inv => {
+        const lastMovement = await MovementLogEntity.findOne({
+          where: { entity: 'fatura', entityId: inv.id },
+          order: [['date', 'DESC']],
+          attributes: ['id']
+        });
+        return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
+      })
+    );
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
+}
 
-  // Busca fatura por ID
-  static async getById(req, res) {
-    try {
-      const { id } = req.params;
-      const invoice = await Invoice.findByPk(id, {
-        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
-        include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'], include: [
+// Busca fatura por ID (GET) filtrando por company/branch do projeto
+static async getById(req, res) {
+  try {
+    const { id } = req.params;
+    const { companyId, branchId } = req.context;
+
+    const invoice = await Invoice.findOne({
+      where: { id },
+      attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
+      include: [
+        { 
+          model: Project, 
+          as: 'project',
+          where: {
+            ...(companyId && { companyId }),
+            ...(branchId && { branchId })
+          },
+          attributes: ['id', 'name'],
+          include: [
             { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-          ] },
-          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId', 'totalQuantity'], include: [
-            { model: Customer, as: 'customer', attributes: ['id', 'name'] },
-          ] },
-          
-        ]
-      });
+          ]
+        },
+        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId', 'totalQuantity'], include: [
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ] }
+      ]
+    });
 
-      if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
+    if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
 
-      const lastMovement = await MovementLogEntity.findOne({
-        where: { entity: 'fatura', entityId: id },
-        order: [['date', 'DESC']],
-        attributes: ['id', 'status']
-      });
+    const lastMovement = await MovementLogEntity.findOne({
+      where: { entity: 'fatura', entityId: id },
+      order: [['date', 'DESC']],
+      attributes: ['id', 'status']
+    });
 
-      return res.json({ ...invoice.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement : null });
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    return res.json({ ...invoice.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement : null });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
+}
 
-  // Busca faturas por projeto
-  static async getByProject(req, res) {
-    try {
-      const { projectId } = req.params;
-      const invoices = await Invoice.findAll({
-        where: { projectId },
-        attributes: ['id', 'projectId', 'type', 'totalPrice'],
-        include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'] },
-          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-        ]
-      });
+// Busca faturas por projeto (GET) filtrando por company/branch do projeto
+static async getByProject(req, res) {
+  try {
+    const { projectId } = req.params;
+    const { companyId, branchId } = req.context;
 
-      const result = await Promise.all(
-        invoices.map(async inv => {
-          const lastMovement = await MovementLogEntity.findOne({
-            where: { entity: 'fatura', entityId: inv.id },
-            order: [['date', 'DESC']],
-            attributes: ['id']
-          });
-          return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
-        })
-      );
+    const invoices = await Invoice.findAll({
+      where: { projectId },
+      attributes: ['id', 'projectId', 'type', 'totalPrice'],
+      include: [
+        { 
+          model: Project, 
+          as: 'project',
+          where: {
+            ...(companyId && { companyId }),
+            ...(branchId && { branchId })
+          },
+          attributes: ['id', 'name']
+        },
+        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+      ]
+    });
 
-      return res.json(result);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await Promise.all(
+      invoices.map(async inv => {
+        const lastMovement = await MovementLogEntity.findOne({
+          where: { entity: 'fatura', entityId: inv.id },
+          order: [['date', 'DESC']],
+          attributes: ['id']
+        });
+        return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
+      })
+    );
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
+}
 
-  // Busca faturas por tipo
-  static async getByType(req, res) {
-    try {
-      const { type } = req.params;
-      const invoices = await Invoice.findAll({
-        where: { type },
-        attributes: ['id', 'projectId', 'type', 'totalPrice'],
-        include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'] },
-          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-        ]
-      });
+// Busca faturas por tipo (GET) filtrando por company/branch do projeto
+static async getByType(req, res) {
+  try {
+    const { type } = req.params;
+    const { companyId, branchId } = req.context;
 
-      const result = await Promise.all(
-        invoices.map(async inv => {
-          const lastMovement = await MovementLogEntity.findOne({
-            where: { entity: 'fatura', entityId: inv.id },
-            order: [['date', 'DESC']],
-            attributes: ['id']
-          });
-          return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
-        })
-      );
+    const invoices = await Invoice.findAll({
+      where: { type },
+      attributes: ['id', 'projectId', 'type', 'totalPrice'],
+      include: [
+        { 
+          model: Project, 
+          as: 'project',
+          where: {
+            ...(companyId && { companyId }),
+            ...(branchId && { branchId })
+          },
+          attributes: ['id', 'name']
+        },
+        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+      ]
+    });
 
-      return res.json(result);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await Promise.all(
+      invoices.map(async inv => {
+        const lastMovement = await MovementLogEntity.findOne({
+          where: { entity: 'fatura', entityId: inv.id },
+          order: [['date', 'DESC']],
+          attributes: ['id']
+        });
+        return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
+      })
+    );
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
+}
 
   static async generatePDF(req, res) {
     try {

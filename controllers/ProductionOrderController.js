@@ -49,14 +49,16 @@ class ProductionOrderController {
     }
   }
 
-  // Buscar OP por projeto
+  // GET: Buscar OP por projeto (filtra pelo company/branch do projeto)
   static async getByProject(req, res) {
     try {
       const { id } = req.params;
+      const { companyId, branchId } = req.context;
+
       const orders = await ProductionOrder.findAll({
         where: { projectId: id },
         include: [
-          { model: Project, as: 'project' },
+          { model: Project, as: 'project', where: { companyId, ...(branchId ? { branchId } : {}) } },
           { model: Customer, as: 'supplier' },
           { model: Customer, as: 'mainCustomer' },
           {
@@ -79,14 +81,16 @@ class ProductionOrderController {
     }
   }
 
-  // Buscar OP por fornecedor
+  // GET: Buscar OP por fornecedor (filtra pelo company/branch do projeto)
   static async getBySupplier(req, res) {
     try {
       const { id } = req.params;
+      const { companyId, branchId } = req.context;
+
       const orders = await ProductionOrder.findAll({
         where: { supplierId: id },
         include: [
-          { model: Project, as: 'project' },
+          { model: Project, as: 'project', where: { companyId, ...(branchId ? { branchId } : {}) } },
           { model: Customer, as: 'supplier' },
           { model: Customer, as: 'mainCustomer' },
           { model: Order, as: 'order' },
@@ -110,14 +114,16 @@ class ProductionOrderController {
     }
   }
 
-  // Buscar OP por cliente principal
+  // GET: Buscar OP por cliente principal (filtra pelo company/branch do projeto)
   static async getByCustomer(req, res) {
     try {
       const { id } = req.params;
+      const { companyId, branchId } = req.context;
+
       const orders = await ProductionOrder.findAll({
         where: { mainCustomerId: id },
         include: [
-          { model: Project, as: 'project' },
+          { model: Project, as: 'project', where: { companyId, ...(branchId ? { branchId } : {}) } },
           { model: Customer, as: 'supplier' },
           { model: Customer, as: 'mainCustomer' },
           { model: Order, as: 'order' },
@@ -141,20 +147,23 @@ class ProductionOrderController {
     }
   }
 
-  // Buscar todas OPs com filtros
+  // GET: Buscar todas OPs com filtros (filtra pelo company/branch do projeto)
   static async getAll(req, res) {
     try {
       const { projectId, supplierId, mainCustomerId, type } = req.query;
-      const where = {};
-      if (projectId) where.projectId = projectId;
-      if (supplierId) where.supplierId = supplierId;
-      if (mainCustomerId) where.mainCustomerId = mainCustomerId;
-      if (type) where.type = type;
+      const { companyId, branchId } = req.context;
+
+      const where = {
+        ...(projectId ? { projectId } : {}),
+        ...(supplierId ? { supplierId } : {}),
+        ...(mainCustomerId ? { mainCustomerId } : {}),
+        ...(type ? { type } : {})
+      };
 
       const orders = await ProductionOrder.findAll({
         where,
         include: [
-          { model: Project, as: 'project' },
+          { model: Project, as: 'project', where: { companyId, ...(branchId ? { branchId } : {}) } },
           { model: Customer, as: 'supplier' },
           { model: Customer, as: 'mainCustomer' },
           {
@@ -177,13 +186,16 @@ class ProductionOrderController {
     }
   }
 
-  // Buscar OP por ID
+  // GET: Buscar OP por ID (filtra pelo company/branch do projeto)
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      const order = await ProductionOrder.findByPk(id, {
+      const { companyId, branchId } = req.context;
+
+      const order = await ProductionOrder.findOne({
+        where: { id },
         include: [
-          { model: Project, as: 'project' },
+          { model: Project, as: 'project', where: { companyId, ...(branchId ? { branchId } : {}) } },
           { model: Customer, as: 'supplier' },
           { model: Customer, as: 'mainCustomer' },
           {
@@ -206,7 +218,7 @@ class ProductionOrderController {
     }
   }
 
-  // Atualizar OP
+  // PUT, PATCH e DELETE permanecem iguais
   static async update(req, res) {
     try {
       const { id } = req.params;
@@ -222,7 +234,6 @@ class ProductionOrderController {
     }
   }
 
-  // Deletar OP
   static async delete(req, res) {
     try {
       const { id } = req.params;
@@ -238,22 +249,20 @@ class ProductionOrderController {
   }
 
   static async patch(req, res) {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
+    try {
+      const { id } = req.params;
+      const updates = req.body;
 
-    const order = await ProductionOrder.findByPk(id);
-    if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' });
+      const order = await ProductionOrder.findByPk(id);
+      if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' });
 
-    // Atualiza somente os campos enviados no body
-    await order.update(updates);
-
-    res.json({ success: true, data: order });
-  } catch (error) {
-    console.error('Erro ao atualizar O.P.:', error);
-    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      await order.update(updates);
+      res.json({ success: true, data: order });
+    } catch (error) {
+      console.error('Erro ao atualizar O.P.:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
   }
-}
 }
 
 export default ProductionOrderController;

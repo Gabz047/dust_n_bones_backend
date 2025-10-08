@@ -3,31 +3,35 @@ import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 
 class PackageController {
-    static async create(req, res) {
-        try {
-            const { name, type, material, width, height, length, weight } = req.body;
+static async create(req, res) {
+    try {
+        const { name, type, material, width, height, length, weight } = req.body;
 
-            const packageItem = await Package.create({
-                id: uuidv4(),
-                name,
-                type,
-                material,
-                width,
-                height,
-                length,
-                weight,
-            });
+        const { companyId, branchId } = req.context; // pega do middleware
 
-            return res.status(201).json({ success: true, data: packageItem });
-        } catch (error) {
-            console.error('Erro ao criar embalagem:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao criar embalagem',
-                error: error.message
-            });
-        }
+        const packageItem = await Package.create({
+            id: uuidv4(),
+            name,
+            type,
+            material,
+            width,
+            height,
+            length,
+            weight,
+            companyId,   
+            branchId    
+        });
+
+        return res.status(201).json({ success: true, data: packageItem });
+    } catch (error) {
+        console.error('Erro ao criar embalagem:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro ao criar embalagem',
+            error: error.message
+        });
     }
+}
 
     static async getAll(req, res) {
         try {
@@ -45,6 +49,11 @@ class PackageController {
                     { material: { [Op.iLike]: `%${search}%` } }
                 ];
             }
+
+            // Filtrar pelo company/branch do usuário
+            const { companyId, branchId } = req.context;
+            if (companyId) where.companyId = companyId;
+            if (branchId) where.branchId = branchId;
 
             const { count, rows } = await Package.findAndCountAll({
                 where,
@@ -79,7 +88,11 @@ class PackageController {
         try {
             const { id } = req.params;
 
-            const packageItem = await Package.findByPk(id);
+            const { companyId, branchId } = req.context;
+
+            const packageItem = await Package.findOne({
+                where: { id, companyId, ...(branchId ? { branchId } : {}) }
+            });
 
             if (!packageItem) {
                 return res.status(404).json({

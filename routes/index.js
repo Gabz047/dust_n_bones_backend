@@ -79,6 +79,7 @@ const protectedRouters = {
   '/orders': orderRoutes,
   '/order-items': orderItemRoutes,
   '/item-feature-options': ItemFeatureOptionRoutes,
+  '/feature-options': featureOptionRoutes,
   '/status': StatusRoutes,
   '/project-items': ProjectItemRoutes,
   '/production-orders': ProductionOrderRoutes,

@@ -1,18 +1,12 @@
+// controllers/ItemController.js
 import Item from '../models/Item.js';
 import Company from '../models/Company.js';
 import Branch from '../models/Branch.js';
 
 // Helper para gerar o name com gênero
 function buildItemName(name, businessItemType, genre) {
-  // Remove qualquer sufixo existente " - <algo>"
   name = name.replace(/\s-\s.*$/, '');
-
-  // Se businessItemType for Outro ou vazio, retorna só o nome
-  if (!businessItemType || businessItemType === 'Outro') {
-    return name;
-  }
-
-  // Se houver gênero, adiciona ao nome
+  if (!businessItemType || businessItemType === 'Outro') return name;
   return `${name} - ${genre || 'Unissex'}`;
 }
 
@@ -40,8 +34,6 @@ export default {
       } else if (!genre) {
         genre = 'Unissex';
       }
-
-      console.log(price)
 
       name = buildItemName(name, businessItemType, genre);
 
@@ -89,8 +81,6 @@ export default {
       const item = await Item.findByPk(id);
       if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-      console.log(price)
-
       if (!businessItemType || businessItemType === 'Outro') {
         genre = null;
       } else if (!genre) {
@@ -119,10 +109,17 @@ export default {
     }
   },
 
-  // Buscar todos os itens
+  // Buscar todos os itens filtrando pelo contexto do usuário
   async getAll(req, res) {
     try {
+      const { companyId, branchId } = req.context;
+
+      const where = {};
+      if (companyId) where.companyId = companyId;
+      if (branchId) where.branchId = branchId;
+
       const items = await Item.findAll({
+        where,
         include: [
           { model: Company, as: 'company', attributes: ['id', 'name'] },
           { model: Branch, as: 'branch', attributes: ['id', 'name'] },
@@ -137,11 +134,18 @@ export default {
     }
   },
 
-  // Buscar item por ID
+  // Buscar item por ID filtrando pelo contexto do usuário
   async getById(req, res) {
     try {
       const { id } = req.params;
-      const item = await Item.findByPk(id, {
+      const { companyId, branchId } = req.context;
+
+      const where = { id };
+      if (companyId) where.companyId = companyId;
+      if (branchId) where.branchId = branchId;
+
+      const item = await Item.findOne({
+        where,
         include: [
           { model: Company, as: 'company' },
           { model: Branch, as: 'branch' },

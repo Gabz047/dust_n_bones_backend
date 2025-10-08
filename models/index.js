@@ -179,6 +179,9 @@ FeatureOption.hasMany(OrderItemAdditionalFeatureOption, { foreignKey: 'featureOp
 Movement.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
 Item.hasMany(Movement, { foreignKey: 'itemId', as: 'movements' });
 
+Movement.belongsTo(Account, { foreignKey: 'accountId', as: 'account' });
+Account.hasMany(Movement, { foreignKey: 'accountId', as: 'movements' });
+
 Movement.belongsTo(ItemFeature, { foreignKey: 'itemFeatureId', as: 'itemFeature' });
 ItemFeature.hasMany(Movement, { foreignKey: 'itemFeatureId', as: 'movements' });
 

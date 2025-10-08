@@ -40,11 +40,18 @@ Movement.init({
   },
   userId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: { model: 'users', key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
+  accountId: {
+  type: DataTypes.UUID,
+  allowNull: true,
+  references: { model: 'accounts', key: 'id' },
+  onDelete: 'CASCADE',
+  onUpdate: 'CASCADE',
+},
   date: {
     type: DataTypes.DATE,
     allowNull: false,

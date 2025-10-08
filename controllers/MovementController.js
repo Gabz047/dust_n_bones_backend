@@ -1,10 +1,11 @@
 // controllers/MovementController.js
+import { Op } from 'sequelize';
 import { Movement, User, Item, ItemFeature, Feature, ProductionOrder, Project } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import sequelize from '../config/database.js';
 
 class MovementController {
-  // Criar movimentação pai
+  // Criar movimentação
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
@@ -38,6 +39,16 @@ class MovementController {
     }
   }
 
+  // Filtro de acesso por empresa/branch
+  static itemAccessFilter(req) {
+    const { companyId, branchId } = req.context; // Middleware deve popular req.context
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+  }
+
+  // Buscar todas movimentações
   static async getAll(req, res) {
     try {
       const page = parseInt(req.query.page) || 1;
@@ -54,9 +65,14 @@ class MovementController {
       const { count, rows } = await Movement.findAndCountAll({
         where,
         include: [
-          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: MovementController.itemAccessFilter(req)
+          },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
-          { model: ProductionOrder, as: 'productionOrder' },
+          { model: ProductionOrder, as: 'productionOrder', include: [{ model: Project, as: 'project', attributes: ['id', 'name'] }] },
           { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
         ],
         limit,
@@ -77,19 +93,20 @@ class MovementController {
     }
   }
 
+  // Buscar movimentação por ID
   static async getById(req, res) {
     try {
       const { id } = req.params;
       const movement = await Movement.findByPk(id, {
         include: [
-          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: MovementController.itemAccessFilter(req)
+          },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
-          { model: ProductionOrder, as: 'productionOrder',
-            include: [{
-              model: Project,
-              as: 'project',
-              attributes: ['id', 'name']
-            }] },
+          { model: ProductionOrder, as: 'productionOrder', include: [{ model: Project, as: 'project', attributes: ['id', 'name'] }] },
           { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
         ]
       });
@@ -102,13 +119,19 @@ class MovementController {
     }
   }
 
+  // Buscar movimentações por tipo
   static async getByMovementType(req, res) {
     try {
       const { type } = req.params;
       const movements = await Movement.findAll({
         where: { movementType: type },
         include: [
-          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: MovementController.itemAccessFilter(req)
+          },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
           { model: ProductionOrder, as: 'productionOrder' },
           { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
@@ -123,13 +146,19 @@ class MovementController {
     }
   }
 
+  // Buscar movimentações por item/feature
   static async getByItemFeature(req, res) {
     try {
       const { itemId, itemFeatureId } = req.params;
       const movements = await Movement.findAll({
         where: { itemId, itemFeatureId },
         include: [
-          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: MovementController.itemAccessFilter(req)
+          },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
           { model: ProductionOrder, as: 'productionOrder' },
           { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
@@ -144,21 +173,22 @@ class MovementController {
     }
   }
 
+  // Buscar movimentações por ordem de produção
   static async getByProductionOrder(req, res) {
     try {
       const { productionOrderId } = req.params;
       const movements = await Movement.findAll({
         where: { productionOrderId },
         include: [
-          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: MovementController.itemAccessFilter(req)
+          },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
-          { model: ProductionOrder, as: 'productionOrder',
-            include: [{
-              model: Project,
-              as: 'project'
-            }]
-           },
-          { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
+          { model: ProductionOrder, as: 'productionOrder', include: [{ model: Project, as: 'project' }] },
+          { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
         ],
         order: [['createdAt', 'DESC']]
       });
@@ -170,13 +200,19 @@ class MovementController {
     }
   }
 
+  // Buscar movimentações por usuário
   static async getByUser(req, res) {
     try {
       const { userId } = req.params;
       const movements = await Movement.findAll({
         where: { userId },
         include: [
-          { model: Item, as: 'item', attributes: ['id', 'name'] },
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: MovementController.itemAccessFilter(req)
+          },
           { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }] },
           { model: ProductionOrder, as: 'productionOrder' },
           { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
