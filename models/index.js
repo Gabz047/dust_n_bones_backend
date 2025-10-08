@@ -340,7 +340,9 @@ InvoiceItem.belongsTo(Order, { as: 'order', foreignKey: 'orderId' });
 // Movement Log Entity + Movement Log Entity Item
 
 User.hasMany(MovementLogEntity, { as: 'movementLogs', foreignKey: 'userId' });
+Account.hasMany(MovementLogEntity, { as: 'movementLogs', foreignKey: 'accountId'})
 MovementLogEntity.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+MovementLogEntity.belongsTo(Account, {as: 'account', foreignKey: 'accountId'});
 
 MovementLogEntity.hasMany(MovementLogEntityItem, { as: 'items', foreignKey: 'movementLogEntityId' });
 MovementLogEntityItem.belongsTo(MovementLogEntity, { as: 'movementLogEntity', foreignKey: 'movementLogEntityId' });

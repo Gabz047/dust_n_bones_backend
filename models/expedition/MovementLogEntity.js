@@ -2,6 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import sequelize from '../../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import User from '../User.js';
+import Account from '../Account.js';
 
 class MovementLogEntity extends Model {}
 
@@ -31,8 +32,15 @@ MovementLogEntity.init({
   },
   userId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: { model: User, key: 'id' },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+  },
+    accountId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: Account, key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },

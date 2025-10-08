@@ -1238,14 +1238,6 @@ export const deliveryNoteSchemas = {
       .messages({
         'string.guid': 'ID da expedição deve ser um UUID válido.',
       }),
-
-    userId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required()
-      .messages({
-        'string.guid': 'ID do usuário deve ser um UUID válido.',
-        'any.required': 'ID do usuário é obrigatório.',
-      }),
       boxes: Joi.array()
       .items(Joi.string().guid({ version: ['uuidv4'] }))
       .min(1)
@@ -1308,14 +1300,6 @@ export const deliveryNoteSchemas = {
       .optional()
       .messages({
         'string.guid': 'ID da expedição deve ser um UUID válido.',
-      }),
-
-    userId: Joi.string()
-      .guid({ version: ['uuidv4'] })
-      .required() // sempre obrigatório pro log
-      .messages({
-        'string.guid': 'ID do usuário deve ser um UUID válido.',
-        'any.required': 'ID do usuário é obrigatório.',
       }),
       boxes: Joi.array()
       .items(Joi.string().guid({ version: ['uuidv4'] }))

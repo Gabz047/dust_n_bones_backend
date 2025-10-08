@@ -58,15 +58,15 @@ router.get('/', (req, res) => {
 
 // Signup não precisa de autenticação
 router.post('/signup', validateRequest(signupSchema), SignupController.signup);
+router.use('/accounts', accountRoutes)
+router.use('/users', userRoutes)
+router.use('/companies', companyRoutes)
+router.use('/company-settings', companySettingsRoutes)
+router.use('/company-customizations', companyCustomizationRoutes)
+router.use( '/tenants', tenantRoutes)
 
 // Sub-routers que precisam de autenticação + resolveEntityContext
 const protectedRouters = {
-  '/accounts': accountRoutes,
-  '/companies': companyRoutes,
-  '/company-settings': companySettingsRoutes,
-  '/company-customizations': companyCustomizationRoutes,
-  '/tenants': tenantRoutes,
-  '/users': userRoutes,
   '/branches': branchRoutes,
   '/userBranches': userBranchRoutes,
   '/customers': customerRoutes,

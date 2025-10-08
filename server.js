@@ -26,7 +26,7 @@ const corsOptions = {
     const isEstoquellogiaSubdomain = /^https?:\/\/([a-zA-Z0-9-]+\.)?estoquelogia\.com(:\d+)?$/.test(origin);
     const additionalAllowedOrigins = process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://zecatutorial.localhost:3001', 'http://acme.localhost:3001', 'http://ventura.localhost:3001'];
+      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://zecatutorial.localhost:3001', 'http://acme.localhost:3001', 'http://ventura.localhost:3001','http://venturas.localhost:3001'];
     if (isEstoquellogiaSubdomain || additionalAllowedOrigins.includes(origin)) {
       return callback(null, true);
     }
