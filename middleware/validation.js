@@ -1248,6 +1248,13 @@ export const deliveryNoteSchemas = {
         'array.includes': 'Cada caixa deve ter um UUID válido.',
         'any.required': 'Boxes é obrigatório.',
       }),
+        userId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .required()
+      .messages({
+        'string.guid': 'ID do usuário deve ser um UUID válido.',
+        'any.required': 'ID do usuário é obrigatório.',
+      }),
   }),
 
   update: Joi.object({
@@ -1307,6 +1314,13 @@ export const deliveryNoteSchemas = {
       .messages({
         'array.base': 'Boxes deve ser um array.',
         'array.includes': 'Cada caixa deve ter um UUID válido.',
+      }),
+        userId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .required()
+      .messages({
+        'string.guid': 'ID do usuário deve ser um UUID válido.',
+        'any.required': 'ID do usuário é obrigatório.',
       }),
   }),
 
@@ -1440,13 +1454,7 @@ export const boxItemSchemas = {
           'number.min': 'Quantidade mínima é 1.',
         }),
 
-      userId: Joi.string()
-        .guid({ version: ['uuidv4'] })
-        .required()
-        .messages({
-          'string.guid': 'ID do usuário deve ser um UUID válido.',
-          'any.required': 'ID do usuário é obrigatório.',
-        }),
+     
 
     })
   ),
@@ -1468,14 +1476,6 @@ export const boxItemSchemas = {
         .messages({
           'number.base': 'Quantidade deve ser um número.',
           'number.min': 'Quantidade mínima é 1.',
-        }),
-
-      userId: Joi.string()
-        .guid({ version: ['uuidv4'] })
-        .required()
-        .messages({
-          'string.guid': 'ID do usuário deve ser um UUID válido.',
-          'any.required': 'ID do usuário é obrigatório.',
         }),
 
     })

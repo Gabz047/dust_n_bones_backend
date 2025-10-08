@@ -1,6 +1,6 @@
 // controllers/MovementController.js
 import { Op } from 'sequelize';
-import { Movement, User, Item, ItemFeature, Feature, ProductionOrder, Project } from '../models/index.js';
+import { Movement, User, Account, Item, ItemFeature, Feature, ProductionOrder, Project } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import sequelize from '../config/database.js';
 
@@ -18,18 +18,36 @@ class MovementController {
         });
       }
 
-      const movement = await Movement.create({
+      // 🔍 Verificação se o ID é de um User ou Account
+      const user = await User.findByPk(userId);
+      let movementData = {
         id: uuidv4(),
         itemId,
         itemFeatureId,
         productionOrderId: productionOrderId || null,
-        userId,
         observation: observation || null,
         movementType: movementType || 'manual',
         date: new Date()
-      }, { transaction });
+      };
 
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: 'O ID informado não corresponde a um User ou Account válido'
+          });
+        }
+      }
+
+      const movement = await Movement.create(movementData, { transaction });
       await transaction.commit();
+
       res.status(201).json({ success: true, data: movement });
 
     } catch (error) {
@@ -39,16 +57,16 @@ class MovementController {
     }
   }
 
-  // Filtro de acesso por empresa/branch
+  // 🔒 Filtro de acesso por empresa/filial
   static itemAccessFilter(req) {
-    const { companyId, branchId } = req.context; // Middleware deve popular req.context
+    const { companyId, branchId } = req.context || {};
     return {
       companyId,
       ...(branchId ? { branchId } : {})
     };
   }
 
-  // Buscar todas movimentações
+  // Buscar todas as movimentações
   static async getAll(req, res) {
     try {
       const page = parseInt(req.query.page) || 1;
@@ -119,7 +137,7 @@ class MovementController {
     }
   }
 
-  // Buscar movimentações por tipo
+  // Buscar por tipo
   static async getByMovementType(req, res) {
     try {
       const { type } = req.params;
@@ -146,7 +164,7 @@ class MovementController {
     }
   }
 
-  // Buscar movimentações por item/feature
+  // Buscar por item/feature
   static async getByItemFeature(req, res) {
     try {
       const { itemId, itemFeatureId } = req.params;
@@ -173,7 +191,7 @@ class MovementController {
     }
   }
 
-  // Buscar movimentações por ordem de produção
+  // Buscar por ordem de produção
   static async getByProductionOrder(req, res) {
     try {
       const { productionOrderId } = req.params;
@@ -200,7 +218,7 @@ class MovementController {
     }
   }
 
-  // Buscar movimentações por usuário
+  // Buscar por usuário
   static async getByUser(req, res) {
     try {
       const { userId } = req.params;

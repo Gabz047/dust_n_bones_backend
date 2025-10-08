@@ -61,14 +61,6 @@ BoxItem.init({
     onUpdate: 'CASCADE',
     field: 'feature_option_id',
   },
-  userId: {
-    type: DataTypes.UUID,
-    allowNull: false,
-    references: { model: User, key: 'id' },
-    onDelete: 'CASCADE',
-    onUpdate: 'CASCADE',
-    field: 'user_id',
-  },
   date: {
     type: DataTypes.DATE,
     allowNull: false,
@@ -84,7 +76,6 @@ BoxItem.init({
     { fields: ['box_id'] },
     { fields: ['item_id'] },
     { fields: ['order_item_id'] },
-    { fields: ['user_id'] },
     { fields: ['date'] },
     { fields: ['box_id', 'item_id'] },
     { fields: ['item_id', 'item_feature_id'] },

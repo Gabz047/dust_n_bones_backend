@@ -261,7 +261,7 @@ Box.belongsTo(Order, { as: 'order', foreignKey: 'orderId' });
 Order.hasMany(Box, { as: 'boxes', foreignKey: 'orderId' });
 
 Box.belongsTo(Package, { as: 'package', foreignKey: 'packageId' });
-Box.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+
 
 BoxItem.belongsTo(Box, { as: 'box', foreignKey: 'boxId' });
 Box.hasMany(BoxItem, { as: 'items', foreignKey: 'boxId' });
@@ -278,7 +278,6 @@ ItemFeature.hasMany(BoxItem, { as: 'boxItems', foreignKey: 'itemFeatureId' });
 BoxItem.belongsTo(FeatureOption, { as: 'featureOption', foreignKey: 'featureOptionId' });
 FeatureOption.hasMany(BoxItem, { as: 'boxItems', foreignKey: 'featureOptionId' });
 
-BoxItem.belongsTo(User, { as: 'user', foreignKey: 'userId' });
 
 // Delivery Note + Delivery Note Item
 

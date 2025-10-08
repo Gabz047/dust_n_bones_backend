@@ -12,9 +12,9 @@ class BoxItemController {
       const boxIdsSet = new Set();
 
       for (const data of items) {
-        const { boxId, orderItemId, itemId, itemFeatureId, featureOptionId, quantity = 1, userId } = data;
+        const { boxId, orderItemId, itemId, itemFeatureId, featureOptionId, quantity = 1 } = data;
 
-        if (!boxId || !orderItemId || !itemId || !userId || !featureOptionId) {
+        if (!boxId || !orderItemId || !itemId || !featureOptionId) {
           throw new Error('Campos obrigatórios ausentes');
         }
 
@@ -23,14 +23,14 @@ class BoxItemController {
           OrderItem.findByPk(orderItemId, { transaction }),
           Item.findByPk(itemId, { transaction }),
           FeatureOption.findByPk(featureOptionId, { transaction }),
-          User.findByPk(userId, { transaction })
+          
         ]);
 
         if (!box) throw new Error(`Box ${boxId} não encontrado`);
         if (!orderItem) throw new Error(`OrderItem ${orderItemId} não encontrado`);
         if (!item) throw new Error(`Item ${itemId} não encontrado`);
         if (!featureOption) throw new Error(`FeatureOption ${featureOptionId} não encontrado`);
-        if (!user) throw new Error(`User ${userId} não encontrado`);
+        
 
         // Stock e StockItem
         let stock = await Stock.findOne({ where: { itemId }, transaction });
@@ -52,7 +52,7 @@ class BoxItemController {
           itemFeatureId: itemFeatureId || null,
           featureOptionId,
           quantity,
-          userId
+          
         }, { transaction });
 
         await stockItem.update({ quantity: stockItem.quantity - quantity }, { transaction });
@@ -376,7 +376,7 @@ console.log('================================================BOX IDS============
         { model: Item, as: 'item' },
         { model: ItemFeature, as: 'itemFeature' },
         { model: FeatureOption, as: 'featureOption' },
-        { model: User, as: 'user' }
+        
       ],
       order: [['createdAt', 'DESC']]
     });

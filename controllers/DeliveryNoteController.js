@@ -1,18 +1,18 @@
-import { sequelize, DeliveryNote, DeliveryNoteItem, MovementLogEntity, MovementLogEntityItem, Box, BoxItem, OrderItem, FeatureOption, Item, ItemFeature, Feature, Invoice, Company, Branch, Project, Order, Customer, Expedition, Package, User, InvoiceItem, Stock, StockItem, ItemFeatureOption } from '../models/index.js';
+import { v4 as uuidv4 } from 'uuid';
+import { sequelize, DeliveryNote, DeliveryNoteItem, MovementLogEntity, MovementLogEntityItem, Box, BoxItem, OrderItem, FeatureOption, Item, ItemFeature, Feature, Invoice, Company, Branch, Project, Order, Customer, Expedition, Package, User, Account, InvoiceItem, Stock, StockItem, ItemFeatureOption } from '../models/index.js';
 import { generateDeliveryNotePDF } from '../services/generate-pdf/delivery-note/delivery-note-pdf.js';
 import { generateLabelsZPL } from '../services/generate-pdf/delivery-note/box-label-pdf.js';
 import { Op } from 'sequelize';
 
 function buildContextFilter(context) {
   const { companyId, branchId } = context;
-  if (branchId) return { branchId }; // prioridade para filial
-  if (companyId) return { companyId }; // fallback: empresa
-  return {}; // se não houver contexto, sem filtro
+  if (branchId) return { branchId };
+  if (companyId) return { companyId };
+  return {};
 }
 
 class DeliveryNoteController {
 
-  // Cria um novo Delivery Note
   // Cria um novo Delivery Note
   static async create(req, res) {
     const transaction = await sequelize.transaction();
@@ -23,7 +23,7 @@ class DeliveryNoteController {
         invoiceId,
         projectId,
         companyId: companyId || null,
-        branchId: branchId || (companyId ? null : /* pegar branch do user */ null),
+        branchId: branchId || null,
         customerId,
         orderId,
         expeditionId,
@@ -31,29 +31,37 @@ class DeliveryNoteController {
         boxQuantity: 0
       }, { transaction });
 
-      const movementLog = await MovementLogEntity.create({
-        userId,
+      // ✅ Criar movimentação
+      let movementData = {
+     
         method: 'criação',
         entity: 'romaneio',
         entityId: deliveryNote.id,
         status: 'finalizado'
-      }, { transaction });
+      };
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      const movementLog = await MovementLogEntity.create(movementData, { transaction });
 
       // Associa as caixas ao DeliveryNote
       for (const boxId of boxes) {
-        // Cria item no romaneio
-        await DeliveryNoteItem.create(
-          { deliveryNoteId: deliveryNote.id, boxId },
-          { transaction }
-        );
+        await DeliveryNoteItem.create({ deliveryNoteId: deliveryNote.id, boxId }, { transaction });
 
-        // Atualiza a caixa para apontar pro romaneio
-        await Box.update(
-          { deliveryNoteId: deliveryNote.id },
-          { where: { id: boxId }, transaction }
-        );
+        await Box.update({ deliveryNoteId: deliveryNote.id }, { where: { id: boxId }, transaction });
 
-        // Log de movimentação
         await MovementLogEntityItem.create({
           entity: 'romaneio',
           entityId: deliveryNote.id,
@@ -63,26 +71,17 @@ class DeliveryNoteController {
         }, { transaction });
       }
 
-      // Atualiza totais
-      const totalQuantity = await Box.sum('totalQuantity', {
-        where: { id: boxes },
-        transaction
-      });
-      await deliveryNote.update(
-        { boxQuantity: boxes.length, totalQuantity },
-        { transaction }
-      );
+      const totalQuantity = await Box.sum('totalQuantity', { where: { id: boxes }, transaction });
+      await deliveryNote.update({ boxQuantity: boxes.length, totalQuantity }, { transaction });
 
       await transaction.commit();
       return res.status(201).json(deliveryNote);
     } catch (error) {
       await transaction.rollback();
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  // Atualiza um Delivery Note
-  // Atualiza um Delivery Note
   // Atualiza um Delivery Note
   static async update(req, res) {
     const transaction = await sequelize.transaction();
@@ -93,7 +92,6 @@ class DeliveryNoteController {
       const deliveryNote = await DeliveryNote.findByPk(id, { transaction });
       if (!deliveryNote) return res.status(404).json({ error: 'DeliveryNote não encontrado' });
 
-      // Atualiza campos básicos
       await deliveryNote.update({
         invoiceId,
         projectId,
@@ -105,74 +103,63 @@ class DeliveryNoteController {
       }, { transaction });
 
       // Pegar todas as caixas atualmente associadas
-      const currentItems = await DeliveryNoteItem.findAll({
-        where: { deliveryNoteId: id },
-        transaction
-      });
+      const currentItems = await DeliveryNoteItem.findAll({ where: { deliveryNoteId: id }, transaction });
       const currentBoxIds = currentItems.map(item => item.boxId);
 
       // 1️⃣ Remover caixas que não foram enviadas pelo frontend
       const boxesToRemove = currentBoxIds.filter(bid => !boxes.includes(bid));
       if (boxesToRemove.length) {
-        await DeliveryNoteItem.destroy({
-          where: { deliveryNoteId: id, boxId: boxesToRemove },
-          transaction
-        });
-
-        // Atualiza o deliveryNoteId das caixas removidas para null
-        await Box.update(
-          { deliveryNoteId: null },
-          { where: { id: boxesToRemove }, transaction }
-        );
+        await DeliveryNoteItem.destroy({ where: { deliveryNoteId: id, boxId: boxesToRemove }, transaction });
+        await Box.update({ deliveryNoteId: null }, { where: { id: boxesToRemove }, transaction });
       }
 
       // 2️⃣ Adicionar novas caixas enviadas pelo frontend
       const boxesToAdd = boxes.filter(bid => !currentBoxIds.includes(bid));
       for (const boxId of boxesToAdd) {
         await DeliveryNoteItem.create({ deliveryNoteId: id, boxId }, { transaction });
-
-        // Atualiza o deliveryNoteId da caixa adicionada
-        await Box.update(
-          { deliveryNoteId: id },
-          { where: { id: boxId }, transaction }
-        );
+        await Box.update({ deliveryNoteId: id }, { where: { id: boxId }, transaction });
       }
 
-      // Rebuscar todas as caixas após adições/removidas
-      const updatedItems = await DeliveryNoteItem.findAll({
-        where: { deliveryNoteId: id },
-        transaction
-      });
+      const updatedItems = await DeliveryNoteItem.findAll({ where: { deliveryNoteId: id }, transaction });
       const updatedBoxIds = updatedItems.map(item => item.boxId);
-
-      // Recalcular totais
       const totalQuantity = updatedBoxIds.length
         ? await Box.sum('totalQuantity', { where: { id: updatedBoxIds }, transaction }) || 0
         : 0;
 
-      await deliveryNote.update({
-        boxQuantity: updatedBoxIds.length,
-        totalQuantity
-      }, { transaction });
+      await deliveryNote.update({ boxQuantity: updatedBoxIds.length, totalQuantity }, { transaction });
 
-      // Criar movimentação
-      await MovementLogEntity.create({
-        userId,
+      // ✅ Criar movimentação
+      let movementData = {
+        id: uuidv4(),
         method: 'edição',
         entity: 'romaneio',
         entityId: deliveryNote.id,
         status: 'finalizado'
-      }, { transaction });
+      };
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction });
 
       await transaction.commit();
       return res.json(deliveryNote);
     } catch (error) {
       await transaction.rollback();
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ success: false, message: error.message });
     }
   }
-
-
 
   // Deleta um Delivery Note
   static async delete(req, res) {
@@ -186,26 +173,40 @@ class DeliveryNoteController {
 
       await deliveryNote.destroy({ transaction });
 
-      // Cria movimentação
-      await MovementLogEntity.create({
-        userId,
+      // ✅ Criar movimentação
+      let movementData = {
+        id: uuidv4(),
         method: 'remoção',
         entity: 'romaneio',
         entityId: id,
         status: 'finalizado'
-      }, { transaction });
+      };
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction });
 
       await transaction.commit();
       return res.json({ message: 'DeliveryNote deletado com sucesso' });
     } catch (error) {
       await transaction.rollback();
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ success: false, message: error.message });
     }
   }
 
-
-
-
+  // --- Métodos de listagem ---
   static async getAll(req, res) {
     try {
       const where = buildContextFilter(req.context);

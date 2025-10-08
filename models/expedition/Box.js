@@ -6,7 +6,7 @@ import Project from '../Project.js';
 import Customer from '../Customer.js';
 import Order from '../Order.js';
 import Package from '../Package.js';
-import User from '../User.js';
+
 
 class Box extends Model {}
 
@@ -66,14 +66,6 @@ Box.init({
     onDelete: 'SET NULL',
     onUpdate: 'CASCADE',
     field: 'package_id',
-  },
-  userId: {
-    type: DataTypes.UUID,
-    allowNull: false,
-    references: { model: User, key: 'id' },
-    onDelete: 'CASCADE',
-    onUpdate: 'CASCADE',
-    field: 'user_id',
   },
   date: {
     type: DataTypes.DATE,
