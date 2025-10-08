@@ -397,8 +397,8 @@ static async create(req, res) {
 
       };
 
-      // await generateInvoicePDF(slimInvoice, res);
-      res.json({success: true, data: slimInvoice})
+      await generateInvoicePDF(slimInvoice, res);
+      res.json
 
     } catch (error) {
       console.error(error);
