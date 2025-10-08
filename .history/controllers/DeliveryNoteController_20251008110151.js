@@ -3,13 +3,6 @@ import { generateDeliveryNotePDF } from '../services/generate-pdf/delivery-note/
 import { generateLabelsZPL } from '../services/generate-pdf/delivery-note/box-label-pdf.js';
 import { Op } from 'sequelize';
 
-function buildContextFilter(context) {
-  const { companyId, branchId } = context;
-  if (branchId) return { branchId }; // prioridade para filial
-  if (companyId) return { companyId }; // fallback: empresa
-  return {}; // se não houver contexto, sem filtro
-}
-
 class DeliveryNoteController {
 
   // Cria um novo Delivery Note
@@ -203,43 +196,61 @@ class DeliveryNoteController {
     }
   }
 
+  
 
-
-
-  static async getAll(req, res) {
+ 
+    static async getAll(req, res) {
     try {
-      const where = buildContextFilter(req.context);
-
+      const { companyId, branchId } = req.context;
       const deliveryNotes = await DeliveryNote.findAll({
-        where,
+        where: {
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        },
         include: [
           { model: Project, as: 'project', attributes: ['id', 'name'] },
           { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-        ],
-        order: [['createdAt', 'DESC']]
+        ]
       });
-
       return res.json(deliveryNotes);
     } catch (error) {
-      console.error(error);
       return res.status(500).json({ error: error.message });
     }
   }
 
+
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      const where = { id, ...buildContextFilter(req.context) };
+      const { companyId, branchId } = req.context;
 
       const deliveryNote = await DeliveryNote.findOne({
-        where,
+        where: {
+          id,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        },
         include: [
-          { model: Expedition, as: 'expedition', attributes: ['id'] },
+          {
+            model: Expedition,
+            as: 'expedition',
+            attributes: ['id']
+          },
           {
             model: Project,
             as: 'project',
             attributes: ['id', 'name'],
-            include: [{ model: Customer, as: 'customer', attributes: ['id', 'name'] }]
+            include: [
+              {
+                model: Customer,
+                as: 'customer',
+                attributes: ['id', 'name']
+              }
+            ]
           },
           {
             model: Customer,
@@ -271,7 +282,7 @@ class DeliveryNoteController {
       });
 
       if (!deliveryNote)
-        return res.status(404).json({ error: 'Romaneio não encontrado ou sem permissão' });
+        return res.status(404).json({ error: 'DeliveryNote não encontrado ou sem permissão' });
 
       return res.json(deliveryNote);
     } catch (error) {
@@ -283,10 +294,16 @@ class DeliveryNoteController {
   static async getByInvoice(req, res) {
     try {
       const { invoiceId } = req.params;
-      const where = { invoiceId, ...buildContextFilter(req.context) };
+      const { companyId, branchId } = req.context;
 
       const deliveryNotes = await DeliveryNote.findAll({
-        where,
+        where: {
+          invoiceId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        },
         include: [{ model: Customer, as: 'customer', attributes: ['name'] }]
       });
       return res.json(deliveryNotes);
@@ -307,37 +324,60 @@ class DeliveryNoteController {
     }
   }
 
-  static async getByCustomer(req, res) {
+    static async getByCustomer(req, res) {
     try {
       const { customerId } = req.params;
-      const where = { customerId, ...buildContextFilter(req.context) };
-
-      const deliveryNotes = await DeliveryNote.findAll({ where });
-      return res.json(deliveryNotes);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
-  }
-
-  static async getByOrder(req, res) {
-    try {
-      const { orderId } = req.params;
-      const where = { orderId, ...buildContextFilter(req.context) };
-
-      const deliveryNotes = await DeliveryNote.findAll({ where });
-      return res.json(deliveryNotes);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
-  }
-
-  static async getByExpedition(req, res) {
-    try {
-      const { expeditionId } = req.params;
-      const where = { expeditionId, ...buildContextFilter(req.context) };
+      const { companyId, branchId } = req.context;
 
       const deliveryNotes = await DeliveryNote.findAll({
-        where,
+        where: {
+          customerId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        }
+      });
+      return res.json(deliveryNotes);
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+   static async getByOrder(req, res) {
+    try {
+      const { orderId } = req.params;
+      const { companyId, branchId } = req.context;
+
+      const deliveryNotes = await DeliveryNote.findAll({
+        where: {
+          orderId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        }
+      });
+      return res.json(deliveryNotes);
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+
+ static async getByExpedition(req, res) {
+    try {
+      const { expeditionId } = req.params;
+      const { companyId, branchId } = req.context;
+
+      const deliveryNotes = await DeliveryNote.findAll({
+        where: {
+          expeditionId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        },
         include: [
           {
             model: Box,
@@ -573,7 +613,7 @@ class DeliveryNoteController {
 
 
       if (!deliveryNote) return res.status(404).json({ error: 'Romaneio não encontrado' });
-      res.json({ success: true, data: slimNote })
+      res.json({success: true, data: slimNote})
 
       // await generateDeliveryNotePDF(slimNote, res);
     } catch (error) {
@@ -582,43 +622,43 @@ class DeliveryNoteController {
     }
   }
 
-  static async generateLabels(req, res) {
-    try {
-      const { id } = req.params;
+static async generateLabels(req, res) {
+  try {
+    const { id } = req.params;
 
-      // Buscar romaneio com caixas e itens
-      const deliveryNote = await DeliveryNote.findByPk(id, {
-        include: [
-          {
-            model: DeliveryNoteItem,
-            as: 'items',
-            include: [
-              {
-                model: Box,
-                as: 'box',
-                include: [
-                  {
-                    model: BoxItem,
-                    as: 'items',
-                    include: [
-                      { model: Item, as: 'item', attributes: ['name'] },
-                      { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['name'] }] },
-                      { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      });
+    // Buscar romaneio com caixas e itens
+    const deliveryNote = await DeliveryNote.findByPk(id, {
+      include: [
+        {
+          model: DeliveryNoteItem,
+          as: 'items',
+          include: [
+            {
+              model: Box,
+              as: 'box',
+              include: [
+                {
+                  model: BoxItem,
+                  as: 'items',
+                  include: [
+                    { model: Item, as: 'item', attributes: ['name'] },
+                    { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['name'] }] },
+                    { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
 
-      if (!deliveryNote) return res.status(404).json({ error: 'Romaneio não encontrado' });
+    if (!deliveryNote) return res.status(404).json({ error: 'Romaneio não encontrado' });
 
-      const slimNote = {
-        items: (deliveryNote.items || []).map(dnItem => ({
-          box: dnItem.box
-            ? {
+    const slimNote = {
+      items: (deliveryNote.items || []).map(dnItem => ({
+        box: dnItem.box
+          ? {
               referralId: dnItem.box.referralId,
               totalQuantity: dnItem.box.totalQuantity,
               items: (dnItem.box.items || []).map(bi => ({
@@ -629,22 +669,22 @@ class DeliveryNoteController {
                   : null
               }))
             }
-            : null
-        }))
-      };
+          : null
+      }))
+    };
 
-      // const zpl = generateLabelsZPL(slimNote);
-      res.json({ success: true, data: slimNote })
-      // console.log(zpl)
+    // const zpl = generateLabelsZPL(slimNote);
+    res.json({success: true, data: slimNote})
+    // console.log(zpl)
 
-      // res.setHeader('Content-Type', 'text/plain'); // Zebra aceita plain/text
-      // res.send(zpl);
+    // res.setHeader('Content-Type', 'text/plain'); // Zebra aceita plain/text
+    // res.send(zpl);
 
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: error.message });
-    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
+}
 
 
   //   static async generatePDF(req, res) {

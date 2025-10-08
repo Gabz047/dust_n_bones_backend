@@ -206,7 +206,7 @@ class DeliveryNoteController {
 
 
 
-  static async getAll(req, res) {
+static async getAll(req, res) {
     try {
       const where = buildContextFilter(req.context);
 
@@ -310,9 +310,17 @@ class DeliveryNoteController {
   static async getByCustomer(req, res) {
     try {
       const { customerId } = req.params;
-      const where = { customerId, ...buildContextFilter(req.context) };
+      const { companyId, branchId } = req.context;
 
-      const deliveryNotes = await DeliveryNote.findAll({ where });
+      const deliveryNotes = await DeliveryNote.findAll({
+        where: {
+          customerId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        }
+      });
       return res.json(deliveryNotes);
     } catch (error) {
       return res.status(500).json({ error: error.message });
@@ -322,22 +330,37 @@ class DeliveryNoteController {
   static async getByOrder(req, res) {
     try {
       const { orderId } = req.params;
-      const where = { orderId, ...buildContextFilter(req.context) };
+      const { companyId, branchId } = req.context;
 
-      const deliveryNotes = await DeliveryNote.findAll({ where });
+      const deliveryNotes = await DeliveryNote.findAll({
+        where: {
+          orderId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        }
+      });
       return res.json(deliveryNotes);
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
   }
 
+
   static async getByExpedition(req, res) {
     try {
       const { expeditionId } = req.params;
-      const where = { expeditionId, ...buildContextFilter(req.context) };
+      const { companyId, branchId } = req.context;
 
       const deliveryNotes = await DeliveryNote.findAll({
-        where,
+        where: {
+          expeditionId,
+          [Op.or]: [
+            { companyId: companyId || null },
+            { branchId: branchId || null }
+          ]
+        },
         include: [
           {
             model: Box,

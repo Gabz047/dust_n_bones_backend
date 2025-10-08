@@ -185,18 +185,13 @@ class BoxController {
     }
   }
 
- static async getAll(req, res) {
+  // Lista todos os Boxes
+  static async getAll(req, res) {
     try {
-      const { company, branch } = req.context;
-
       const boxes = await Box.findAll({
         include: [
           { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
-            as: 'project',
-            where: { companyId: company.id, branchId: branch.id }
-          },
+          { model: Project, as: 'project' },
           { model: Customer, as: 'customer' },
           { model: Order, as: 'order' },
           { model: Package, as: 'package' },
@@ -267,28 +262,21 @@ class BoxController {
   static async getByProject(req, res) {
     try {
       const { projectId } = req.params;
-      const { company, branch } = req.context;
-
       const boxes = await Box.findAll({
         where: { projectId },
         include: [
           { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
-            as: 'project',
-            where: { id: projectId, companyId: company.id, branchId: branch.id }
-          },
+          { model: Project, as: 'project' },
           { model: Customer, as: 'customer' },
           { model: Order, as: 'order' },
           { model: Package, as: 'package' },
           { model: User, as: 'user' }
         ]
       });
-
       const boxesWithLastLog = await BoxController.attachLastLog(boxes);
       return res.json({ success: true, data: boxesWithLastLog });
     } catch (error) {
-      console.error('Erro ao buscar Boxes por projeto:', error);
+      console.error('Erro ao buscar Boxes por projectId:', error);
       return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
@@ -321,7 +309,7 @@ class BoxController {
       return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
-  
+
 
     static async getByOrder(req, res) {
     try {

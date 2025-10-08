@@ -291,7 +291,7 @@ class BoxController {
       console.error('Erro ao buscar Boxes por projeto:', error);
       return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
-  }
+  
 
    static async getByCustomer(req, res) {
     try {
@@ -321,7 +321,7 @@ class BoxController {
       return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
-  
+
 
     static async getByOrder(req, res) {
     try {

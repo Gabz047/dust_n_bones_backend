@@ -6,7 +6,7 @@ class CustomerController {
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      
+      const user = req.user;
       const context = req.context; // vem do middleware resolveEntityContext
       const {
         name,

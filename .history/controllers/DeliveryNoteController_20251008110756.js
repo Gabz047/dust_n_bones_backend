@@ -206,7 +206,7 @@ class DeliveryNoteController {
 
 
 
-  static async getAll(req, res) {
+static async getAll(req, res) {
     try {
       const where = buildContextFilter(req.context);
 
@@ -307,7 +307,7 @@ class DeliveryNoteController {
     }
   }
 
-  static async getByCustomer(req, res) {
+ static async getByCustomer(req, res) {
     try {
       const { customerId } = req.params;
       const where = { customerId, ...buildContextFilter(req.context) };
@@ -371,7 +371,7 @@ class DeliveryNoteController {
       return res.status(500).json({ error: error.message });
     }
   }
-
+}
   static async generatePDF(req, res) {
     try {
       const { id } = req.params;
