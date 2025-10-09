@@ -1,6 +1,5 @@
 import { sequelize, Invoice, DeliveryNote, MovementLogEntity, Project, InvoiceItem, Box, BoxItem, ItemFeature, Item, FeatureOption, Feature, Order, Customer, OrderItem, User, Account, MovementLogEntityItem, Company, Branch } from '../models/index.js';
-import { calculateQuantityAndPrice } from '../utils/invoice.js';
-import { generateInvoicePDF } from '../services/generate-pdf/invoice/invoice-pdf.js';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
 
 class InvoiceController {
@@ -25,7 +24,6 @@ class InvoiceController {
       }
 
       const invoice = await Invoice.create({
-        
         projectId,
         type,
         companyId: companyId || null,
@@ -36,7 +34,6 @@ class InvoiceController {
 
       // Preparar dados do log
       let movementData = {
-        
         method: 'criação',
         entity: 'fatura',
         entityId: invoice.id,
@@ -101,7 +98,6 @@ class InvoiceController {
 
           // Log do item
           let movementItemData = {
-          
             method: 'criação',
             entity: 'fatura',
             entityId: invoiceItem.id,
@@ -133,12 +129,12 @@ class InvoiceController {
 
       await invoice.update({ totalPrice: totalInvoicePrice }, { transaction });
       await transaction.commit();
-      return res.status(201).json(invoice);
+      return res.status(201).json({ success: true, data: invoice });
 
     } catch (error) {
       await transaction.rollback();
       console.error(error);
-      return res.status(500).json({ error: 'Erro ao criar fatura' });
+      return res.status(500).json({ success: false, error: 'Erro ao criar fatura' });
     }
   }
 
@@ -150,13 +146,15 @@ class InvoiceController {
       const { totalPrice, userId } = req.body;
       const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findOne({ where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, transaction });
-      if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
+      const invoice = await Invoice.findOne({ 
+        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, 
+        transaction 
+      });
+      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
 
       await invoice.update({ totalPrice }, { transaction });
 
       const movementData = {
-      
         method: 'edição',
         entity: 'fatura',
         entityId: invoice.id,
@@ -180,10 +178,10 @@ class InvoiceController {
 
       await MovementLogEntity.create(movementData, { transaction });
       await transaction.commit();
-      return res.json(invoice);
+      return res.json({ success: true, data: invoice });
     } catch (error) {
       await transaction.rollback();
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 
@@ -195,8 +193,11 @@ class InvoiceController {
       const { userId } = req.body;
       const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findOne({ where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, transaction });
-      if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
+      const invoice = await Invoice.findOne({ 
+        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, 
+        transaction 
+      });
+      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
 
       await invoice.destroy({ transaction });
 
@@ -224,173 +225,166 @@ class InvoiceController {
 
       await MovementLogEntity.create(movementData, { transaction });
       await transaction.commit();
-      return res.json({ message: 'Fatura deletada com sucesso' });
+      return res.json({ success: true, message: 'Fatura deletada com sucesso' });
     } catch (error) {
       await transaction.rollback();
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 
- // Busca todas as faturas (GET) filtrando por company/branch do projeto
-static async getAll(req, res) {
-  try {
-    const { companyId, branchId } = req.context;
-
-    const invoices = await Invoice.findAll({
-      attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
-      include: [
-        { 
-          model: Project, 
-          as: 'project',
-          where: {
-            ...(companyId && { companyId }),
-            ...(branchId && { branchId })
-          },
-          attributes: ['id', 'name']
-        },
-        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-      ]
-    });
-
-    const result = await Promise.all(
-      invoices.map(async inv => {
-        const lastMovement = await MovementLogEntity.findOne({
-          where: { entity: 'fatura', entityId: inv.id },
-          order: [['date', 'DESC']],
-          attributes: ['id']
-        });
-        return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
-      })
-    );
-
-    return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+  // 🔒 Filtro de acesso por empresa/filial
+  static projectAccessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    return {
+      ...(companyId && { companyId }),
+      ...(branchId && { branchId })
+    };
   }
-}
 
-// Busca fatura por ID (GET) filtrando por company/branch do projeto
-static async getById(req, res) {
-  try {
-    const { id } = req.params;
-    const { companyId, branchId } = req.context;
+  // 📦 Buscar todas as faturas (COM PAGINAÇÃO)
+  static async getAll(req, res) {
+    try {
+      const { projectId, type } = req.query;
+      const where = {};
 
-    const invoice = await Invoice.findOne({
-      where: { id },
-      attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId'],
-      include: [
-        { 
-          model: Project, 
-          as: 'project',
-          where: {
-            ...(companyId && { companyId }),
-            ...(branchId && { branchId })
+      if (projectId) where.projectId = projectId;
+      if (type) where.type = type;
+
+      const result = await buildQueryOptions(req, Invoice, {
+        where,
+        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId', 'createdAt'],
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'name']
           },
-          attributes: ['id', 'name'],
-          include: [
-            { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-          ]
-        },
-        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId', 'totalQuantity'], include: [
-          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-        ] }
-      ]
-    });
+          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+        ]
+      });
 
-    if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
-
-    const lastMovement = await MovementLogEntity.findOne({
-      where: { entity: 'fatura', entityId: id },
-      order: [['date', 'DESC']],
-      attributes: ['id', 'status']
-    });
-
-    return res.json({ ...invoice.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement : null });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar faturas:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
   }
-}
 
-// Busca faturas por projeto (GET) filtrando por company/branch do projeto
-static async getByProject(req, res) {
-  try {
-    const { projectId } = req.params;
-    const { companyId, branchId } = req.context;
+  // 🔍 Buscar fatura por ID
+  static async getById(req, res) {
+    try {
+      const { id } = req.params;
 
-    const invoices = await Invoice.findAll({
-      where: { projectId },
-      attributes: ['id', 'projectId', 'type', 'totalPrice'],
-      include: [
-        { 
-          model: Project, 
-          as: 'project',
-          where: {
-            ...(companyId && { companyId }),
-            ...(branchId && { branchId })
+      const invoice = await Invoice.findOne({
+        where: { id },
+        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId', 'createdAt'],
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'name'],
+            include: [
+              { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+            ]
           },
-          attributes: ['id', 'name']
-        },
-        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-      ]
-    });
+          { 
+            model: DeliveryNote, 
+            as: 'deliveryNotes', 
+            attributes: ['id', 'referralId', 'totalQuantity'], 
+            include: [
+              { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+            ] 
+          }
+        ]
+      });
 
-    const result = await Promise.all(
-      invoices.map(async inv => {
-        const lastMovement = await MovementLogEntity.findOne({
-          where: { entity: 'fatura', entityId: inv.id },
-          order: [['date', 'DESC']],
-          attributes: ['id']
-        });
-        return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
-      })
-    );
+      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
 
-    return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+      const lastMovement = await MovementLogEntity.findOne({
+        where: { entity: 'fatura', entityId: id },
+        order: [['date', 'DESC']],
+        attributes: ['id', 'status']
+      });
+
+      res.json({ 
+        success: true, 
+        data: { 
+          ...invoice.toJSON(), 
+          lastMovementLogEntityId: lastMovement || null 
+        } 
+      });
+    } catch (error) {
+      console.error('Erro ao buscar fatura por ID:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
   }
-}
 
-// Busca faturas por tipo (GET) filtrando por company/branch do projeto
-static async getByType(req, res) {
-  try {
-    const { type } = req.params;
-    const { companyId, branchId } = req.context;
+  // 🏗️ Buscar faturas por projeto (COM PAGINAÇÃO)
+  static async getByProject(req, res) {
+    try {
+      const { projectId } = req.params;
 
-    const invoices = await Invoice.findAll({
-      where: { type },
-      attributes: ['id', 'projectId', 'type', 'totalPrice'],
-      include: [
-        { 
-          model: Project, 
-          as: 'project',
-          where: {
-            ...(companyId && { companyId }),
-            ...(branchId && { branchId })
+      const result = await buildQueryOptions(req, Invoice, {
+        where: { projectId },
+        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId', 'createdAt'],
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'name']
           },
-          attributes: ['id', 'name']
-        },
-        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-      ]
-    });
+          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+        ]
+      });
 
-    const result = await Promise.all(
-      invoices.map(async inv => {
-        const lastMovement = await MovementLogEntity.findOne({
-          where: { entity: 'fatura', entityId: inv.id },
-          order: [['date', 'DESC']],
-          attributes: ['id']
-        });
-        return { ...inv.toJSON(), lastMovementLogEntityId: lastMovement ? lastMovement.id : null };
-      })
-    );
-
-    return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar faturas por projeto:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
   }
-}
 
+  // 📋 Buscar faturas por tipo (COM PAGINAÇÃO)
+  static async getByType(req, res) {
+    try {
+      const { type } = req.params;
+      const { term, fields } = req.query;
+
+      const where = { type };
+
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
+
+      const result = await buildQueryOptions(req, Invoice, {
+        where,
+        attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId', 'createdAt'],
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'name']
+          },
+          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
+        ]
+      });
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar faturas por tipo:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
+  }
+
+  // 📄 Gerar PDF
   static async generatePDF(req, res) {
     try {
       const { id } = req.params;
@@ -398,18 +392,48 @@ static async getByType(req, res) {
       const invoice = await Invoice.findByPk(id, {
         attributes: ['id', 'createdAt', 'totalPrice', 'type'],
         include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'], include: [{ model: Customer, as: 'customer', attributes: ['id', 'name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'document'] }] },
-          { model: Company, as: 'company', attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country'] },
-          { model: Branch, as: 'branch', attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country'] },
+          { 
+            model: Project, 
+            as: 'project', 
+            attributes: ['id', 'name'], 
+            include: [
+              { 
+                model: Customer, 
+                as: 'customer', 
+                attributes: ['id', 'name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'document'] 
+              }
+            ] 
+          },
+          { 
+            model: Company, 
+            as: 'company', 
+            attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country'] 
+          },
+          { 
+            model: Branch, 
+            as: 'branch', 
+            attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country'] 
+          },
           {
-            model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'], include: [
+            model: DeliveryNote, 
+            as: 'deliveryNotes', 
+            attributes: ['id', 'referralId'], 
+            include: [
               { model: Customer, as: 'customer', attributes: ['id', 'name'] },
               {
-                model: Box, as: 'boxes', include: [
+                model: Box, 
+                as: 'boxes', 
+                include: [
                   {
-                    model: BoxItem, as: 'items', include: [
+                    model: BoxItem, 
+                    as: 'items', 
+                    include: [
                       { model: Item, as: 'item', attributes: ['id', 'name', 'price'] },
-                      { model: ItemFeature, as: 'itemFeature', include: [{ model: Feature, as: 'feature', attributes: ['name'] }] },
+                      { 
+                        model: ItemFeature, 
+                        as: 'itemFeature', 
+                        include: [{ model: Feature, as: 'feature', attributes: ['name'] }] 
+                      },
                       { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
                     ]
                   }
@@ -420,78 +444,100 @@ static async getByType(req, res) {
         ]
       });
 
-      if (!invoice) return res.status(404).json({ error: 'Fatura não encontrada' });
-      console.log(invoice.deliveryNotes[0])
+      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
+
       const slimInvoice = {
         id: invoice.id,
         issueDate: invoice.createdAt,
         totalPrice: invoice.totalPrice,
         type: invoice.type,
-        company: invoice.company ? { name: invoice.company.name, cnpj: invoice.company.cnpj, email: invoice.company.email, phone: invoice.company.phone, address: invoice.company.address, city: invoice.company.city, state: invoice.company.state, zipcode: invoice.company.get('zipcode'), country: invoice.company.country } : null,
-        branch: invoice.branch ? { name: invoice.branch.name, cnpj: invoice.branch.cnpj, email: invoice.branch.email, phone: invoice.branch.phone, address: invoice.branch.address, city: invoice.branch.city, state: invoice.branch.state, zipcode: invoice.branch.get('zipcode'), country: invoice.branch.country } : null,
+        company: invoice.company ? { 
+          name: invoice.company.name, 
+          cnpj: invoice.company.cnpj, 
+          email: invoice.company.email, 
+          phone: invoice.company.phone, 
+          address: invoice.company.address, 
+          city: invoice.company.city, 
+          state: invoice.company.state, 
+          zipcode: invoice.company.get('zipcode'), 
+          country: invoice.company.country 
+        } : null,
+        branch: invoice.branch ? { 
+          name: invoice.branch.name, 
+          cnpj: invoice.branch.cnpj, 
+          email: invoice.branch.email, 
+          phone: invoice.branch.phone, 
+          address: invoice.branch.address, 
+          city: invoice.branch.city, 
+          state: invoice.branch.state, 
+          zipcode: invoice.branch.get('zipcode'), 
+          country: invoice.branch.country 
+        } : null,
         project: invoice.project ? {
           id: invoice.project.id,
           name: invoice.project.name,
-          customer: invoice.project.customer ? { id: invoice.project.customer.id, name: invoice.project.customer.name, address: invoice.project.customer.address, city: invoice.project.customer.city, state: invoice.project.customer.state, zipcode: invoice.project.customer.get('zipcode'), country: invoice.project.customer.country, document: invoice.project.customer.document } : null
+          customer: invoice.project.customer ? { 
+            id: invoice.project.customer.id, 
+            name: invoice.project.customer.name, 
+            address: invoice.project.customer.address, 
+            city: invoice.project.customer.city, 
+            state: invoice.project.customer.state, 
+            zipcode: invoice.project.customer.get('zipcode'), 
+            country: invoice.project.customer.country, 
+            document: invoice.project.customer.document 
+          } : null
         } : null,
         deliveryNotes: (invoice.deliveryNotes || []).map(dn => {
           let dnTotal = 0;
-          const itemsMap = {}; // Mapa temporário para agrupar itens
+          const itemsMap = {};
 
           (dn.boxes || []).forEach(box => {
-  (box.items || []).forEach(bi => {
-    // Se bi.itemFeature for array, percorre todos
-    const features = Array.isArray(bi.itemFeature) ? bi.itemFeature : [bi.itemFeature];
-    
-    features.forEach(f => {
-      // Cada feature pode ter uma featureOption
-      const featureOptionName = bi.featureOption?.name || f?.featureOption?.name || null;
-      const key = `${bi.item?.id}-${featureOptionName || ''}`;
+            (box.items || []).forEach(bi => {
+              const features = Array.isArray(bi.itemFeature) ? bi.itemFeature : [bi.itemFeature];
+              
+              features.forEach(f => {
+                const featureOptionName = bi.featureOption?.name || f?.featureOption?.name || null;
+                const key = `${bi.item?.id}-${featureOptionName || ''}`;
 
-      const unitPrice = bi.item?.price || 0;
-      const totalPriceItem = unitPrice * bi.quantity;
+                const unitPrice = bi.item?.price || 0;
+                const totalPriceItem = unitPrice * bi.quantity;
 
-      if (!itemsMap[key]) {
-        itemsMap[key] = {
-          quantity: bi.quantity,
-          item: bi.item?.name,
-          unitPrice,
-          totalPrice: totalPriceItem,
-          itemFeature: f ? { feature: { name: f.feature?.name } } : null,
-          featureOption: featureOptionName
-        };
-      } else {
-        itemsMap[key].quantity += bi.quantity;
-        itemsMap[key].totalPrice += totalPriceItem;
-      }
+                if (!itemsMap[key]) {
+                  itemsMap[key] = {
+                    quantity: bi.quantity,
+                    item: bi.item?.name,
+                    unitPrice,
+                    totalPrice: totalPriceItem,
+                    itemFeature: f ? { feature: { name: f.feature?.name } } : null,
+                    featureOption: featureOptionName
+                  };
+                } else {
+                  itemsMap[key].quantity += bi.quantity;
+                  itemsMap[key].totalPrice += totalPriceItem;
+                }
 
-      dnTotal += totalPriceItem;
-    });
-  });
-});
+                dnTotal += totalPriceItem;
+              });
+            });
+          });
 
           return {
             id: dn.id,
             referralId: dn.referralId,
             customer: dn.customer ? { id: dn.customer.id, name: dn.customer.name } : null,
             total: dnTotal,
-            items: Object.values(itemsMap) // Converte o map em array
+            items: Object.values(itemsMap)
           };
         })
-
       };
 
-      // await generateInvoicePDF(slimInvoice, res);
-      res.json({success: true, data: slimInvoice})
+      res.json({ success: true, data: slimInvoice });
 
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
-
-
-
 }
 
 export default InvoiceController;

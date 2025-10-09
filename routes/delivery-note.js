@@ -45,6 +45,15 @@ router.get(
   DeliveryNoteController.getAll
 );
 
+router.get(
+  '/search',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  DeliveryNoteController.search
+);
+
 // Buscar DeliveryNote por ID
 router.get(
   '/:id',

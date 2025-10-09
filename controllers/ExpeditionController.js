@@ -1,8 +1,18 @@
 import { v4 as uuidv4 } from 'uuid';
 import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account } from '../models/index.js';
 import { Op } from 'sequelize';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
 class ExpeditionController {
+
+  // 🔒 Filtro de acesso por empresa/filial
+  static projectAccessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+  }
 
   // Criar expedição
   static async create(req, res) {
@@ -156,68 +166,65 @@ class ExpeditionController {
     }
   }
 
-  // Buscar todas as expedições — filtrando por company/branch do contexto
+  // 📦 Buscar todas as expedições COM PAGINAÇÃO
   static async getAll(req, res) {
     try {
-      const { companyId, branchId } = req.context;
+      const { projectId, mainCustomerId } = req.query;
+      const where = {};
 
-      const expeditions = await Expedition.findAll({
+      if (projectId) where.projectId = projectId;
+      if (mainCustomerId) where.mainCustomerId = mainCustomerId;
+
+      const result = await buildQueryOptions(req, Expedition, {
+        where,
         include: [
           {
             model: Project,
             as: 'project',
-            where: { companyId, branchId },
-            required: true
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: ExpeditionController.projectAccessFilter(req)
           },
-          { model: Customer, as: 'mainCustomer' }
-        ],
-        order: [['createdAt', 'DESC']]
+          { 
+            model: Customer, 
+            as: 'mainCustomer',
+            attributes: ['id', 'name', 'email', 'phone']
+          }
+        ]
       });
 
-      const expeditionsWithLog = await Promise.all(
-        expeditions.map(async (exp) => {
-          const lastLog = await MovementLogEntity.findOne({
-            where: { entity: 'expedição', entityId: exp.id },
-            order: [['createdAt', 'DESC']]
-          });
-          return { ...exp.toJSON(), lastMovementLog: lastLog ? lastLog.toJSON() : null };
-        })
-      );
-
-      return res.json({ success: true, data: expeditionsWithLog });
+      res.json({ success: true, ...result });
     } catch (error) {
-      console.error('Erro ao listar expedições:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      console.error('Erro ao buscar expedições:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
 
-  // Buscar por ID — filtrando pela empresa/filial via Project
+  // 🔍 Buscar por ID
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      const { companyId, branchId } = req.context;
 
-      const expedition = await Expedition.findOne({
-        where: { id },
+      const expedition = await Expedition.findByPk(id, {
         include: [
           {
             model: Project,
             as: 'project',
-            where: { companyId, branchId },
-            required: true
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: ExpeditionController.projectAccessFilter(req)
           },
           { model: Customer, as: 'mainCustomer' }
         ]
       });
 
-      if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada.' });
+      if (!expedition)
+        return res.status(404).json({ success: false, message: 'Expedição não encontrada' });
 
       const lastLog = await MovementLogEntity.findOne({
         where: { entity: 'expedição', entityId: expedition.id },
         order: [['createdAt', 'DESC']]
       });
 
-      return res.json({
+      res.json({
         success: true,
         data: {
           ...expedition.toJSON(),
@@ -226,63 +233,79 @@ class ExpeditionController {
       });
     } catch (error) {
       console.error('Erro ao buscar expedição por ID:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
 
-  // Buscar expedições por projeto
+  // 🏭 Buscar expedições por projeto COM PAGINAÇÃO
   static async getByProject(req, res) {
     try {
       const { projectId } = req.params;
-      const { companyId, branchId } = req.context;
+      const { term, fields } = req.query;
 
-      const project = await Project.findOne({
-        where: { id: projectId, companyId, branchId }
-      });
-      if (!project)
-        return res.status(403).json({ success: false, message: 'Acesso negado a este projeto.' });
+      const where = { projectId };
 
-      const expeditions = await Expedition.findAll({
-        where: { projectId },
-        include: [
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'mainCustomer' }
-        ]
-      });
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
 
-      return res.json({ success: true, data: expeditions });
-    } catch (error) {
-      console.error('Erro ao buscar expedições por projeto:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
-  }
-
-  // Buscar expedições por cliente (somente dentro do contexto)
-  static async getByCustomer(req, res) {
-    try {
-      const { mainCustomerId } = req.params;
-      const { companyId, branchId } = req.context;
-
-      const expeditions = await Expedition.findAll({
+      const result = await buildQueryOptions(req, Expedition, {
+        where,
         include: [
           {
             model: Project,
             as: 'project',
-            where: { companyId, branchId },
-            required: true
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: ExpeditionController.projectAccessFilter(req)
           },
-          {
-            model: Customer,
-            as: 'mainCustomer',
-            where: { id: mainCustomerId }
-          }
+          { model: Customer, as: 'mainCustomer' }
         ]
       });
 
-      return res.json({ success: true, data: expeditions });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar expedições por projeto:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
+  }
+
+  // 👤 Buscar expedições por cliente COM PAGINAÇÃO
+  static async getByCustomer(req, res) {
+    try {
+      const { mainCustomerId } = req.params;
+      const { term, fields } = req.query;
+
+      const where = { mainCustomerId };
+
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
+
+      const result = await buildQueryOptions(req, Expedition, {
+        where,
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: ExpeditionController.projectAccessFilter(req)
+          },
+          { model: Customer, as: 'mainCustomer' }
+        ]
+      });
+
+      res.json({ success: true, ...result });
     } catch (error) {
       console.error('Erro ao buscar expedições por cliente:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
 }

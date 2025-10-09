@@ -1,27 +1,49 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, Box, BoxItem, DeliveryNote, Project, Customer, Order, Package, User, MovementLogEntity, StockItem, Item, Account } from '../models/index.js';
+import { Op } from 'sequelize';
+import { 
+  sequelize, 
+  Box, 
+  BoxItem, 
+  DeliveryNote, 
+  Project, 
+  Customer, 
+  Order, 
+  Package, 
+  User, 
+  MovementLogEntity, 
+  StockItem, 
+  Item, 
+  Account 
+} from '../models/index.js';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
 class BoxController {
 
-   // Helper para adicionar o último log em uma lista de boxes
+  // 🔒 Filtro de acesso por empresa/filial
+  static projectAccessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+  }
+
+  // Helper para adicionar o último log em uma lista de boxes
   static async attachLastLog(boxes) {
     if (!boxes.length) return [];
 
     const boxIds = boxes.map(b => b.id);
 
-    // Busca todos os últimos logs de uma vez
     const logs = await MovementLogEntity.findAll({
       where: { entity: 'caixa', entityId: boxIds },
       order: [['entityId', 'ASC'], ['createdAt', 'DESC']]
     });
 
-    // Mapeia o último log por box
     const lastLogsMap = {};
     logs.forEach(log => {
       if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log;
     });
 
-    // Calcula o totalWeight para cada box
     const boxesWithData = await Promise.all(boxes.map(async (box) => {
       const boxItems = await BoxItem.findAll({
         where: { boxId: box.id },
@@ -40,79 +62,74 @@ class BoxController {
     return boxesWithData;
   }
 
+  // 🧾 Criar box
   static async create(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const { deliveryNoteId, projectId, customerId, orderId, packageId, userId } = req.body;
+    const transaction = await sequelize.transaction();
+    try {
+      const { deliveryNoteId, projectId, customerId, orderId, packageId, userId } = req.body;
 
-    // Validações básicas
-    if (deliveryNoteId != null && !await DeliveryNote.findByPk(deliveryNoteId, { transaction }))
-      return res.status(400).json({ success: false, message: 'Delivery Note não encontrada' });
-    if (!await Project.findByPk(projectId, { transaction }))
-      return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
-    if (!await Customer.findByPk(customerId, { transaction }))
-      return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
-    if (!await Order.findByPk(orderId, { transaction }))
-      return res.status(400).json({ success: false, message: 'Pedido não encontrado' });
-    if (!await Package.findByPk(packageId, { transaction }))
-      return res.status(400).json({ success: false, message: 'Embalagem não encontrada' });
+      if (deliveryNoteId != null && !await DeliveryNote.findByPk(deliveryNoteId, { transaction }))
+        return res.status(400).json({ success: false, message: 'Delivery Note não encontrada' });
+      if (!await Project.findByPk(projectId, { transaction }))
+        return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
+      if (!await Customer.findByPk(customerId, { transaction }))
+        return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
+      if (!await Order.findByPk(orderId, { transaction }))
+        return res.status(400).json({ success: false, message: 'Pedido não encontrado' });
+      if (!await Package.findByPk(packageId, { transaction }))
+        return res.status(400).json({ success: false, message: 'Embalagem não encontrada' });
 
-    // Cria o box (sem userId na tabela Box)
-    const box = await Box.create({
-      deliveryNoteId,
-      projectId,
-      customerId,
-      orderId,
-      packageId,
-      qtdTotal: 0
-    }, { transaction });
+      const box = await Box.create({
+        deliveryNoteId,
+        projectId,
+        customerId,
+        orderId,
+        packageId,
+        qtdTotal: 0
+      }, { transaction });
 
-    // Verifica User ou Account para o log
-    let logUserId = null;
-    let logAccountId = null;
+      let logUserId = null;
+      let logAccountId = null;
 
-    if (userId) {
-      const user = await User.findByPk(userId, { transaction });
-      if (user) logUserId = userId;
-      else {
-        const account = await Account.findByPk(userId, { transaction });
-        if (account) logAccountId = userId;
+      if (userId) {
+        const user = await User.findByPk(userId, { transaction });
+        if (user) logUserId = userId;
         else {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+          const account = await Account.findByPk(userId, { transaction });
+          if (account) logAccountId = userId;
+          else {
+            await transaction.rollback();
+            return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+          }
         }
       }
+
+      const movementData = {
+        entity: 'caixa',
+        entityId: box.id,
+        method: 'criação',
+        status: 'aberto',
+        userId: logUserId,
+        accountId: logAccountId
+      };
+
+      const lastLog = await MovementLogEntity.create(movementData, { transaction });
+
+      const boxItems = await BoxItem.findAll({ where: { boxId: box.id }, include: [{ model: Item, as: 'item' }], transaction });
+      const totalQty = boxItems.reduce((sum, bi) => sum + (bi.quantity || 0), 0);
+      await box.update({ qtdTotal: totalQty }, { transaction });
+
+      await transaction.commit();
+      return res.status(201).json({ success: true, data: { ...box.toJSON(), lastMovementLog: lastLog } });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao criar Box:', error);
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
-
-    // Cria o log de movimentação
-    const movementData = {
-      entity: 'caixa',
-      entityId: box.id,
-      method: 'criação',
-      status: 'aberto',
-      userId: logUserId,
-      accountId: logAccountId
-    };
-
-    const lastLog = await MovementLogEntity.create(movementData, { transaction });
-
-    // Atualiza qtdTotal
-    const boxItems = await BoxItem.findAll({ where: { boxId: box.id }, include: [{ model: Item, as: 'item' }], transaction });
-    const totalQty = boxItems.reduce((sum, bi) => sum + (bi.quantity || 0), 0);
-    await box.update({ qtdTotal: totalQty }, { transaction });
-
-    await transaction.commit();
-    return res.status(201).json({ success: true, data: { ...box.toJSON(), lastMovementLog: lastLog } });
-
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao criar Box:', error);
-    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
-}
 
-
-  // Atualiza um Box existente
+  // ✏️ Atualizar box
   static async update(req, res) {
     const transaction = await sequelize.transaction();
     try {
@@ -135,7 +152,6 @@ class BoxController {
 
       await box.update(updates, { transaction });
 
-      // Preparar dados do log
       let movementData = {
         entity: 'caixa',
         entityId: box.id,
@@ -143,13 +159,11 @@ class BoxController {
         status: 'aberto'
       };
 
-      const logUserId = updates.userId
+      const logUserId = updates.userId;
 
-      // Verifica User ou Account
       const user = await User.findByPk(logUserId);
       if (user) {
         movementData.userId = logUserId;
-      
       } else {
         const account = await Account.findByPk(logUserId);
         if (account) {
@@ -176,7 +190,7 @@ class BoxController {
     }
   }
 
-  // Deleta um Box
+  // 🗑️ Deletar box
   static async delete(req, res) {
     const transaction = await sequelize.transaction();
     try {
@@ -198,16 +212,13 @@ class BoxController {
         if (stockItem) await stockItem.update({ quantity: stockItem.quantity + bi.quantity }, { transaction });
       }
 
-      // Preparar dados do log
       let movementData = {
-      
         entity: 'caixa',
         entityId: box.id,
         method: 'remoção',
         status: 'aberto'
       };
 
-      // Verifica User ou Account
       const user = await User.findByPk(userId);
       if (user) {
         movementData.userId = userId;
@@ -235,35 +246,55 @@ class BoxController {
     }
   }
 
- static async getAll(req, res) {
-    try {
-      const { companyId, branchId } = req.context;
+  // 📦 Buscar todos os boxes (com paginação)
+static async getAll(req, res) {
+  try {
+    const { projectId, customerId, orderId, deliveryNoteId, term, fields } = req.query
+    const where = {}
 
-      const boxes = await Box.findAll({
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
-            as: 'project',
-            where: { companyId: companyId, branchId: branchId }
-          },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
-       
-        ],
-        order: [['createdAt', 'DESC']]
-      });
+    if (projectId) where.projectId = projectId
+    if (customerId) where.customerId = customerId
+    if (orderId) where.orderId = orderId
+    if (deliveryNoteId) where.deliveryNoteId = deliveryNoteId
 
-      const boxesWithLastLog = await BoxController.attachLastLog(boxes);
-      return res.json({ success: true, data: boxesWithLastLog });
-    } catch (error) {
-      console.error('Erro ao listar Boxes:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    // 🔍 Filtro de pesquisa textual
+    if (term && fields) {
+      const searchFields = fields.split(',')
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }))
     }
-  }
 
-  // Busca Box por ID
+    const result = await buildQueryOptions(req, Box, {
+      where,
+      include: [
+        { model: DeliveryNote, as: 'deliveryNote' },
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where: BoxController.projectAccessFilter(req)
+        },
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+        { model: Order, as: 'order', attributes: ['id', 'referralId'] },
+        { model: Package, as: 'package', attributes: ['id', 'name'] }
+      ],
+      order: [['createdAt', 'DESC']],
+      distinct: true
+    })
+
+    // 📜 Anexa o último log a cada box
+    const boxesWithLog = await BoxController.attachLastLog(result.data)
+    result.data = boxesWithLog
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    console.error('Erro ao buscar boxes:', error)
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+  }
+}
+
+  // 🔍 Buscar por ID
   static async getById(req, res) {
     try {
       const { id } = req.params;
@@ -274,7 +305,6 @@ class BoxController {
           { model: Customer, as: 'customer' },
           { model: Order, as: 'order' },
           { model: Package, as: 'package' },
-        
         ]
       });
       if (!box) return res.status(404).json({ success: false, message: 'Box não encontrado' });
@@ -291,8 +321,130 @@ class BoxController {
     }
   }
 
-  // Reuso attachLastLog para filtros
-  static async getByDeliveryNote(req, res) {
+  // 🔗 Buscar por projeto
+  static async getByProject(req, res) {
+    try {
+      const { projectId } = req.params;
+
+      const result = await buildQueryOptions(req, Box, {
+        where: { projectId },
+        include: [
+          { model: DeliveryNote, as: 'deliveryNote' },
+          {
+            model: Project,
+            as: 'project',
+            where: { id: projectId, ...BoxController.projectAccessFilter(req) }
+          },
+          { model: Customer, as: 'customer' },
+          { model: Order, as: 'order' },
+          { model: Package, as: 'package' },
+        ]
+      });
+
+      const boxesWithLog = await BoxController.attachLastLog(result.data);
+      result.data = boxesWithLog;
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar boxes por projeto:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
+  }
+
+  // 👤 Buscar por cliente
+  static async getByCustomer(req, res) {
+    try {
+      const { customerId } = req.params;
+
+      const result = await buildQueryOptions(req, Box, {
+        where: { customerId },
+        include: [
+          { model: DeliveryNote, as: 'deliveryNote' },
+          {
+            model: Project,
+            as: 'project',
+            where: BoxController.projectAccessFilter(req)
+          },
+          { model: Customer, as: 'customer' },
+          { model: Order, as: 'order' },
+          { model: Package, as: 'package' },
+        ]
+      });
+
+      const boxesWithLog = await BoxController.attachLastLog(result.data);
+      result.data = boxesWithLog;
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar boxes por cliente:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
+  }
+
+  // 📋 Buscar por pedido
+  static async getByOrder(req, res) {
+    try {
+      const { orderId } = req.params;
+
+      const result = await buildQueryOptions(req, Box, {
+        where: { orderId },
+        include: [
+          { model: DeliveryNote, as: 'deliveryNote' },
+          {
+            model: Project,
+            as: 'project',
+            where: BoxController.projectAccessFilter(req)
+          },
+          { model: Customer, as: 'customer' },
+          { model: Order, as: 'order' },
+          { model: Package, as: 'package' },
+        ]
+      });
+
+      const boxesWithLog = await BoxController.attachLastLog(result.data);
+      result.data = boxesWithLog;
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar boxes por pedido:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
+  }
+
+  // 📋 Buscar por múltiplos pedidos
+  static async getByOrderIds(req, res) {
+    try {
+      let orderIds = req.body.orderIds || req.query.orderIds;
+      if (!orderIds || (Array.isArray(orderIds) && orderIds.length === 0))
+        return res.status(400).json({ success: false, message: 'É necessário enviar um array de orderIds.' });
+
+      orderIds = orderIds.map(id => id);
+
+      const result = await buildQueryOptions(req, Box, {
+        where: { orderId: orderIds },
+        include: [
+          { model: DeliveryNote, as: 'deliveryNote' },
+          { model: Project, as: 'project' },
+          { model: Customer, as: 'customer' },
+          { model: Order, as: 'order' },
+          { model: Package, as: 'package' },
+        ]
+      });
+
+      if (!result.data.length) return res.status(404).json({ success: false, message: 'Nenhum Box encontrado para os orderIds fornecidos.' });
+
+      const boxesWithLog = await BoxController.attachLastLog(result.data);
+      result.data = boxesWithLog;
+
+      return res.json({ success: true, ...result });
+
+    } catch (error) {
+      console.error('Erro ao buscar Boxes por múltiplos orderIds:', error);
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
+  }
+
+   static async getByDeliveryNote(req, res) {
     try {
       const { deliveryNoteId } = req.params;
       const boxes = await Box.findAll({
@@ -314,125 +466,6 @@ class BoxController {
     }
   }
 
-  static async getByProject(req, res) {
-    try {
-      const { projectId } = req.params;
-      const { companyId, branchId } = req.context;
-
-      const boxes = await Box.findAll({
-        where: { projectId },
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
-            as: 'project',
-            where: { id: projectId, companyId: companyId, branchId: branchId }
-          },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
-          
-        ]
-      });
-
-      const boxesWithLastLog = await BoxController.attachLastLog(boxes);
-      return res.json({ success: true, data: boxesWithLastLog });
-    } catch (error) {
-      console.error('Erro ao buscar Boxes por projeto:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
-  }
-
-   static async getByCustomer(req, res) {
-    try {
-      const { customerId } = req.params;
-      const { companyId, branchId } = req.context;
-
-      const boxes = await Box.findAll({
-        where: { customerId },
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
-            as: 'project',
-            where: { companyId: companyId, branchId: branchId }
-          },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
-          
-        ]
-      });
-
-      const boxesWithLastLog = await BoxController.attachLastLog(boxes);
-      return res.json({ success: true, data: boxesWithLastLog });
-    } catch (error) {
-      console.error('Erro ao buscar Boxes por cliente:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
-  }
-  
-
-    static async getByOrder(req, res) {
-    try {
-      const { orderId } = req.params;
-      const { companyId, branchId } = req.context;
-
-      const boxes = await Box.findAll({
-        where: { orderId },
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
-            as: 'project',
-            where: { companyId: companyId, branchId: branchId }
-          },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
-         
-        ]
-      });
-
-      const boxesWithLastLog = await BoxController.attachLastLog(boxes);
-      return res.json({ success: true, data: boxesWithLastLog });
-    } catch (error) {
-      console.error('Erro ao buscar Boxes por pedido:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
-  }
-
-  static async getByOrderIds(req, res) {
-    console.log('=========================================== ORDER IDS ===========================================', req.body, req.query);
-    try {
-      let orderIds = req.body.orderIds || req.query.orderIds;
-      if (!orderIds || (Array.isArray(orderIds) && orderIds.length === 0))
-        return res.status(400).json({ success: false, message: 'É necessário enviar um array de orderIds.' });
-
-      orderIds = orderIds.map(id => id);
-      const boxes = await Box.findAll({
-        where: { orderId: orderIds },
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
-         
-        ],
-        order: [['createdAt', 'DESC']]
-      });
-
-      if (!boxes.length) return res.status(404).json({ success: false, message: 'Nenhum Box encontrado para os orderIds fornecidos.' });
-
-      const boxesWithLastLog = await BoxController.attachLastLog(boxes);
-      return res.json({ success: true, data: boxesWithLastLog });
-
-    } catch (error) {
-      console.error('Erro ao buscar Boxes por múltiplos orderIds:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
-  }
 
   static async getByPackage(req, res) {
     try {
@@ -445,7 +478,7 @@ class BoxController {
           { model: Customer, as: 'customer' },
           { model: Order, as: 'order' },
           { model: Package, as: 'package' },
-          
+         
         ]
       });
       const boxesWithLastLog = await BoxController.attachLastLog(boxes);
@@ -455,6 +488,7 @@ class BoxController {
       return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+
 
   static async getByUser(req, res) {
     try {
@@ -478,26 +512,29 @@ class BoxController {
     }
   }
 
+
    static async getByDate(req, res) {
     try {
       const { date } = req.params;
       const { companyId, branchId } = req.context;
 
+
       const boxes = await Box.findAll({
         where: sequelize.where(sequelize.fn('DATE', sequelize.col('Box.createdAt')), date),
         include: [
           { model: DeliveryNote, as: 'deliveryNote' },
-          { 
-            model: Project, 
+          {
+            model: Project,
             as: 'project',
             where: { companyId: companyId, branchId: branchId }
           },
           { model: Customer, as: 'customer' },
           { model: Order, as: 'order' },
           { model: Package, as: 'package' },
-        
+       
         ]
       });
+
 
       const boxesWithLastLog = await BoxController.attachLastLog(boxes);
       return res.json({ success: true, data: boxesWithLastLog });

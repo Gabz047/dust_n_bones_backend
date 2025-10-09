@@ -3,6 +3,7 @@ import { sequelize, DeliveryNote, DeliveryNoteItem, MovementLogEntity, MovementL
 import { generateDeliveryNotePDF } from '../services/generate-pdf/delivery-note/delivery-note-pdf.js';
 import { generateLabelsZPL } from '../services/generate-pdf/delivery-note/box-label-pdf.js';
 import { Op } from 'sequelize';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
 function buildContextFilter(context) {
   const { companyId, branchId } = context;
@@ -206,26 +207,86 @@ class DeliveryNoteController {
     }
   }
 
-  // --- Métodos de listagem ---
-  static async getAll(req, res) {
-    try {
-      const where = buildContextFilter(req.context);
+static async getAll(req, res) {
+  try {
+    const { projectId, customerId, term, fields } = req.query
+    const where = {}
 
-      const deliveryNotes = await DeliveryNote.findAll({
-        where,
-        include: [
-          { model: Project, as: 'project', attributes: ['id', 'name'] },
-          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-        ],
-        order: [['createdAt', 'DESC']]
-      });
+    if (projectId) where.projectId = projectId
+    if (customerId) where.customerId = customerId
 
-      return res.json(deliveryNotes);
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: error.message });
+    // 🔍 Filtro de pesquisa textual
+    if (term && fields) {
+      const searchFields = fields.split(',')
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }))
     }
+
+    const result = await buildQueryOptions(req, DeliveryNote, {
+      where,
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where: buildContextFilter(req.context)
+        },
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+      ],
+      order: [['createdAt', 'DESC']],
+      distinct: true
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    console.error('Erro ao buscar notas de entrega:', error)
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
   }
+}
+
+static async search(req, res) {
+  try {
+    const { term, fields } = req.query
+    const where = { ...buildContextFilter(req.context) }
+
+    // Filtro de pesquisa textual
+    if (term && fields) {
+      const searchFields = fields.split(',')
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }))
+    }
+
+    const result = await buildQueryOptions(req, DeliveryNote, {
+      where,
+      include: [
+        { 
+          model: Project, 
+          as: 'project', 
+          attributes: ['id', 'name'],
+          where: term && fields?.includes('project.name') 
+            ? { name: { [Op.iLike]: `%${term}%` } }
+            : undefined
+        },
+        { 
+          model: Customer, 
+          as: 'customer', 
+          attributes: ['id', 'name'],
+          where: term && fields?.includes('customer.name')
+            ? { name: { [Op.iLike]: `%${term}%` } }
+            : undefined
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ success: false, message: error.message })
+  }
+}
 
   static async getById(req, res) {
     try {
@@ -281,20 +342,23 @@ class DeliveryNoteController {
     }
   }
 
-  static async getByInvoice(req, res) {
-    try {
-      const { invoiceId } = req.params;
-      const where = { invoiceId, ...buildContextFilter(req.context) };
+ static async getByInvoice(req, res) {
+  try {
+    const { invoiceId } = req.params
+    const where = { invoiceId, ...buildContextFilter(req.context) }
 
-      const deliveryNotes = await DeliveryNote.findAll({
-        where,
-        include: [{ model: Customer, as: 'customer', attributes: ['name'] }]
-      });
-      return res.json(deliveryNotes);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await buildQueryOptions(req, DeliveryNote, {
+      where,
+      include: [
+        { model: Customer, as: 'customer', attributes: ['name'] }
+      ]
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
   }
+}
 
   static async getByCompanyOrBranch(req, res) {
     try {
@@ -308,71 +372,77 @@ class DeliveryNoteController {
     }
   }
 
-  static async getByCustomer(req, res) {
-    try {
-      const { customerId } = req.params;
-      const where = { customerId, ...buildContextFilter(req.context) };
+  // Modificar getByCustomer
+static async getByCustomer(req, res) {
+  try {
+    const { customerId } = req.params
+    const where = { customerId, ...buildContextFilter(req.context) }
 
-      const deliveryNotes = await DeliveryNote.findAll({ where });
-      return res.json(deliveryNotes);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await buildQueryOptions(req, DeliveryNote, {
+      where
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
   }
+}
 
-  static async getByOrder(req, res) {
-    try {
-      const { orderId } = req.params;
-      const where = { orderId, ...buildContextFilter(req.context) };
+static async getByOrder(req, res) {
+  try {
+    const { orderId } = req.params
+    const where = { orderId, ...buildContextFilter(req.context) }
 
-      const deliveryNotes = await DeliveryNote.findAll({ where });
-      return res.json(deliveryNotes);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await buildQueryOptions(req, DeliveryNote, {
+      where
+    })
+
+    res.json({ success: true, ...result })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
   }
+}
 
   static async getByExpedition(req, res) {
-    try {
-      const { expeditionId } = req.params;
-      const where = { expeditionId, ...buildContextFilter(req.context) };
+  try {
+    const { expeditionId } = req.params
+    const where = { expeditionId, ...buildContextFilter(req.context) }
 
-      const deliveryNotes = await DeliveryNote.findAll({
-        where,
-        include: [
-          {
-            model: Box,
-            as: 'boxes',
-            include: [
-              {
-                model: BoxItem,
-                as: 'items',
-                include: [
-                  {
-                    model: OrderItem,
-                    as: 'orderItem',
-                    include: [{ model: FeatureOption, as: 'featureOption', attributes: ['name'] }]
-                  },
-                  { model: Item, as: 'item', attributes: ['name', 'price'] },
-                  {
-                    model: ItemFeature,
-                    as: 'itemFeature',
-                    include: [{ model: Feature, as: 'feature', attributes: ['name'] }]
-                  }
-                ]
-              }
-            ]
-          },
-          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-        ]
-      });
+    const result = await buildQueryOptions(req, DeliveryNote, {
+      where,
+      include: [
+        {
+          model: Box,
+          as: 'boxes',
+          include: [
+            {
+              model: BoxItem,
+              as: 'items',
+              include: [
+                {
+                  model: OrderItem,
+                  as: 'orderItem',
+                  include: [{ model: FeatureOption, as: 'featureOption', attributes: ['name'] }]
+                },
+                { model: Item, as: 'item', attributes: ['name', 'price'] },
+                {
+                  model: ItemFeature,
+                  as: 'itemFeature',
+                  include: [{ model: Feature, as: 'feature', attributes: ['name'] }]
+                }
+              ]
+            }
+          ]
+        },
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+      ]
+    })
 
-      return res.json(deliveryNotes);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    res.json({ success: true, ...result })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
   }
-
+}
   static async generatePDF(req, res) {
     try {
       const { id } = req.params;
