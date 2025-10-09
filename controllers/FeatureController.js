@@ -1,14 +1,15 @@
-import Feature from '../models/Features.js';
 import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
+import Feature from '../models/Features.js';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
-export default {
-  // Criar característica do item
-  async create(req, res) {
+class FeatureController {
+  // 🧾 Criar característica
+  static async create(req, res) {
     try {
       const { name, options } = req.body;
       const { companyId, branchId } = req.context;
 
-      // Verifica se já existe característica com mesmo nome na mesma company/branch
       const exists = await Feature.findOne({ where: { name, companyId, branchId } });
       if (exists) {
         return res.status(400).json({ success: false, message: 'Característica já existe.' });
@@ -25,72 +26,100 @@ export default {
       return res.status(201).json({ success: true, data: feature });
     } catch (error) {
       console.error('Erro ao criar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao criar característica.' });
+      return res.status(500).json({ success: false, message: 'Erro ao criar característica.', error: error.message });
     }
-  },
+  }
 
-  // Buscar característica pelo ID
-  async getById(req, res) {
+  // 🔒 Filtro de acesso por empresa/filial
+  static accessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+  }
+
+  // 📦 Buscar todas as características (com filtros, search e paginação)
+  static async getAll(req, res) {
     try {
-      const { id } = req.params;
-      const { companyId, branchId } = req.context;
+      const { term, fields } = req.query;
 
-      const feature = await Feature.findOne({ where: { id, companyId, branchId } });
-      if (!feature) return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
+      const where = FeatureController.accessFilter(req);
 
-      return res.json({ success: true, data: feature });
-    } catch (error) {
-      console.error('Erro ao buscar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao buscar característica.' });
-    }
-  },
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map(field => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
 
-  // Buscar todas as características (GET) filtrando por company/branch
-  async getAll(req, res) {
-    try {
-      const { companyId, branchId } = req.context;
+      const result = await buildQueryOptions(req, Feature, { where });
 
-      const features = await Feature.findAll({ where: { companyId, branchId } });
-
-      return res.json({ success: true, data: features });
+      return res.json({ success: true, ...result });
     } catch (error) {
       console.error('Erro ao buscar características:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao buscar características.' });
+      return res.status(500).json({ success: false, message: 'Erro ao buscar características.', error: error.message });
     }
-  },
+  }
 
-  // Atualizar característica
-  async update(req, res) {
+  // 🔍 Buscar por ID
+  static async getById(req, res) {
+    try {
+      const { id } = req.params;
+
+      const feature = await buildQueryOptions(req, Feature, {
+        where: { id, ...FeatureController.accessFilter(req) }
+      });
+
+      if (!feature || feature.data.length === 0) {
+        return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
+      }
+
+      return res.json({ success: true, data: feature.data[0] });
+    } catch (error) {
+      console.error('Erro ao buscar característica:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar característica.', error: error.message });
+    }
+  }
+
+  // 🔄 Atualizar característica
+  static async update(req, res) {
     try {
       const { id } = req.params;
       const { name, options } = req.body;
-      const { companyId, branchId } = req.context;
 
-      const feature = await Feature.findOne({ where: { id, companyId, branchId } });
+      const feature = await Feature.findOne({
+        where: { id, ...FeatureController.accessFilter(req) }
+      });
+
       if (!feature) return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
 
       await feature.update({ name, options });
       return res.json({ success: true, data: feature });
     } catch (error) {
       console.error('Erro ao atualizar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao atualizar característica.' });
+      return res.status(500).json({ success: false, message: 'Erro ao atualizar característica.', error: error.message });
     }
-  },
+  }
 
-  // Deletar característica
-  async delete(req, res) {
+  // ❌ Deletar característica
+  static async delete(req, res) {
     try {
       const { id } = req.params;
-      const { companyId, branchId } = req.context;
 
-      const feature = await Feature.findOne({ where: { id, companyId, branchId } });
+      const feature = await Feature.findOne({
+        where: { id, ...FeatureController.accessFilter(req) }
+      });
+
       if (!feature) return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
 
       await feature.destroy();
       return res.json({ success: true, message: 'Característica deletada com sucesso.' });
     } catch (error) {
       console.error('Erro ao deletar característica:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao deletar característica.' });
+      return res.status(500).json({ success: false, message: 'Erro ao deletar característica.', error: error.message });
     }
   }
-};
+}
+
+export default FeatureController;

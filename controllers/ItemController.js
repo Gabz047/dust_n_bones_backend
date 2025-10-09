@@ -1,13 +1,22 @@
-// controllers/ItemController.js
 import Item from '../models/Item.js';
 import Company from '../models/Company.js';
 import Branch from '../models/Branch.js';
-
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
+import { Op } from 'sequelize';
 // Helper para gerar o name com gênero
 function buildItemName(name, businessItemType, genre) {
   name = name.replace(/\s-\s.*$/, '');
   if (!businessItemType || businessItemType === 'Outro') return name;
   return `${name} - ${genre || 'Unissex'}`;
+}
+
+// Filtro de acesso por empresa/filial
+function itemAccessFilter(req) {
+  const { companyId, branchId } = req.context || {};
+  return {
+    companyId,
+    ...(branchId ? { branchId } : {}),
+  };
 }
 
 export default {
@@ -109,16 +118,22 @@ export default {
     }
   },
 
-  // Buscar todos os itens filtrando pelo contexto do usuário
+  // Buscar todos os itens com filtros, search e paginação
   async getAll(req, res) {
     try {
-      const { companyId, branchId } = req.context;
+      const { term, fields, page, limit } = req.query;
 
-      const where = {};
-      if (companyId) where.companyId = companyId;
-      if (branchId) where.branchId = branchId;
+      const where = itemAccessFilter(req);
 
-      const items = await Item.findAll({
+      // Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` },
+        }));
+      }
+
+      const result = await buildQueryOptions(req, Item, {
         where,
         include: [
           { model: Company, as: 'company', attributes: ['id', 'name'] },
@@ -127,34 +142,32 @@ export default {
         order: [['createdAt', 'DESC']],
       });
 
-      return res.json({ success: true, data: items });
+      return res.json({ success: true, ...result });
     } catch (error) {
       console.error('Erro ao buscar itens:', error);
       return res.status(500).json({ success: false, message: 'Erro ao buscar itens.' });
     }
   },
 
-  // Buscar item por ID filtrando pelo contexto do usuário
+  // Buscar item por ID com filtro de contexto
   async getById(req, res) {
     try {
       const { id } = req.params;
-      const { companyId, branchId } = req.context;
 
-      const where = { id };
-      if (companyId) where.companyId = companyId;
-      if (branchId) where.branchId = branchId;
+      const where = { id, ...itemAccessFilter(req) };
 
-      const item = await Item.findOne({
+      const result = await buildQueryOptions(req, Item, {
         where,
         include: [
-          { model: Company, as: 'company' },
-          { model: Branch, as: 'branch' },
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
         ],
       });
 
-      if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
+      if (!result.data || result.data.length === 0)
+        return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-      return res.json({ success: true, data: item });
+      return res.json({ success: true, ...result });
     } catch (error) {
       console.error('Erro ao buscar item:', error);
       return res.status(500).json({ success: false, message: 'Erro ao buscar item.' });

@@ -1,4 +1,6 @@
 import { StockItem, StockAdditionalItem, Item, ItemFeature, Feature, FeatureOption, Stock } from '../models/index.js';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
+import { Op } from 'sequelize';
 
 class StockController {
   // Formatar dados
@@ -59,6 +61,15 @@ class StockController {
     ];
   }
 
+  // 🔒 Filtro de acesso por empresa/filial
+  static itemAccessFilter(req) {
+    const { companyId, branchId } = req.context || {}
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    }
+  }
+
   // GET StockItem por ID (não filtra company/branch porque vem via Stock já filtrado)
   static async getStockItemById(req, res) {
     try {
@@ -115,44 +126,52 @@ class StockController {
     }
   }
 
-  // Listar todos os estoques com filtro de contexto
   static async getAll(req, res) {
-    try {
-      const { itemId } = req.query;
-      const { companyId, branchId } = req.context;
+  try {
+    const { itemId, term } = req.query;
+    const where = {};
+    const itemWhere = StockController.itemAccessFilter(req); // filtro company/branch
 
-      const where = {};
-      if (itemId) where.itemId = itemId;
+    if (itemId) where.itemId = itemId;
 
-      const stocks = await Stock.findAll({
-        where,
-        include: [
-          {
-            model: Item,
-            as: 'item',
-            attributes: ['id', 'name', 'companyId', 'branchId'],
-            where: {
-              companyId,
-              ...(branchId ? { branchId } : {})
-            }
-          },
-          ...StockController.stockInclude()
-        ],
-        order: [['createdAt', 'DESC']]
-      });
-
-      res.json({ success: true, data: StockController.formatStock(stocks) });
-    } catch (error) {
-      console.error('Erro ao buscar estoques:', error);
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    // Se tiver term, aplicamos direto no include de Item
+    if (term) {
+      itemWhere.name = { [Op.iLike]: `%${term}%` };
     }
-  }
 
-  // Buscar estoque por ID com filtro de contexto
+    const result = await buildQueryOptions(req, Stock, {
+      where,
+      include: [
+        {
+          model: Item,
+          as: 'item',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where: itemWhere
+        },
+        ...StockController.stockInclude()
+      ],
+      order: [['createdAt', 'DESC']],
+      distinct: true, // garante que o count conte Stock e não StockItem
+    });
+
+    const formattedData = StockController.formatStock(result.data);
+
+    res.json({
+      success: true,
+      data: formattedData,
+      count: result.count,
+      pagination: result.pagination
+    });
+  } catch (error) {
+    console.error('Erro ao buscar estoques:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+}
+
+  // 🔍 Buscar estoque por ID (sem paginação)
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      const { companyId, branchId } = req.context;
 
       const stock = await Stock.findByPk(id, {
         include: [
@@ -160,10 +179,7 @@ class StockController {
             model: Item,
             as: 'item',
             attributes: ['id', 'name', 'companyId', 'branchId'],
-            where: {
-              companyId,
-              ...(branchId ? { branchId } : {})
-            }
+            where: StockController.itemAccessFilter(req)
           },
           ...StockController.stockInclude()
         ]
@@ -178,11 +194,10 @@ class StockController {
     }
   }
 
-  // Buscar estoque por Item + ItemFeature + FeatureOption com filtro de contexto
+  // 🔗 Buscar estoque por Item + ItemFeature + FeatureOption (sem paginação)
   static async getByItemFeatureOption(req, res) {
     try {
       const { itemId, itemFeatureId, featureOptionId } = req.params;
-      const { companyId, branchId } = req.context;
 
       const stock = await Stock.findOne({
         include: [
@@ -192,8 +207,7 @@ class StockController {
             attributes: ['id', 'name', 'companyId', 'branchId'],
             where: {
               id: itemId,
-              companyId,
-              ...(branchId ? { branchId } : {})
+              ...StockController.itemAccessFilter(req)
             }
           },
           ...StockController.stockInclude({ itemFeatureId, featureOptionId })
@@ -214,11 +228,10 @@ class StockController {
     }
   }
 
-  // Buscar estoques por múltiplos itens com filtro de contexto
+  // 📋 Buscar estoques por múltiplos itens COM PAGINAÇÃO
   static async getByMultipleItems(req, res) {
     try {
       let itemIds = req.body.itemIds || req.query.itemIds;
-      const { companyId, branchId } = req.context;
 
       if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
         return res.status(400).json({ success: false, message: 'É necessário enviar um array de itemIds.' });
@@ -226,7 +239,7 @@ class StockController {
 
       itemIds = itemIds.map(id => id);
 
-      const stocks = await Stock.findAll({
+      const result = await buildQueryOptions(req, Stock, {
         where: {
           itemId: itemIds
         },
@@ -235,17 +248,22 @@ class StockController {
             model: Item,
             as: 'item',
             attributes: ['id', 'name', 'companyId', 'branchId'],
-            where: {
-              companyId,
-              ...(branchId ? { branchId } : {})
-            }
+            where: StockController.itemAccessFilter(req)
           },
           ...StockController.stockInclude()
         ],
         order: [['createdAt', 'DESC']]
       });
 
-      res.json({ success: true, data: StockController.formatStock(stocks) });
+      // Formatar os dados antes de retornar
+      const formattedData = StockController.formatStock(result.data);
+
+      res.json({
+        success: true,
+        data: formattedData,
+        count: result.count,
+        pagination: result.pagination
+      });
     } catch (error) {
       console.error('Erro ao buscar estoques por múltiplos itens:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
