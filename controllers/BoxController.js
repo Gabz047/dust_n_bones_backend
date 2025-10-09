@@ -13,7 +13,10 @@ import {
   MovementLogEntity, 
   StockItem, 
   Item, 
-  Account 
+  Account,
+  ItemFeature,
+  FeatureOption,
+  Feature
 } from '../models/index.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
@@ -300,11 +303,31 @@ static async getAll(req, res) {
       const { id } = req.params;
       const box = await Box.findByPk(id, {
         include: [
-          { model: DeliveryNote, as: 'deliveryNote' },
-          { model: Project, as: 'project' },
-          { model: Customer, as: 'customer' },
-          { model: Order, as: 'order' },
-          { model: Package, as: 'package' },
+          { model: DeliveryNote, as: 'deliveryNote', attributes: ['referralId', 'id'], include: [
+            {
+              model: Customer,
+              as: 'customer',
+              attributes: ['name']
+            }
+          ] },
+          { model: Project, as: 'project', attributes: ['name', 'id']},
+          { model: Customer, as: 'customer', attributes: ['name', 'id'] },
+          { model: Order, as: 'order', attributes: ['referralId', 'id'] },
+          { model: Package, as: 'package', attributes: ['id', 'name'] },
+          {
+                model: BoxItem,
+                as: 'items',
+                attributes: ['id', 'quantity'],
+                include: [
+                  { model: Item, as: 'item', attributes: ['id', 'name', 'weight'] },
+                  {
+                    model: ItemFeature,
+                    as: 'itemFeature',
+                    include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }]
+                  },
+                  { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] }
+                ]
+              }
         ]
       });
       if (!box) return res.status(404).json({ success: false, message: 'Box não encontrado' });
