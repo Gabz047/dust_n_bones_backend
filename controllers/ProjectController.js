@@ -1,40 +1,42 @@
-import { Project, Company, Branch, Customer, ProductionOrder, sequelize } from '../models/index.js';
-import { v4 as uuidv4 } from 'uuid';
-import { Op } from 'sequelize';
+// controllers/ProjectController.js
+import { v4 as uuidv4 } from 'uuid'
+import { Op } from 'sequelize'
+import { Project, Company, Branch, Customer, ProductionOrder, sequelize } from '../models/index.js'
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 
 class ProjectController {
   static async create(req, res) {
-    const transaction = await sequelize.transaction();
+    const transaction = await sequelize.transaction()
     try {
-      const { companyId, branchId, customerId, totalQuantity, name, deliveryDate } = req.body;
-      let branch = null;
+      const { companyId, branchId, customerId, totalQuantity, name, deliveryDate } = req.body
+      let branch = null
 
       // Validar empresa
       if (!branchId) {
-        const company = await Company.findByPk(companyId);
+        const company = await Company.findByPk(companyId)
         if (!company || !company.active) {
-          return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' });
+          return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' })
         }
       }
 
       // Validar filial
       if (branchId) {
-        branch = await Branch.findByPk(branchId);
+        branch = await Branch.findByPk(branchId)
         if (!branch || !branch.active) {
-          return res.status(400).json({ success: false, message: 'Filial inválida ou inativa' });
+          return res.status(400).json({ success: false, message: 'Filial inválida ou inativa' })
         }
       }
 
       // Validar cliente (opcional)
-      let customer = null;
+      let customer = null
       if (customerId) {
-        customer = await Customer.findByPk(customerId);
+        customer = await Customer.findByPk(customerId)
         if (!customer) {
-          return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
+          return res.status(400).json({ success: false, message: 'Cliente não encontrado' })
         }
       }
 
-      const projectId = uuidv4();
+      const projectId = uuidv4()
 
       const project = await Project.create({
         id: projectId,
@@ -44,155 +46,194 @@ class ProjectController {
         branchId: branchId || null,
         customerId: customerId || null,
         totalQuantity: totalQuantity || 0
-      }, { transaction });
+      }, { transaction })
 
-      await transaction.commit();
-      return res.status(201).json({ success: true, data: project });
+      await transaction.commit()
+      return res.status(201).json({ success: true, data: project })
     } catch (error) {
-      await transaction.rollback();
-      console.error('Erro ao criar projeto:', error);
+      await transaction.rollback()
+      console.error('Erro ao criar projeto:', error)
       return res.status(500).json({
         success: false,
         message: 'Erro interno do servidor',
         error: error.message
-      });
+      })
     }
   }
 
-  // GET: Listar todos os projetos com filtro de contexto
+  // 🔒 Filtro de acesso por empresa/filial
+  static contextFilter(req) {
+    const { companyId, branchId } = req.context || {}
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    }
+  }
+
+  // 📦 Buscar todos os projetos (com paginação via buildQueryOptions)
   static async getAll(req, res) {
     try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
+      const { active, customerId, term, fields } = req.query
+      const where = {}
 
-      const { active } = req.query;
-      const where = {};
-      if (active !== undefined) where.active = active === 'true';
+      if (active !== undefined) where.active = active === 'true'
+      if (customerId) where.customerId = customerId
 
-      const { companyId, branchId } = req.context;
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',')
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }))
+      }
 
-      const { count, rows } = await Project.findAndCountAll({
-        where: {
-          ...where,
-          companyId,
-          ...(branchId ? { branchId } : {})
-        },
+      // Aplicar filtro de contexto
+      Object.assign(where, ProjectController.contextFilter(req))
+
+      const result = await buildQueryOptions(req, Project, {
+        where,
         include: [
-          { model: Company, as: 'company' },
-          { model: Branch, as: 'branch' },
-          { model: Customer, as: 'customer' }
-        ],
-        limit,
-        offset,
-        order: [['createdAt', 'DESC']]
-      });
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ]
+      })
 
-      res.json({
-        success: true,
-        data: {
-          projects: rows,
-          pagination: {
-            total: count,
-            page,
-            limit,
-            totalPages: Math.ceil(count / limit)
-          }
-        }
-      });
+      res.json({ success: true, ...result })
     } catch (error) {
-      console.error('Erro ao buscar projetos:', error);
+      console.error('Erro ao buscar projetos:', error)
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor',
         error: error.message
-      });
+      })
     }
   }
 
-  // GET: Buscar projeto por ID com filtro de contexto
+  // 🔍 Buscar projeto por ID
   static async getById(req, res) {
     try {
-      const { id } = req.params;
-      const { companyId, branchId } = req.context;
+      const { id } = req.params
 
       const project = await Project.findOne({
         where: {
           id,
-          companyId,
-          ...(branchId ? { branchId } : {})
+          ...ProjectController.contextFilter(req)
         },
         include: [
           { model: Company, as: 'company' },
           { model: Branch, as: 'branch' },
           { model: Customer, as: 'customer' }
         ]
-      });
+      })
 
       if (!project) {
-        return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
+        return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
       }
 
-      res.json({ success: true, data: project });
+      res.json({ success: true, data: project })
     } catch (error) {
-      console.error('Erro ao buscar projeto:', error);
+      console.error('Erro ao buscar projeto:', error)
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor',
         error: error.message
-      });
+      })
     }
   }
 
+  // 🔄 Atualizar projeto
   static async update(req, res) {
     try {
-      const { id } = req.params;
-      const updates = req.body;
+      const { id } = req.params
+      const updates = req.body
 
-      const project = await Project.findByPk(id);
+      const project = await Project.findOne({
+        where: {
+          id,
+          ...ProjectController.contextFilter(req)
+        }
+      })
+
       if (!project) {
-        return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
+        return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
       }
 
-      await project.update(updates);
-      res.json({ success: true, data: project });
+      await project.update(updates)
+      res.json({ success: true, data: project })
     } catch (error) {
-      console.error('Erro ao atualizar projeto:', error);
+      console.error('Erro ao atualizar projeto:', error)
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor',
         error: error.message
-      });
+      })
     }
   }
 
+  // 🗑️ Deletar projeto
   static async delete(req, res) {
     try {
-      const { id } = req.params;
-      const project = await Project.findByPk(id);
+      const { id } = req.params
+
+      const project = await Project.findOne({
+        where: {
+          id,
+          ...ProjectController.contextFilter(req)
+        }
+      })
+
       if (!project) {
-        return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
+        return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
       }
 
-      const productionOrder = await ProductionOrder.findOne({ where: { projectId: id } });
+      const productionOrder = await ProductionOrder.findOne({ where: { projectId: id } })
       if (productionOrder) {
-        return res.status(404).json({
+        return res.status(400).json({
           success: false,
           message: 'Projeto não pode ser apagado, pois possui uma ordem de produção!'
-        });
+        })
       }
 
-      await project.destroy();
-      res.json({ success: true, message: 'Projeto removido com sucesso' });
+      await project.destroy()
+      res.json({ success: true, message: 'Projeto removido com sucesso' })
     } catch (error) {
-      console.error('Erro ao deletar projeto:', error);
+      console.error('Erro ao deletar projeto:', error)
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor',
         error: error.message
-      });
+      })
+    }
+  }
+
+  // 👤 Buscar projetos por cliente
+  static async getByCustomer(req, res) {
+    try {
+      const { customerId } = req.params
+
+      const result = await buildQueryOptions(req, Project, {
+        where: {
+          customerId,
+          ...ProjectController.contextFilter(req)
+        },
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ]
+      })
+
+      res.json({ success: true, ...result })
+    } catch (error) {
+      console.error('Erro ao buscar projetos por cliente:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      })
     }
   }
 }
 
-export default ProjectController;
+export default ProjectController

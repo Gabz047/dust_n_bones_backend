@@ -1,179 +1,165 @@
-import Package from '../models/Package.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
+import Package from '../models/Package.js';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
 class PackageController {
-static async create(req, res) {
+  // 🔒 Filtro de acesso por empresa/filial
+  static packageAccessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+  }
+
+  // 🧾 Criar embalagem
+  static async create(req, res) {
     try {
-        const { name, type, material, width, height, length, weight } = req.body;
+      const { name, type, material, width, height, length, weight } = req.body;
+      const { companyId, branchId } = req.context;
 
-        const { companyId, branchId } = req.context; // pega do middleware
+      const packageItem = await Package.create({
+        id: uuidv4(),
+        name,
+        type,
+        material,
+        width,
+        height,
+        length,
+        weight,
+        companyId,
+        branchId
+      });
 
-        const packageItem = await Package.create({
-            id: uuidv4(),
-            name,
-            type,
-            material,
-            width,
-            height,
-            length,
-            weight,
-            companyId,   
-            branchId    
-        });
-
-        return res.status(201).json({ success: true, data: packageItem });
+      return res.status(201).json({ success: true, data: packageItem });
     } catch (error) {
-        console.error('Erro ao criar embalagem:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Erro ao criar embalagem',
-            error: error.message
+      console.error('Erro ao criar embalagem:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao criar embalagem',
+        error: error.message
+      });
+    }
+  }
+
+  // 📦 Buscar todas as embalagens com paginação
+  static async getAll(req, res) {
+    try {
+      const { term, fields } = req.query;
+      const where = PackageController.packageAccessFilter(req);
+
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
+
+      const result = await buildQueryOptions(req, Package, {
+        where,
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar embalagens:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
+
+  // 🔍 Buscar por ID
+  static async getById(req, res) {
+    try {
+      const { id } = req.params;
+      const where = { id, ...PackageController.packageAccessFilter(req) };
+
+      const packageItem = await Package.findOne({ where });
+
+      if (!packageItem) {
+        return res.status(404).json({
+          success: false,
+          message: 'Embalagem não encontrada'
         });
+      }
+
+      res.json({ success: true, data: packageItem });
+    } catch (error) {
+      console.error('Erro ao buscar embalagem:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
-}
+  }
 
-    static async getAll(req, res) {
-        try {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const offset = (page - 1) * limit;
+  // ✏️ Atualizar embalagem
+  static async update(req, res) {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
 
-            const { search } = req.query;
-            const where = {};
+      const packageItem = await Package.findByPk(id);
 
-            if (search) {
-                where[Op.or] = [
-                    { name: { [Op.iLike]: `%${search}%` } },
-                    { type: { [Op.iLike]: `%${search}%` } },
-                    { material: { [Op.iLike]: `%${search}%` } }
-                ];
-            }
+      if (!packageItem) {
+        return res.status(404).json({
+          success: false,
+          message: 'Embalagem não encontrada'
+        });
+      }
 
-            // Filtrar pelo company/branch do usuário
-            const { companyId, branchId } = req.context;
-            if (companyId) where.companyId = companyId;
-            if (branchId) where.branchId = branchId;
+      await packageItem.update(updates);
 
-            const { count, rows } = await Package.findAndCountAll({
-                where,
-                limit,
-                offset,
-                order: [['createdAt', 'DESC']]
-            });
-
-            res.json({
-                success: true,
-                data: {
-                    packages: rows,
-                    pagination: {
-                        total: count,
-                        page,
-                        limit,
-                        totalPages: Math.ceil(count / limit)
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Erro ao buscar embalagens:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
+      res.json({
+        success: true,
+        message: 'Embalagem atualizada com sucesso',
+        data: packageItem
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar embalagem:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
+  }
 
-    static async getById(req, res) {
-        try {
-            const { id } = req.params;
+  // 🗑️ Deletar embalagem
+  static async delete(req, res) {
+    try {
+      const { id } = req.params;
 
-            const { companyId, branchId } = req.context;
+      const packageItem = await Package.findByPk(id);
 
-            const packageItem = await Package.findOne({
-                where: { id, companyId, ...(branchId ? { branchId } : {}) }
-            });
+      if (!packageItem) {
+        return res.status(404).json({
+          success: false,
+          message: 'Embalagem não encontrada'
+        });
+      }
 
-            if (!packageItem) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Embalagem não encontrada'
-                });
-            }
+      await packageItem.destroy();
 
-            res.json({
-                success: true,
-                data: packageItem
-            });
-        } catch (error) {
-            console.error('Erro ao buscar embalagem:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
+      res.json({
+        success: true,
+        message: 'Embalagem removida com sucesso'
+      });
+    } catch (error) {
+      console.error('Erro ao deletar embalagem:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
-
-    static async update(req, res) {
-        try {
-            const { id } = req.params;
-            const updates = req.body;
-
-            const packageItem = await Package.findByPk(id);
-
-            if (!packageItem) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Embalagem não encontrada'
-                });
-            }
-
-            await packageItem.update(updates);
-
-            res.json({
-                success: true,
-                message: 'Embalagem atualizada com sucesso',
-                data: packageItem
-            });
-        } catch (error) {
-            console.error('Erro ao atualizar embalagem:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
-    }
-
-    static async delete(req, res) {
-        try {
-            const { id } = req.params;
-
-            const packageItem = await Package.findByPk(id);
-
-            if (!packageItem) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Embalagem não encontrada'
-                });
-            }
-
-            await packageItem.destroy();
-
-            res.json({
-                success: true,
-                message: 'Embalagem removida com sucesso'
-            });
-        } catch (error) {
-            console.error('Erro ao deletar embalagem:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
-    }
+  }
 }
 
 export default PackageController;
