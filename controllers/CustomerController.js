@@ -1,13 +1,26 @@
-import { Customer, Company, Branch, User, sequelize, CustomerGroup } from '../models/index.js';
+import { Customer, Company, Branch, sequelize, CustomerGroup } from '../models/index.js';
 import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
 class CustomerController {
-  // Criar cliente
+  // 🔒 Filtro de acesso por empresa/filial
+  static customerAccessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    
+    if (branchId) {
+      return { branchId };
+    } else if (companyId) {
+      return { companyId };
+    }
+    return {};
+  }
+
+  // 🧾 Criar cliente
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      
-      const context = req.context; // vem do middleware resolveEntityContext
+      const context = req.context;
       const {
         name,
         document,
@@ -25,6 +38,7 @@ class CustomerController {
       if (document) {
         const existingCustomer = await Customer.findOne({ where: { document } });
         if (existingCustomer) {
+          await transaction.rollback();
           return res.status(400).json({
             success: false,
             message: 'Documento já está em uso por outro cliente',
@@ -35,19 +49,25 @@ class CustomerController {
       // Impedir CNPJ duplicado com empresa/filial
       if (document?.length > 11) {
         const existingCompanyCnpj = await Company.findOne({ where: { cnpj: document } });
-        if (existingCompanyCnpj)
+        if (existingCompanyCnpj) {
+          await transaction.rollback();
           return res.status(400).json({ success: false, message: 'Documento já usado por empresa.' });
+        }
 
         const existingBranchCnpj = await Branch.findOne({ where: { cnpj: document } });
-        if (existingBranchCnpj)
+        if (existingBranchCnpj) {
+          await transaction.rollback();
           return res.status(400).json({ success: false, message: 'Documento já usado por filial.' });
+        }
       }
 
       // Verifica grupo de cliente
       if (customerGroup) {
         const existingGroup = await CustomerGroup.findByPk(customerGroup);
-        if (!existingGroup)
+        if (!existingGroup) {
+          await transaction.rollback();
           return res.status(404).json({ success: false, message: 'Grupo de cliente não encontrado.' });
+        }
       }
 
       // Cria cliente com contexto do usuário
@@ -88,49 +108,47 @@ class CustomerController {
     }
   }
 
-  // Buscar todos (respeitando empresa/filial)
+  // 📦 Buscar todos os clientes (COM PAGINAÇÃO)
   static async getAll(req, res) {
     try {
-      const { companyId, branchId } = req.context;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
-      const { active } = req.query;
+      const { active, state, country, city, email, term, fields } = req.query;
+      const where = { ...CustomerController.customerAccessFilter(req) };
 
-      const where = {};
+      // Filtros opcionais
       if (active !== undefined) where.active = active === 'true';
+      if (state) where.state = { [Op.iLike]: `%${state}%` };
+      if (country) where.country = { [Op.iLike]: `%${country}%` };
+      if (city) where.city = { [Op.iLike]: `%${city}%` };
+      if (email) where.email = { [Op.iLike]: `%${email}%` };
 
-      // Filtro exclusivo (empresa OU filial)
-      if (branchId) {
-        where.branchId = branchId;
-      } else if (companyId) {
-        where.companyId = companyId;
-      } else {
-        return res.status(403).json({
-          success: false,
-          message: 'Usuário sem contexto de empresa ou filial válido.',
-        });
-      }
+       if (term && fields) {
+            const searchFields = fields.split(',')
+            where[Op.or] = searchFields.map((field) => ({
+              [field]: { [Op.iLike]: `%${term}%` }
+            }))
+          }
 
-      const { count, rows } = await Customer.findAndCountAll({
+      const result = await buildQueryOptions(req, Customer, {
         where,
-        limit,
-        offset,
-        order: [['createdAt', 'DESC']],
+        include: [
+          {
+            model: CustomerGroup,
+            as: 'customerGroups',
+            attributes: ['id', 'mainCustomer'],
+            required: false,
+            include: [
+              {
+                model: Customer,
+                as: 'mainCustomerInGroup',
+                attributes: ['name']
+              }
+            ]
+          }
+        ],
+        order: [['createdAt', 'DESC']]
       });
 
-      return res.json({
-        success: true,
-        data: {
-          customers: rows,
-          pagination: {
-            total: count,
-            page,
-            limit,
-            totalPages: Math.ceil(count / limit),
-          },
-        },
-      });
+      res.json({ success: true, ...result });
     } catch (error) {
       console.error('Erro ao buscar clientes:', error);
       return res.status(500).json({
@@ -141,8 +159,8 @@ class CustomerController {
     }
   }
 
-  // Buscar por ID (também respeita o contexto)
-  static async getById(req, res) {
+  // 🔍 Buscar por ID
+ static async getById(req, res) {
     try {
       const { companyId, branchId } = req.context;
       const { id } = req.params;
@@ -173,46 +191,120 @@ class CustomerController {
     }
   }
 
-  // Update (mantido)
+  // 🔍 Buscar com filtro de busca textual avançada
+  static async search(req, res) {
+    try {
+      const { term, fields } = req.query;
+      const where = { ...CustomerController.customerAccessFilter(req) };
+
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
+
+      const result = await buildQueryOptions(req, Customer, {
+        where,
+        include: [
+          {
+            model: CustomerGroup,
+            as: 'customerGroups',
+            attributes: ['id', 'mainCustomer'],
+            required: false,
+            include: [
+              {
+                model: Customer,
+                as: 'mainCustomerInGroup',
+                attributes: ['name']
+              }
+            ]
+          }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
+
+  // ✏️ Atualizar cliente
   static async update(req, res) {
     try {
       const { id } = req.params;
       const updates = req.body;
+      const where = { id, ...CustomerController.customerAccessFilter(req) };
 
-      const customer = await Customer.findByPk(id);
-      if (!customer)
-        return res.status(404).json({ success: false, message: 'Cliente não encontrado' });
+      const customer = await Customer.findOne({ where });
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Cliente não encontrado ou sem permissão'
+        });
+      }
 
       if (updates.document && updates.document !== customer.document) {
         const existing = await Customer.findOne({ where: { document: updates.document } });
-        if (existing)
-          return res.status(400).json({ success: false, message: 'Documento já usado por outro cliente' });
+        if (existing) {
+          return res.status(400).json({
+            success: false,
+            message: 'Documento já usado por outro cliente'
+          });
+        }
       }
 
-      await Customer.update(updates, { where: { id } });
+      await customer.update(updates);
 
-      return res.json({ success: true, message: 'Cliente atualizado com sucesso' });
+      return res.json({
+        success: true,
+        message: 'Cliente atualizado com sucesso',
+        data: customer
+      });
     } catch (error) {
       console.error('Erro ao atualizar cliente:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      return res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
   }
 
-  // Delete (mantido)
+  // 🗑️ Desativar cliente
   static async delete(req, res) {
     try {
       const { id } = req.params;
-      const customer = await Customer.findByPk(id);
+      const where = { id, ...CustomerController.customerAccessFilter(req) };
 
-      if (!customer)
-        return res.status(404).json({ success: false, message: 'Cliente não encontrado' });
+      const customer = await Customer.findOne({ where });
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Cliente não encontrado ou sem permissão'
+        });
+      }
 
       await customer.update({ active: false });
 
-      return res.json({ success: true, message: 'Cliente desativado com sucesso' });
+      return res.json({
+        success: true,
+        message: 'Cliente desativado com sucesso'
+      });
     } catch (error) {
       console.error('Erro ao desativar cliente:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      return res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
   }
 }

@@ -64,10 +64,10 @@ router.use('/companies', companyRoutes)
 router.use('/company-settings', companySettingsRoutes)
 router.use('/company-customizations', companyCustomizationRoutes)
 router.use( '/tenants', tenantRoutes)
+router.use( '/branches', branchRoutes)
 
 // Sub-routers que precisam de autenticação + resolveEntityContext
 const protectedRouters = {
-  '/branches': branchRoutes,
   '/userBranches': userBranchRoutes,
   '/customers': customerRoutes,
   '/customers_group': customerGroupRoutes,

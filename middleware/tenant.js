@@ -1,6 +1,7 @@
-import { Company } from '../models/index.js';
-import { RedisCache } from '../config/redis.js'; // Seu wrapper do Redis
+import { Company, Branch } from '../models/index.js';
+import { RedisCache } from '../config/redis.js';
 
+// Middleware obrigatório
 export const extractTenant = async (req, res, next) => {
     try {
         const tenantId = req.headers['x-tenant-id'];
@@ -16,17 +17,26 @@ export const extractTenant = async (req, res, next) => {
         let tenant = await RedisCache.getTenantData(tenantId);
 
         if (!tenant) {
-            // Se não tiver no cache, buscar no banco
-            tenant = await Company.findOne({
+            // Buscar primeiro como branch
+            tenant = await Branch.findOne({
                 where: { id: tenantId, active: true },
-                raw: true, // Se quiser pegar plain object e economizar peso
+                include: [{ model: Company, as: 'company', attributes: ['id', 'name'] }],
+                raw: true,
+                nest: true // Para manter a associação como objeto aninhado
             });
+
+            if (!tenant) {
+                // Buscar como company
+                tenant = await Company.findOne({
+                    where: { id: tenantId, active: true },
+                    raw: true
+                });
+            }
 
             console.log('🔍 Tenant buscado no banco:', tenant);
 
             if (tenant) {
-                // Salvar no cache com um TTL (ex: 30 minutos)
-                await RedisCache.setTenantData(tenantId, tenant, 1800);
+                await RedisCache.setTenantData(tenantId, tenant, 1800); // TTL 30min
             }
         } else {
             console.log('🟢 Tenant recuperado do cache Redis');
@@ -51,17 +61,25 @@ export const extractTenant = async (req, res, next) => {
     }
 };
 
+// Middleware opcional
 export const optionalTenant = async (req, res, next) => {
     try {
         const tenantId = req.headers['x-tenant-id'];
 
         if (tenantId) {
-            const tenant = await Company.findOne({
-                where: {
-                    id: tenantId,
-                    active: true
-                }
+            let tenant = await Branch.findOne({
+                where: { id: tenantId, active: true },
+                include: [{ model: Company, as: 'company', attributes: ['id', 'name'] }],
+                raw: true,
+                nest: true
             });
+
+            if (!tenant) {
+                tenant = await Company.findOne({
+                    where: { id: tenantId, active: true },
+                    raw: true
+                });
+            }
 
             if (tenant) {
                 req.tenant = tenant;
@@ -71,15 +89,17 @@ export const optionalTenant = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('Erro no middleware opcional de tenant:', error);
-        next(); // Continua mesmo com erro no tenant opcional
+        next(); // Continua mesmo com erro
     }
 };
 
+// Validar acesso ao tenant (branch ou company)
 export const validateTenantAccess = (req, res, next) => {
-    // Verificar se o usuário tem acesso ao tenant
     if (req.user && req.tenant) {
-        // Se o usuário não pertencer ao tenant
-        if (req.user.companyId !== req.tenant.id) {
+        const tenantId = req.tenant.id;
+
+        // Se o usuário não for admin e não pertencer à company ou branch
+        if (req.user.accountType !== 'admin' && req.user.companyId !== tenantId && req.user.branchId !== tenantId) {
             return res.status(403).json({
                 success: false,
                 message: 'Acesso negado ao tenant especificado'

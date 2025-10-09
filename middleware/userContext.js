@@ -1,8 +1,10 @@
 import { Branch, UserBranch } from '../models/index.js';
+import { Op } from 'sequelize';
 
 /**
  * Middleware que identifica e injeta a company e branch do usuário logado
  * - Deve ser executado após o authenticateToken
+ * - Suporta usuários que têm companyId e branchId ao mesmo tempo
  */
 export const resolveEntityContext = async (req, res, next) => {
   try {
@@ -41,7 +43,15 @@ export const resolveEntityContext = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Não foi possível determinar a empresa do usuário.' });
     }
 
-    req.context = { companyId, branchId };
+    /**
+     * Ajuste para suportar filtros de estoque:
+     * - branchId pode existir
+     * - Se branchId existir, vamos permitir que o filtro pegue tanto os itens da filial quanto os da empresa (branchId null)
+     */
+    req.context = { 
+      companyId, 
+      branchId // branchId vai existir, mas os filtros devem usar [branchId, null]
+    };
     req.companyId = companyId;
     req.branchId = branchId;
 

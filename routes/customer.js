@@ -21,6 +21,8 @@ router.get(
   CustomerController.getAll
 );
 
+router.get('/search', CustomerController.search);
+
 router.get(
   '/:id',
   authenticateToken,

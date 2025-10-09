@@ -1,71 +1,69 @@
-import { Company, CompanySettings, CompanyCustomize, Account } from '../models/index.js';
+import { Company, Branch, CompanySettings, CompanyCustomize, Account } from '../models/index.js';
 
 class TenantController {
   // Buscar dados do tenant por subdomínio (rota pública)
   static async getBySubdomain(req, res) {
-    try {
-      console.log('Buscando empresa por subdomínio:');
-      const { subdomain } = req.params;
-      const company = await Company.findOne({
-        where: {
-          subdomain: subdomain.toLowerCase(),
-          active: true
-        },
+  try {
+    const { subdomain } = req.params;
+
+    // Primeiro tenta buscar como Branch
+    let tenant = await Branch.findOne({
+      where: { subdomain: subdomain.toLowerCase(), active: true },
+      include: [
+        {
+          model: Company,
+          as: 'company',
+          include: [
+            { model: CompanySettings, as: 'settings' },
+            { model: CompanyCustomize, as: 'customization' }
+          ]
+        }
+      ]
+    });
+
+    // Se não achar branch, tenta buscar Company direto
+    if (!tenant) {
+      tenant = await Company.findOne({
+        where: { subdomain: subdomain.toLowerCase(), active: true },
         include: [
-          {
-            model: CompanySettings,
-            as: 'settings'
-          },
-          {
-            model: CompanyCustomize,
-            as: 'customization'
-          }
+          { model: CompanySettings, as: 'settings' },
+          { model: CompanyCustomize, as: 'customization' }
         ]
       });
-
-      if (!company) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tenant não encontrado'
-        });
-      }
-
-      // Estruturar resposta conforme solicitado
-      const response = {
-        id: company.id,
-        name: company.name,
-        logo: company.logo || company.customization?.logoUrl,
-        theme: {
-          primaryColor: company.customization?.primaryColor || '#007bff',
-          secondaryColor: company.customization?.secondaryColor || '#6c757d',
-          backgroundColor: company.customization?.backgroundColor || '#ffffff',
-          logoUrl: company.customization?.darkLogoUrl || company.customization?.logoUrl
-        },
-        settings: {
-          timezone: company.settings?.timezone || 'America/Sao_Paulo',
-          language: company.settings?.language || 'pt-BR',
-          currency: company.settings?.currency || 'BRL',
-          dateFormat: company.settings?.dateFormat || 'DD/MM/YYYY'
-        },
-        active: company.active
-      };
-      console.log('Estrutura tenant:', {
-        success: true,
-        data: response
-      });
-      res.json({
-        success: true,
-        data: response
-      });
-    } catch (error) {
-      console.error('Erro ao buscar tenant por subdomínio:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      });
     }
+
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Tenant não encontrado' });
+    }
+
+    // Estruturar resposta
+    const company = tenant.company || tenant; // Se for branch, company vem do include
+    const response = {
+      id: tenant.id,
+      name: tenant.name || company.name,
+      logo: tenant.logo || company.customization?.logoUrl,
+      theme: {
+        primaryColor: company.customization?.primaryColor || '#007bff',
+        secondaryColor: company.customization?.secondaryColor || '#6c757d',
+        backgroundColor: company.customization?.backgroundColor || '#ffffff',
+        logoUrl: company.customization?.darkLogoUrl || company.customization?.logoUrl
+      },
+      settings: {
+        timezone: company.settings?.timezone || 'America/Sao_Paulo',
+        language: company.settings?.language || 'pt-BR',
+        currency: company.settings?.currency || 'BRL',
+        dateFormat: company.settings?.dateFormat || 'DD/MM/YYYY'
+      },
+      active: tenant.active
+    };
+
+    res.json({ success: true, data: response });
+
+  } catch (error) {
+    console.error('Erro ao buscar tenant por subdomínio:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
 
   // Obter informações do tenant atual
   static async getCurrentTenant(req, res) {
@@ -77,28 +75,23 @@ class TenantController {
         });
       }
 
-      const tenant = await Company.findByPk(req.tenant.id, {
+      const tenant = await Branch.findByPk(req.tenant.id, {
         include: [
-          {
-            model: CompanySettings,
-            as: 'settings'
-          },
-          {
-            model: CompanyCustomize,
-            as: 'customization'
-          },
-          {
-            model: Account,
-            as: 'owner',
-            attributes: ['id', 'email', 'username']
-          }
+          { model: CompanySettings, as: 'settings' },
+          { model: CompanyCustomize, as: 'customization' },
+          { model: Company, as: 'company' },
+          { model: Account, as: 'owner', attributes: ['id', 'email', 'username'] }
         ]
       });
 
-      res.json({
-        success: true,
-        data: tenant
-      });
+      if (!tenant) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tenant não encontrado'
+        });
+      }
+
+      res.json({ success: true, data: tenant });
     } catch (error) {
       console.error('Erro ao buscar tenant atual:', error);
       res.status(500).json({
@@ -119,14 +112,13 @@ class TenantController {
         });
       }
 
-      // Contar usuários do tenant
       const userCount = await Account.count({
-        where: { companyId: req.tenant.id }
+        where: { branchId: req.tenant.id } // agora considera branch
       });
 
       const stats = {
         tenantId: req.tenant.id,
-        tenantName: req.tenant.name,
+        tenantName: req.tenant.name || req.tenant.company?.name,
         userCount,
         maxUsers: req.tenant.maxUsers,
         subscriptionPlan: req.tenant.subscriptionPlan,
@@ -134,10 +126,7 @@ class TenantController {
         createdAt: req.tenant.createdAt
       };
 
-      res.json({
-        success: true,
-        data: stats
-      });
+      res.json({ success: true, data: stats });
     } catch (error) {
       console.error('Erro ao buscar estatísticas do tenant:', error);
       res.status(500).json({
@@ -153,27 +142,19 @@ class TenantController {
     try {
       const { tenantId } = req.params;
 
-      // Verificar se o tenant existe
-      const tenant = await Company.findOne({
-        where: {
-          id: tenantId,
-          active: true
-        }
-      });
+      // Verificar se o tenant existe (branch ou company)
+      let tenant = await Branch.findOne({ where: { id: tenantId, active: true } });
 
       if (!tenant) {
-        return res.status(404).json({
-          success: false,
-          message: 'Tenant não encontrado'
-        });
+        tenant = await Company.findOne({ where: { id: tenantId, active: true } });
       }
 
-      // Verificar se o usuário tem acesso
-      if (req.user.accountType !== 'admin' && req.user.companyId !== tenantId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Acesso negado ao tenant'
-        });
+      if (!tenant) {
+        return res.status(404).json({ success: false, message: 'Tenant não encontrado' });
+      }
+
+      if (req.user.accountType !== 'admin' && req.user.branchId !== tenantId && req.user.companyId !== tenantId) {
+        return res.status(403).json({ success: false, message: 'Acesso negado ao tenant' });
       }
 
       res.json({
@@ -181,7 +162,7 @@ class TenantController {
         message: 'Acesso autorizado',
         data: {
           tenantId: tenant.id,
-          tenantName: tenant.name,
+          tenantName: tenant.name || tenant.company?.name,
           userRole: req.user.role,
           hasAccess: true
         }

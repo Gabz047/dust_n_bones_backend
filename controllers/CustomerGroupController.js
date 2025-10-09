@@ -1,7 +1,16 @@
+// controllers/CustomerGroupController.js
 import Customer from '../models/Customer.js';
 import CustomerGroup from '../models/CustomerGroup.js';
 import { Op } from 'sequelize';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 
+function groupAccessFilter(req) {
+  const { companyId, branchId } = req.context || {};
+  const where = {};
+  if (branchId) where.branchId = branchId;
+  else if (companyId) where.companyId = companyId;
+  return where;
+}
 export default {
   // Criar grupo de clientes
   async create(req, res) {
@@ -9,7 +18,6 @@ export default {
       const { mainCustomer } = req.body;
       const { companyId, branchId } = req.context;
 
-      // Verifica se o cliente existe
       const customer = await Customer.findByPk(mainCustomer);
       if (!customer) {
         return res.status(404).json({
@@ -18,7 +26,6 @@ export default {
         });
       }
 
-      // Garante que o cliente pertence à mesma empresa/filial
       if (
         (branchId && customer.branchId !== branchId) ||
         (!branchId && companyId && customer.companyId !== companyId)
@@ -29,7 +36,6 @@ export default {
         });
       }
 
-      // Verifica se o cliente já é principal ou pertence a outro grupo
       const isMainCustomerInAnotherGroup = await CustomerGroup.findOne({
         where: { mainCustomer },
       });
@@ -45,14 +51,12 @@ export default {
         });
       }
 
-      // Cria o grupo com o contexto da empresa/filial
       const group = await CustomerGroup.create({
         mainCustomer,
         companyId: companyId || null,
         branchId: branchId || null,
       });
 
-      // Atualiza o cliente principal com o ID do grupo
       await Customer.update({ customerGroup: group.id }, { where: { id: mainCustomer } });
 
       return res.status(201).json({
@@ -66,59 +70,71 @@ export default {
     }
   },
 
-  // Buscar todos os grupos com clientes (respeita empresa/filial)
+  // 📦 Buscar todos os grupos com paginação e filtros
   async getAll(req, res) {
     try {
-      const { companyId, branchId } = req.context;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
-      const { active } = req.query;
+      const where = groupAccessFilter(req)
 
-      const where = {};
-      if (active !== undefined) where.active = active === 'true';
-      if (branchId) where.branchId = branchId;
-      else if (companyId) where.companyId = companyId;
-      else
-        return res.status(403).json({
-          success: false,
-          message: 'Usuário sem contexto de empresa ou filial válido.',
-        });
+      const { term, fields } = req.query
 
-      const { count, rows } = await CustomerGroup.findAndCountAll({
+      // ⚡️ Se o campo de busca envolve associação (ex: mainCustomerInGroup.name)
+      if (fields?.includes('mainCustomerInGroup.') && term) {
+        const result = await CustomerGroup.findAndCountAll({
+          where,
+          include: [
+            {
+              model: Customer,
+              as: 'mainCustomerInGroup',
+              attributes: ['id', 'name'],
+              required: true,
+              where: {
+                name: { [Op.iLike]: `%${term}%` },
+              },
+            },
+            {
+              model: Customer,
+              as: 'customersInGroup',
+              attributes: ['id', 'name'],
+            },
+          ],
+          order: [['createdAt', 'DESC']],
+          limit: req.query.limit ? parseInt(req.query.limit) : 10,
+          offset: req.query.page
+            ? (parseInt(req.query.page) - 1) * (parseInt(req.query.limit) || 10)
+            : 0,
+        })
+
+        return res.status(200).json({
+          data: result.rows,
+          count: result.count,
+          pagination: {
+            total: result.count,
+            page: parseInt(req.query.page) || 1,
+            limit: parseInt(req.query.limit) || 10,
+            totalPages: Math.ceil(result.count / (parseInt(req.query.limit) || 10)),
+          },
+        })
+      }
+
+      // 👇 Se não for filtro por associação, usa o util padrão
+      const result = await buildQueryOptions(req, CustomerGroup, {
         where,
-        limit,
-        offset,
         include: [
-          { model: Customer, as: 'mainCustomerInGroup' },
-          { model: Customer, as: 'customersInGroup' },
+          { model: Customer, as: 'mainCustomerInGroup', attributes: ['id', 'name'] },
+          { model: Customer, as: 'customersInGroup', attributes: ['id', 'name'] },
         ],
         order: [['createdAt', 'DESC']],
-      });
+      })
 
-      return res.json({
-        success: true,
-        data: {
-          customerGroups: rows,
-          pagination: {
-            total: count,
-            page,
-            limit,
-            totalPages: Math.ceil(count / limit),
-          },
-        },
-      });
-    } catch (err) {
-      console.error('Erro ao buscar grupos de clientes:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: err.message,
-      });
+      return res.status(200).json(result)
+    } catch (error) {
+      console.error('Erro ao buscar grupos de clientes:', error)
+      return res.status(500).json({ error: error.message })
     }
   },
 
-  // Buscar grupo por ID (respeita empresa/filial)
+
+  // 🔍 Buscar grupo por ID
   async getById(req, res) {
     try {
       const { id } = req.params;
@@ -161,7 +177,7 @@ export default {
     }
   },
 
-  // Buscar grupo do cliente principal (respeita empresa/filial)
+  // Buscar grupo do cliente principal
   async getByMainCustomerGroup(req, res) {
     try {
       const { id } = req.params;
@@ -171,7 +187,6 @@ export default {
       if (!customer)
         return res.status(404).json({ success: false, message: 'Cliente não encontrado.' });
 
-      // Verifica se cliente pertence à mesma empresa/filial
       if (
         (branchId && customer.branchId !== branchId) ||
         (!branchId && companyId && customer.companyId !== companyId)
@@ -221,7 +236,7 @@ export default {
     }
   },
 
-  // Atualizar os clientes comuns do grupo (respeita empresa/filial)
+  // Atualizar os clientes comuns do grupo
   async updateGroupCustomers(req, res) {
     try {
       const { id } = req.params;
@@ -286,7 +301,7 @@ export default {
     }
   },
 
-  // Atualizar cliente principal do grupo (respeita empresa/filial)
+  // Atualizar cliente principal do grupo
   async updateGroupMainCustomer(req, res) {
     try {
       const { id } = req.params;
@@ -355,7 +370,7 @@ export default {
     }
   },
 
-  // Deletar grupo (respeita empresa/filial)
+  // Deletar grupo
   async delete(req, res) {
     try {
       const { id } = req.params;
