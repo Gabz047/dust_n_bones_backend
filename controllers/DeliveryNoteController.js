@@ -34,11 +34,11 @@ class DeliveryNoteController {
 
       // ✅ Criar movimentação
       let movementData = {
-     
+
         method: 'criação',
         entity: 'romaneio',
         entityId: deliveryNote.id,
-        status: 'finalizado'
+        status: 'aberto'
       };
 
       // Verifica User ou Account
@@ -67,6 +67,7 @@ class DeliveryNoteController {
           entity: 'romaneio',
           entityId: deliveryNote.id,
           quantity: 1,
+          status: 'aberto',
           movementLogEntityId: movementLog.id,
           date: new Date()
         }, { transaction });
@@ -135,7 +136,7 @@ class DeliveryNoteController {
         method: 'edição',
         entity: 'romaneio',
         entityId: deliveryNote.id,
-        status: 'finalizado'
+        status: 'aberto'
       };
 
       // Verifica User ou Account
@@ -207,86 +208,86 @@ class DeliveryNoteController {
     }
   }
 
-static async getAll(req, res) {
-  try {
-    const { projectId, customerId, term, fields } = req.query
-    const where = {}
+  static async getAll(req, res) {
+    try {
+      const { projectId, customerId, term, fields } = req.query
+      const where = {}
 
-    if (projectId) where.projectId = projectId
-    if (customerId) where.customerId = customerId
+      if (projectId) where.projectId = projectId
+      if (customerId) where.customerId = customerId
 
-    // 🔍 Filtro de pesquisa textual
-    if (term && fields) {
-      const searchFields = fields.split(',')
-      where[Op.or] = searchFields.map((field) => ({
-        [field]: { [Op.iLike]: `%${term}%` }
-      }))
+      // 🔍 Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',')
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }))
+      }
+
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where,
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            where: buildContextFilter(req.context)
+          },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ],
+        order: [['createdAt', 'DESC']],
+        distinct: true
+      })
+
+      res.json({ success: true, ...result })
+    } catch (error) {
+      console.error('Erro ao buscar notas de entrega:', error)
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
-
-    const result = await buildQueryOptions(req, DeliveryNote, {
-      where,
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name', 'companyId', 'branchId'],
-          where: buildContextFilter(req.context)
-        },
-        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-      ],
-      order: [['createdAt', 'DESC']],
-      distinct: true
-    })
-
-    res.json({ success: true, ...result })
-  } catch (error) {
-    console.error('Erro ao buscar notas de entrega:', error)
-    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
   }
-}
 
-static async search(req, res) {
-  try {
-    const { term, fields } = req.query
-    const where = { ...buildContextFilter(req.context) }
+  static async search(req, res) {
+    try {
+      const { term, fields } = req.query
+      const where = { ...buildContextFilter(req.context) }
 
-    // Filtro de pesquisa textual
-    if (term && fields) {
-      const searchFields = fields.split(',')
-      where[Op.or] = searchFields.map((field) => ({
-        [field]: { [Op.iLike]: `%${term}%` }
-      }))
+      // Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',')
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }))
+      }
+
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where,
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name'],
+            where: term && fields?.includes('project.name')
+              ? { name: { [Op.iLike]: `%${term}%` } }
+              : undefined
+          },
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id', 'name'],
+            where: term && fields?.includes('customer.name')
+              ? { name: { [Op.iLike]: `%${term}%` } }
+              : undefined
+          }
+        ],
+        order: [['createdAt', 'DESC']]
+      })
+
+      res.json({ success: true, ...result })
+    } catch (error) {
+      console.error(error)
+      return res.status(500).json({ success: false, message: error.message })
     }
-
-    const result = await buildQueryOptions(req, DeliveryNote, {
-      where,
-      include: [
-        { 
-          model: Project, 
-          as: 'project', 
-          attributes: ['id', 'name'],
-          where: term && fields?.includes('project.name') 
-            ? { name: { [Op.iLike]: `%${term}%` } }
-            : undefined
-        },
-        { 
-          model: Customer, 
-          as: 'customer', 
-          attributes: ['id', 'name'],
-          where: term && fields?.includes('customer.name')
-            ? { name: { [Op.iLike]: `%${term}%` } }
-            : undefined
-        }
-      ],
-      order: [['createdAt', 'DESC']]
-    })
-
-    res.json({ success: true, ...result })
-  } catch (error) {
-    console.error(error)
-    return res.status(500).json({ success: false, message: error.message })
   }
-}
 
   static async getById(req, res) {
     try {
@@ -342,23 +343,23 @@ static async search(req, res) {
     }
   }
 
- static async getByInvoice(req, res) {
-  try {
-    const { invoiceId } = req.params
-    const where = { invoiceId, ...buildContextFilter(req.context) }
+  static async getByInvoice(req, res) {
+    try {
+      const { invoiceId } = req.params
+      const where = { invoiceId, ...buildContextFilter(req.context) }
 
-    const result = await buildQueryOptions(req, DeliveryNote, {
-      where,
-      include: [
-        { model: Customer, as: 'customer', attributes: ['name'] }
-      ]
-    })
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where,
+        include: [
+          { model: Customer, as: 'customer', attributes: ['name'] }
+        ]
+      })
 
-    res.json({ success: true, ...result })
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message })
+      res.json({ success: true, ...result })
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message })
+    }
   }
-}
 
   static async getByCompanyOrBranch(req, res) {
     try {
@@ -373,41 +374,42 @@ static async search(req, res) {
   }
 
   // Modificar getByCustomer
-static async getByCustomer(req, res) {
-  try {
-    const { customerId } = req.params
-    const where = { customerId, ...buildContextFilter(req.context) }
+  static async getByCustomer(req, res) {
+    try {
+      const { customerId } = req.params
+      const where = { customerId, ...buildContextFilter(req.context) }
 
-    const result = await buildQueryOptions(req, DeliveryNote, {
-      where
-    })
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where
+      })
 
-    res.json({ success: true, ...result })
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message })
+      res.json({ success: true, ...result })
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message })
+    }
   }
-}
 
-static async getByOrder(req, res) {
-  try {
-    const { orderId } = req.params
-    const where = { orderId, ...buildContextFilter(req.context) }
+  static async getByOrder(req, res) {
+    try {
+      const { orderId } = req.params
+      const where = { orderId, ...buildContextFilter(req.context) }
 
-    const result = await buildQueryOptions(req, DeliveryNote, {
-      where
-    })
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where
+      })
 
-    res.json({ success: true, ...result })
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message })
+      res.json({ success: true, ...result })
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message })
+    }
   }
-}
 
   static async getByExpedition(req, res) {
   try {
     const { expeditionId } = req.params
     const where = { expeditionId, ...buildContextFilter(req.context) }
 
+    // 1️⃣ Busca os romaneios normalmente
     const result = await buildQueryOptions(req, DeliveryNote, {
       where,
       include: [
@@ -422,7 +424,9 @@ static async getByOrder(req, res) {
                 {
                   model: OrderItem,
                   as: 'orderItem',
-                  include: [{ model: FeatureOption, as: 'featureOption', attributes: ['name'] }]
+                  include: [
+                    { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
+                  ]
                 },
                 { model: Item, as: 'item', attributes: ['name', 'price'] },
                 {
@@ -434,15 +438,49 @@ static async getByOrder(req, res) {
             }
           ]
         },
-        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-      ]
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+      ],
     })
 
-    res.json({ success: true, ...result })
+    const deliveryNoteIds = result.data.map(dn => dn.id)
+
+    // 3️⃣ Busca o último log de cada romaneio
+    const logs = await MovementLogEntity.findAll({
+      where: {
+        entity: 'romaneio',
+        entityId: { [Op.in]: deliveryNoteIds },
+      },
+      attributes: ['entityId', 'status'],
+      order: [['createdAt', 'DESC']],
+    })
+
+    // 4️⃣ Cria um map: entityId -> último log
+    const lastLogs = {}
+    for (const log of logs) {
+      if (!lastLogs[log.entityId]) {
+        lastLogs[log.entityId] = log
+      }
+    }
+
+    // 5️⃣ Anexa o último log a cada DeliveryNote
+    const enrichedRows = result.data.map(dn => ({
+      ...dn.toJSON(),
+      lastMovementLog: lastLogs[dn.id] || null,
+    }))
+
+    // 6️⃣ Substitui apenas o data e retorna o mesmo formato
+    res.json({
+      success: true,
+      ...result,
+      data: enrichedRows,
+    })
+
   } catch (error) {
+    console.error(error)
     return res.status(500).json({ success: false, message: error.message })
   }
 }
+
   static async generatePDF(req, res) {
     try {
       const { id } = req.params;
@@ -501,7 +539,7 @@ static async getByOrder(req, res) {
               {
                 model: Box,
                 as: 'box',
-                attributes: ['id', 'totalQuantity', 'referralId'],
+                attributes: ['id', 'totalQuantity', 'referralId', 'orderReferralId'],
                 include: [
                   {
                     model: Package,
@@ -623,6 +661,7 @@ static async getByOrder(req, res) {
             ? {
               totalQuantity: i.box.totalQuantity,
               referralId: i.box.referralId,
+              orderReferralId: i.box.orderReferralId,
               items: (i.box.items || []).map(bi => ({
                 quantity: bi.quantity,
                 item: bi.item?.name,

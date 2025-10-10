@@ -74,6 +74,14 @@ MovementLogEntity.init({
   modelName: 'MovementLogEntity',
   tableName: 'movement_log_entities',
   timestamps: true,
+
+  // ✅ Índices
+  indexes: [
+    {
+      name: 'idx_movement_entity_search',
+      fields: ['entity', 'entity_id', 'created_at'],
+    },
+  ],
 });
 
 // Relações

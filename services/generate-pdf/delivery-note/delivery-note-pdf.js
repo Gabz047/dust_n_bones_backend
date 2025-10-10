@@ -147,7 +147,7 @@ export async function generateDeliveryNotePDF(deliveryNote, res) {
 
   return `
     <div class="item-category">
-      <h4>${safe(item.box?.name || 'Caixa ' + item.box.referralId)}</h4>
+      <h4>${safe(item.box?.name || 'Caixa ' + item.box.orderReferralId)}</h4>
       <table>
         <thead>
           <tr>

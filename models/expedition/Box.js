@@ -22,6 +22,11 @@ Box.init({
     allowNull: true,
     unique: true,
   },
+  orderReferralId:{
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    unique: false,
+  },
   deliveryNoteId: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -89,11 +94,5 @@ Box.init({
   ]
 });
 
-
-// Hook para gerar referralId incremental
-Box.beforeCreate(async (box, options) => {
-  const last = await Box.findOne({ order: [['referralId', 'DESC']], transaction: options.transaction });
-  box.referralId = last ? last.referralId + 1 : 1;
-});
 
 export default Box;
