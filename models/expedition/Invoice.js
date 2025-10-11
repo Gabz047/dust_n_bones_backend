@@ -45,7 +45,7 @@ Invoice.init({
   },
   totalPrice: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
+    allowNull: true,
     defaultValue: 0.0,
   },
 }, {
