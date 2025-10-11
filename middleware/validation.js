@@ -1829,7 +1829,14 @@ export const projectSchema = {
     totalQuantity: Joi.number().min(0).optional().messages({
       'number.base': 'A quantidade total deve ser um número.',
       'number.min': 'A quantidade total não pode ser negativa.'
-    })
+    }),
+    userId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .required()
+      .messages({
+        'string.guid': 'ID do usuário deve ser um UUID válido.',
+        'any.required': 'ID do usuário é obrigatório.',
+      }),
   }),
 
   update: Joi.object({
@@ -1853,7 +1860,14 @@ export const projectSchema = {
     totalQuantity: Joi.number().min(0).optional().messages({
       'number.base': 'A quantidade total deve ser um número.',
       'number.min': 'A quantidade total não pode ser negativa.'
-    })
+    }),
+    userId: Joi.string()
+      .guid({ version: ['uuidv4'] })
+      .required() // sempre obrigatório pra log
+      .messages({
+        'string.guid': 'ID do usuário deve ser um UUID válido.',
+        'any.required': 'ID do usuário é obrigatório.',
+      }),
   })
 };
 

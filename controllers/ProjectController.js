@@ -1,14 +1,14 @@
 // controllers/ProjectController.js
 import { v4 as uuidv4 } from 'uuid'
 import { Op } from 'sequelize'
-import { Project, Company, Branch, Customer, ProductionOrder, sequelize } from '../models/index.js'
+import { Project, Company, Branch, Customer, ProductionOrder, User, Account, MovementLogEntity, sequelize } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 
 class ProjectController {
   static async create(req, res) {
     const transaction = await sequelize.transaction()
     try {
-      const { companyId, branchId, customerId, totalQuantity, name, deliveryDate } = req.body
+      const { companyId, branchId, customerId, totalQuantity, name, deliveryDate, userId } = req.body
       let branch = null
 
       // Validar empresa
@@ -48,6 +48,31 @@ class ProjectController {
         totalQuantity: totalQuantity || 0
       }, { transaction })
 
+      // ✅ Criar movimentação
+      let movementData = {
+        id: uuidv4(),
+        method: 'criação',
+        entity: 'projeto',
+        entityId: project.id,
+        status: 'aberto'
+      }
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId)
+      if (user) {
+        movementData.userId = userId
+      } else {
+        const account = await Account.findByPk(userId)
+        if (account) {
+          movementData.accountId = userId
+        } else {
+          await transaction.rollback()
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' })
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction })
+
       await transaction.commit()
       return res.status(201).json({ success: true, data: project })
     } catch (error) {
@@ -70,8 +95,7 @@ class ProjectController {
     }
   }
 
-  // 📦 Buscar todos os projetos (com paginação via buildQueryOptions)
-  static async getAll(req, res) {
+   static async getAll(req, res) {
     try {
       const { active, customerId, term, fields } = req.query
       const where = {}
@@ -79,7 +103,7 @@ class ProjectController {
       if (active !== undefined) where.active = active === 'true'
       if (customerId) where.customerId = customerId
 
-      // 🔍 Filtro de pesquisa textual
+      // Filtro de pesquisa textual
       if (term && fields) {
         const searchFields = fields.split(',')
         where[Op.or] = searchFields.map((field) => ({
@@ -87,7 +111,6 @@ class ProjectController {
         }))
       }
 
-      // Aplicar filtro de contexto
       Object.assign(where, ProjectController.contextFilter(req))
 
       const result = await buildQueryOptions(req, Project, {
@@ -99,18 +122,35 @@ class ProjectController {
         ]
       })
 
-      res.json({ success: true, ...result })
+      // Buscar últimos logs de movimentação
+      const projectIds = result.data.map(p => p.id)
+      const logs = await MovementLogEntity.findAll({
+        where: {
+          entity: 'projeto',
+          entityId: { [Op.in]: projectIds }
+        },
+        attributes: ['entityId', 'status'],
+        order: [['createdAt', 'DESC']]
+      })
+
+      const lastLogsMap = {}
+      for (const log of logs) {
+        if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log
+      }
+
+      const enrichedData = result.data.map(p => ({
+        ...p.toJSON(),
+        lastMovementLog: lastLogsMap[p.id] ? lastLogsMap[p.id].status : null
+      }))
+
+      res.json({ success: true, ...result, data: enrichedData })
     } catch (error) {
       console.error('Erro ao buscar projetos:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      })
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
   }
 
-  // 🔍 Buscar projeto por ID
+  // 🔍 Buscar projeto por ID com lastMovementLog
   static async getById(req, res) {
     try {
       const { id } = req.params
@@ -127,41 +167,72 @@ class ProjectController {
         ]
       })
 
-      if (!project) {
-        return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
-      }
+      if (!project) return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
 
-      res.json({ success: true, data: project })
+      const lastLog = await MovementLogEntity.findOne({
+        where: { entity: 'projeto', entityId: id },
+        order: [['createdAt', 'DESC']],
+        attributes: ['status']
+      })
+
+      res.json({ success: true, data: { ...project.toJSON(), lastMovementLog: lastLog ? lastLog.status : null } })
     } catch (error) {
       console.error('Erro ao buscar projeto:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      })
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
   }
 
   // 🔄 Atualizar projeto
-  static async update(req, res) {
+   static async update(req, res) {
+    const transaction = await sequelize.transaction()
     try {
       const { id } = req.params
       const updates = req.body
+      const { userId } = updates
 
       const project = await Project.findOne({
         where: {
           id,
           ...ProjectController.contextFilter(req)
-        }
+        },
+        transaction
       })
 
       if (!project) {
+        await transaction.rollback()
         return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
       }
 
-      await project.update(updates)
+      await project.update(updates, { transaction })
+
+      // ✅ Criar movimentação
+      let movementData = {
+        id: uuidv4(),
+        method: 'edição',
+        entity: 'projeto',
+        entityId: project.id,
+        status: 'aberto'
+      }
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId)
+      if (user) {
+        movementData.userId = userId
+      } else {
+        const account = await Account.findByPk(userId)
+        if (account) {
+          movementData.accountId = userId
+        } else {
+          await transaction.rollback()
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' })
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction })
+      await transaction.commit()
       res.json({ success: true, data: project })
     } catch (error) {
+      await transaction.rollback()
       console.error('Erro ao atualizar projeto:', error)
       res.status(500).json({
         success: false,
@@ -173,31 +244,63 @@ class ProjectController {
 
   // 🗑️ Deletar projeto
   static async delete(req, res) {
+    const transaction = await sequelize.transaction()
     try {
       const { id } = req.params
+      const { userId } = req.body
 
       const project = await Project.findOne({
         where: {
           id,
           ...ProjectController.contextFilter(req)
-        }
+        },
+        transaction
       })
 
       if (!project) {
+        await transaction.rollback()
         return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
       }
 
       const productionOrder = await ProductionOrder.findOne({ where: { projectId: id } })
       if (productionOrder) {
+        await transaction.rollback()
         return res.status(400).json({
           success: false,
           message: 'Projeto não pode ser apagado, pois possui uma ordem de produção!'
         })
       }
 
-      await project.destroy()
+      await project.destroy({ transaction })
+
+      // ✅ Criar movimentação
+      let movementData = {
+        id: uuidv4(),
+        method: 'remoção',
+        entity: 'projeto',
+        entityId: project.id,
+        status: 'finalizado'
+      }
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId)
+      if (user) {
+        movementData.userId = userId
+      } else {
+        const account = await Account.findByPk(userId)
+        if (account) {
+          movementData.accountId = userId
+        } else {
+          await transaction.rollback()
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' })
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction })
+      await transaction.commit()
       res.json({ success: true, message: 'Projeto removido com sucesso' })
     } catch (error) {
+      await transaction.rollback()
       console.error('Erro ao deletar projeto:', error)
       res.status(500).json({
         success: false,
@@ -207,16 +310,13 @@ class ProjectController {
     }
   }
 
-  // 👤 Buscar projetos por cliente
+  // 👤 Buscar projetos por cliente com lastMovementLog
   static async getByCustomer(req, res) {
     try {
       const { customerId } = req.params
 
       const result = await buildQueryOptions(req, Project, {
-        where: {
-          customerId,
-          ...ProjectController.contextFilter(req)
-        },
+        where: { customerId, ...ProjectController.contextFilter(req) },
         include: [
           { model: Company, as: 'company', attributes: ['id', 'name'] },
           { model: Branch, as: 'branch', attributes: ['id', 'name'] },
@@ -224,14 +324,27 @@ class ProjectController {
         ]
       })
 
-      res.json({ success: true, ...result })
+      const projectIds = result.data.map(p => p.id)
+      const logs = await MovementLogEntity.findAll({
+        where: { entity: 'projeto', entityId: { [Op.in]: projectIds } },
+        attributes: ['entityId', 'status'],
+        order: [['createdAt', 'DESC']]
+      })
+
+      const lastLogsMap = {}
+      for (const log of logs) {
+        if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log
+      }
+
+      const enrichedData = result.data.map(p => ({
+        ...p.toJSON(),
+        lastMovementLog: lastLogsMap[p.id] ? lastLogsMap[p.id].status : null
+      }))
+
+      res.json({ success: true, ...result, data: enrichedData })
     } catch (error) {
       console.error('Erro ao buscar projetos por cliente:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      })
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
   }
 }

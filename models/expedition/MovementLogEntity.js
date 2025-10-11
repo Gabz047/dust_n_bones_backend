@@ -23,7 +23,7 @@ MovementLogEntity.init({
     allowNull: false,
   },
   entity: {
-    type: DataTypes.ENUM('romaneio', 'fatura', 'caixa', 'expedição'),
+    type: DataTypes.ENUM('romaneio', 'fatura', 'caixa', 'expedição', 'projeto'),
     allowNull: false,
   },
   entityId: {

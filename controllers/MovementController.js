@@ -183,7 +183,13 @@ static async getByMovementType(req, res) {
           as: 'itemFeature',
           include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }]
         },
-        { model: ProductionOrder, as: 'productionOrder' },
+        { model: ProductionOrder, as: 'productionOrder', include: [
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['name']
+          }
+        ] },
         { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
         { model: Account, as: 'account', attributes: ['id', 'username', 'email'] }
       ]
