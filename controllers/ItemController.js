@@ -90,6 +90,9 @@ export default {
       const item = await Item.findByPk(id);
       if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
+      // Usa o nome atual se não foi enviado um novo
+      name = name || item.name;
+
       if (!businessItemType || businessItemType === 'Outro') {
         genre = null;
       } else if (!genre) {

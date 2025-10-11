@@ -121,65 +121,73 @@ class OrderController {
   }
 
   // Buscar pedido por ID (GET) filtrando por company/branch do projeto
-  static async getById(req, res) {
-    try {
-      const { id } = req.params;
-      const { companyId, branchId } = req.context;
+  // Buscar pedido por ID (GET) filtrando por company/branch do projeto
+static async getById(req, res) {
+  try {
+    const { id } = req.params;
+    const { companyId, branchId } = req.context;
 
-      const order = await Order.findOne({
-        where: { id },
-        include: [
-          { 
-            model: Project, 
-            as: 'project',
-            where: {
-              ...(companyId && { companyId }),
-              ...(branchId && { branchId })
-            }
-          },
-          { model: Customer, as: 'customer' },
-          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'orderId', 'referralId'] },
-          {
-            model: OrderItem,
-            as: 'orderItems',
-            include: [
-              { model: Item, as: 'item' },
-              { model: FeatureOption, as: 'featureOption' }
-            ]
-          },
-          {
-            model: OrderItemAdditionalFeatureOption,
-            as: 'additionalOptions',
-            include: [
-              {
-                model: ItemFeature,
-                as: 'itemFeature',
-                attributes: ['id', 'featureId'],
-                include: [
-                  { model: Feature, as: 'feature', attributes: ['name'] }
-                ]
-              },
-              { model: FeatureOption, as: 'featureOption' },
-              { model: Item, as: 'item' }
-            ]
+    const order = await Order.findOne({
+      where: { id },
+      include: [
+        { 
+          model: Project, 
+          as: 'project',
+          where: {
+            ...(companyId && { companyId }),
+            ...(branchId && { branchId })
           }
-        ]
-      });
+        },
+        { model: Customer, as: 'customer' },
+        {
+          model: DeliveryNote,
+          as: 'deliveryNotes',
+          attributes: ['id', 'orderId', 'referralId', 'invoiceId'],
+          where: { invoiceId: null }, // 🔒 Apenas romaneios não faturados
+          required: false // importante para não excluir o pedido caso nenhum romaneio disponível
+        },
+        {
+          model: OrderItem,
+          as: 'orderItems',
+          include: [
+            { model: Item, as: 'item' },
+            { model: FeatureOption, as: 'featureOption' }
+          ]
+        },
+        {
+          model: OrderItemAdditionalFeatureOption,
+          as: 'additionalOptions',
+          include: [
+            {
+              model: ItemFeature,
+              as: 'itemFeature',
+              attributes: ['id', 'featureId'],
+              include: [
+                { model: Feature, as: 'feature', attributes: ['name'] }
+              ]
+            },
+            { model: FeatureOption, as: 'featureOption' },
+            { model: Item, as: 'item' }
+          ]
+        }
+      ]
+    });
 
-      if (!order) {
-        return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
-      }
-
-      res.json({ success: true, data: order });
-    } catch (error) {
-      console.error('Erro ao buscar pedido:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
     }
+
+    res.json({ success: true, data: order });
+  } catch (error) {
+    console.error('Erro ao buscar pedido:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
   }
+}
+
 
   // Buscar pedidos por projeto (GET) filtrando por company/branch
   static async getOrderByProject(req, res) {

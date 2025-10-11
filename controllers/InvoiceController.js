@@ -60,6 +60,12 @@ class InvoiceController {
       let totalInvoicePrice = 0;
 
       for (const dn of romaneios) {
+        // ⚠️ Ignora romaneios que já estão vinculados a alguma fatura
+        if (dn.invoiceId) {
+          console.log(`Romaneio ${dn.id} já vinculado à fatura ${dn.invoiceId}, ignorando...`);
+          continue;
+        }
+
         let dnTotalPrice = 0;
         let dnTotalQuantity = 0;
 
@@ -86,6 +92,7 @@ class InvoiceController {
           }
         }
 
+        // 🔒 Só cria itens e atualiza romaneio se for fatura de projeto
         if (type === 'project') {
           const invoiceItem = await InvoiceItem.create({
             invoiceId: invoice.id,
@@ -94,10 +101,11 @@ class InvoiceController {
             price: dnTotalPrice
           }, { transaction });
 
+          // Marca o romaneio como faturado
           await dn.update({ invoiceId: invoice.id }, { transaction });
 
-          // Log do item
-          let movementItemData = {
+          // Log do item da fatura
+          const movementItemData = {
             method: 'criação',
             entity: 'fatura',
             entityId: invoiceItem.id,
@@ -107,7 +115,7 @@ class InvoiceController {
             date: new Date()
           };
 
-          // Verifica User ou Account novamente
+          // Associa ao User ou Account
           const userItem = await User.findByPk(userId);
           if (userItem) {
             movementItemData.userId = userId;
@@ -146,9 +154,9 @@ class InvoiceController {
       const { totalPrice, userId } = req.body;
       const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findOne({ 
-        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, 
-        transaction 
+      const invoice = await Invoice.findOne({
+        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) },
+        transaction
       });
       if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
 
@@ -193,9 +201,9 @@ class InvoiceController {
       const { userId } = req.body;
       const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findOne({ 
-        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) }, 
-        transaction 
+      const invoice = await Invoice.findOne({
+        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) },
+        transaction
       });
       if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
 
@@ -289,13 +297,13 @@ class InvoiceController {
               { model: Customer, as: 'customer', attributes: ['id', 'name'] }
             ]
           },
-          { 
-            model: DeliveryNote, 
-            as: 'deliveryNotes', 
-            attributes: ['id', 'referralId', 'totalQuantity'], 
+          {
+            model: DeliveryNote,
+            as: 'deliveryNotes',
+            attributes: ['id', 'referralId', 'totalQuantity'],
             include: [
               { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-            ] 
+            ]
           }
         ]
       });
@@ -308,12 +316,12 @@ class InvoiceController {
         attributes: ['id', 'status']
       });
 
-      res.json({ 
-        success: true, 
-        data: { 
-          ...invoice.toJSON(), 
-          lastMovementLogEntityId: lastMovement || null 
-        } 
+      res.json({
+        success: true,
+        data: {
+          ...invoice.toJSON(),
+          lastMovementLogEntityId: lastMovement || null
+        }
       });
     } catch (error) {
       console.error('Erro ao buscar fatura por ID:', error);
@@ -392,47 +400,47 @@ class InvoiceController {
       const invoice = await Invoice.findByPk(id, {
         attributes: ['id', 'createdAt', 'totalPrice', 'type'],
         include: [
-          { 
-            model: Project, 
-            as: 'project', 
-            attributes: ['id', 'name'], 
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name'],
             include: [
-              { 
-                model: Customer, 
-                as: 'customer', 
-                attributes: ['id', 'name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'document'] 
+              {
+                model: Customer,
+                as: 'customer',
+                attributes: ['id', 'name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'document']
               }
-            ] 
-          },
-          { 
-            model: Company, 
-            as: 'company', 
-            attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country'] 
-          },
-          { 
-            model: Branch, 
-            as: 'branch', 
-            attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country'] 
+            ]
           },
           {
-            model: DeliveryNote, 
-            as: 'deliveryNotes', 
-            attributes: ['id', 'referralId'], 
+            model: Company,
+            as: 'company',
+            attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country']
+          },
+          {
+            model: Branch,
+            as: 'branch',
+            attributes: ['id', 'name', 'cnpj', 'email', 'phone', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country']
+          },
+          {
+            model: DeliveryNote,
+            as: 'deliveryNotes',
+            attributes: ['id', 'referralId'],
             include: [
               { model: Customer, as: 'customer', attributes: ['id', 'name'] },
               {
-                model: Box, 
-                as: 'boxes', 
+                model: Box,
+                as: 'boxes',
                 include: [
                   {
-                    model: BoxItem, 
-                    as: 'items', 
+                    model: BoxItem,
+                    as: 'items',
                     include: [
                       { model: Item, as: 'item', attributes: ['id', 'name', 'price'] },
-                      { 
-                        model: ItemFeature, 
-                        as: 'itemFeature', 
-                        include: [{ model: Feature, as: 'feature', attributes: ['name'] }] 
+                      {
+                        model: ItemFeature,
+                        as: 'itemFeature',
+                        include: [{ model: Feature, as: 'feature', attributes: ['name'] }]
                       },
                       { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
                     ]
@@ -451,40 +459,40 @@ class InvoiceController {
         issueDate: invoice.createdAt,
         totalPrice: invoice.totalPrice,
         type: invoice.type,
-        company: invoice.company ? { 
-          name: invoice.company.name, 
-          cnpj: invoice.company.cnpj, 
-          email: invoice.company.email, 
-          phone: invoice.company.phone, 
-          address: invoice.company.address, 
-          city: invoice.company.city, 
-          state: invoice.company.state, 
-          zipcode: invoice.company.get('zipcode'), 
-          country: invoice.company.country 
+        company: invoice.company ? {
+          name: invoice.company.name,
+          cnpj: invoice.company.cnpj,
+          email: invoice.company.email,
+          phone: invoice.company.phone,
+          address: invoice.company.address,
+          city: invoice.company.city,
+          state: invoice.company.state,
+          zipcode: invoice.company.get('zipcode'),
+          country: invoice.company.country
         } : null,
-        branch: invoice.branch ? { 
-          name: invoice.branch.name, 
-          cnpj: invoice.branch.cnpj, 
-          email: invoice.branch.email, 
-          phone: invoice.branch.phone, 
-          address: invoice.branch.address, 
-          city: invoice.branch.city, 
-          state: invoice.branch.state, 
-          zipcode: invoice.branch.get('zipcode'), 
-          country: invoice.branch.country 
+        branch: invoice.branch ? {
+          name: invoice.branch.name,
+          cnpj: invoice.branch.cnpj,
+          email: invoice.branch.email,
+          phone: invoice.branch.phone,
+          address: invoice.branch.address,
+          city: invoice.branch.city,
+          state: invoice.branch.state,
+          zipcode: invoice.branch.get('zipcode'),
+          country: invoice.branch.country
         } : null,
         project: invoice.project ? {
           id: invoice.project.id,
           name: invoice.project.name,
-          customer: invoice.project.customer ? { 
-            id: invoice.project.customer.id, 
-            name: invoice.project.customer.name, 
-            address: invoice.project.customer.address, 
-            city: invoice.project.customer.city, 
-            state: invoice.project.customer.state, 
-            zipcode: invoice.project.customer.get('zipcode'), 
-            country: invoice.project.customer.country, 
-            document: invoice.project.customer.document 
+          customer: invoice.project.customer ? {
+            id: invoice.project.customer.id,
+            name: invoice.project.customer.name,
+            address: invoice.project.customer.address,
+            city: invoice.project.customer.city,
+            state: invoice.project.customer.state,
+            zipcode: invoice.project.customer.get('zipcode'),
+            country: invoice.project.customer.country,
+            document: invoice.project.customer.document
           } : null
         } : null,
         deliveryNotes: (invoice.deliveryNotes || []).map(dn => {
@@ -494,7 +502,7 @@ class InvoiceController {
           (dn.boxes || []).forEach(box => {
             (box.items || []).forEach(bi => {
               const features = Array.isArray(bi.itemFeature) ? bi.itemFeature : [bi.itemFeature];
-              
+
               features.forEach(f => {
                 const featureOptionName = bi.featureOption?.name || f?.featureOption?.name || null;
                 const key = `${bi.item?.id}-${featureOptionName || ''}`;

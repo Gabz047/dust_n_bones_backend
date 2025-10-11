@@ -3,61 +3,80 @@ import { calculateQuantityAndPrice, groupItems } from '../utils/invoice.js';
 
 class InvoiceItemController {
 
-  static async createBatch(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { items, movementLogEntityId } = req.body;
+ static async createBatch(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { items, movementLogEntityId } = req.body;
 
-      if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'Array de items é obrigatório' });
-      if (!movementLogEntityId) return res.status(400).json({ error: 'movementLogEntityId é obrigatório' });
+    if (!Array.isArray(items) || !items.length)
+      return res.status(400).json({ error: 'Array de items é obrigatório' });
+    if (!movementLogEntityId)
+      return res.status(400).json({ error: 'movementLogEntityId é obrigatório' });
 
-      const createdItems = [];
+    const createdItems = [];
+    const ignoredItems = [];
 
-      for (const item of items) {
-        // Calcula quantidade total e preço baseado no romaneio
-        const { totalQuantity, totalPrice } = await calculateQuantityAndPrice(item.deliveryNoteId, transaction);
-
-        const invoiceItem = await InvoiceItem.create({
-          invoiceId: item.invoiceId,
-          deliveryNoteId: item.deliveryNoteId,
-          orderId: item.orderId,
-          price: totalPrice
-        }, { transaction });
-
-        if (item.deliveryNoteId) {
-          await DeliveryNote.update(
-            { invoiceId: item.invoiceId },
-            { where: { id: item.deliveryNoteId }, transaction }
-          );
-        }
-
-        if (item.invoiceId) {
-          const totalInvoicePrice = await InvoiceItem.sum('price', {
-            where: { invoiceId: item.invoiceId },
-            transaction
-          });
-          await Invoice.update({ totalPrice: totalInvoicePrice }, { where: { id: item.invoiceId }, transaction });
-        }
-
-        // Cria o log com quantidade correta
-        await MovementLogEntityItem.create({
-          movementLogEntityId,
-          entity: 'fatura',
-          entityId: invoiceItem.id,
-          quantity: totalQuantity,
-          date: new Date()
-        }, { transaction });
-
-        createdItems.push(invoiceItem);
+    for (const item of items) {
+      // Busca o romaneio relacionado
+      const deliveryNote = await DeliveryNote.findByPk(item.deliveryNoteId, { transaction });
+      if (deliveryNote?.invoiceId) {
+        ignoredItems.push(deliveryNote.id);
+        continue; // ⚠️ Ignora romaneio já faturado
       }
 
-      await transaction.commit();
-      return res.status(201).json(createdItems);
-    } catch (error) {
-      await transaction.rollback();
-      return res.status(500).json({ error: error.message });
+      // Calcula quantidade total e preço
+      const { totalQuantity, totalPrice } = await calculateQuantityAndPrice(item.deliveryNoteId, transaction);
+
+      const invoiceItem = await InvoiceItem.create({
+        invoiceId: item.invoiceId,
+        deliveryNoteId: item.deliveryNoteId,
+        orderId: item.orderId,
+        price: totalPrice
+      }, { transaction });
+
+      if (item.deliveryNoteId) {
+        await DeliveryNote.update(
+          { invoiceId: item.invoiceId },
+          { where: { id: item.deliveryNoteId }, transaction }
+        );
+      }
+
+      if (item.invoiceId) {
+        const totalInvoicePrice = await InvoiceItem.sum('price', {
+          where: { invoiceId: item.invoiceId },
+          transaction
+        });
+        await Invoice.update(
+          { totalPrice: totalInvoicePrice },
+          { where: { id: item.invoiceId }, transaction }
+        );
+      }
+
+      await MovementLogEntityItem.create({
+        movementLogEntityId,
+        entity: 'fatura',
+        entityId: invoiceItem.id,
+        quantity: totalQuantity,
+        date: new Date()
+      }, { transaction });
+
+      createdItems.push(invoiceItem);
     }
+
+    await transaction.commit();
+    return res.status(201).json({
+      success: true,
+      created: createdItems.length,
+      ignored: ignoredItems.length,
+      ignoredDeliveryNotes: ignoredItems,
+      data: createdItems
+    });
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({ error: error.message });
   }
+}
+
 
   // ---------------------- UPDATE BATCH ----------------------
   static async updateBatch(req, res) {
@@ -303,21 +322,29 @@ class InvoiceItemController {
   }
 
   // Busca por Order
-  static async getByOrder(req, res) {
-    try {
-      const { orderId } = req.params;
-      const items = await InvoiceItem.findAll({
-        where: { orderId },
-        include: [
-          { model: DeliveryNote, as: 'deliveryNote', attributes: ['id', 'number'] },
-          { model: Box, as: 'box', attributes: ['id', 'label'] }
-        ]
-      });
-      return res.json(items);
-    } catch (error) {
-      return res.status(500).json({ error: error.message });
-    }
+ static async getByOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+
+    // Busca os InvoiceItems apenas com DeliveryNotes ainda sem invoiceId
+    const items = await InvoiceItem.findAll({
+      where: { orderId },
+      include: [
+        {
+          model: DeliveryNote,
+          as: 'deliveryNote',
+          attributes: ['id', 'number', 'invoiceId'],
+          where: { invoiceId: null } // 🔒 Só romaneios não faturados
+        },
+        { model: Box, as: 'box', attributes: ['id', 'label'] }
+      ]
+    });
+
+    return res.json(items);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
+}
 }
 
 export default InvoiceItemController;
