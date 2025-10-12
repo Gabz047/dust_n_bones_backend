@@ -55,15 +55,6 @@ Invoice.init({
   timestamps: true,
 });
 
-// Hook para gerar referralId incremental
-Invoice.beforeCreate(async (invoice, options) => {
-  const last = await Invoice.findOne({
-    order: [['referralId', 'DESC']],
-    transaction: options.transaction,
-  });
-  invoice.referralId = last ? last.referralId + 1 : 1;
-});
-
 // Relações
 
 

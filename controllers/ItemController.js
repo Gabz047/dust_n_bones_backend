@@ -1,7 +1,9 @@
 import Item from '../models/Item.js';
 import Company from '../models/Company.js';
 import Branch from '../models/Branch.js';
+import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 import { Op } from 'sequelize';
 // Helper para gerar o name com gênero
 function buildItemName(name, businessItemType, genre) {
@@ -22,6 +24,7 @@ function itemAccessFilter(req) {
 export default {
   // Criar item
   async create(req, res) {
+      const transaction = await sequelize.transaction();
     try {
       let {
         companyId,
@@ -46,8 +49,24 @@ export default {
 
       name = buildItemName(name, businessItemType, genre);
 
+        // ✅ GERA REFERRAL AUTOMÁTICO
+            const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Item,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+      
+
       const itemData = {
         name,
+        referralId,
         description,
         itemType,
         measurementUnit,

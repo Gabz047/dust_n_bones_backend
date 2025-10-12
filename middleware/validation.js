@@ -74,7 +74,8 @@ export const productionOrderSchemas = {
     type: Joi.string().valid('Normal', 'Reposição').optional(),
     plannedQuantity: Joi.number().integer().min(1).optional(),
     issueDate: Joi.date().optional(),
-    closeDate: Joi.date().optional().allow(null)
+    closeDate: Joi.date().optional().allow(null),
+     referralId: Joi.string().min(0).max(255).optional(),
   })
 };
 
@@ -239,7 +240,8 @@ export const branchSchemas = {
     maxUsers: Joi.number().integer().min(1).optional(),
     ownerId: Joi.string().uuid().optional(),
     companyId: Joi.string().uuid().optional(),
-    active: Joi.boolean().optional()
+    active: Joi.boolean().optional(),
+    referralId: Joi.string().min(0).max(255).optional(),
   })
 };
 
@@ -284,7 +286,7 @@ export const customerSchemas = {
       state: Joi.string().required(),
       zipCode: Joi.string().required(),
       country: Joi.string().default('Brasil'),
-      customerGroup: Joi.string().uuid().optional()  // <-- adiciona aqui
+      customerGroup: Joi.string().uuid().optional()
     })
   },
   update: {
@@ -298,7 +300,8 @@ export const customerSchemas = {
       state: Joi.string(),
       zipCode: Joi.string(),
       country: Joi.string(),
-      customerGroup: Joi.string().uuid().optional()  // <-- e aqui
+      customerGroup: Joi.string().uuid().optional(),
+      referralId: Joi.string().min(0).max(255).optional(),
     })
   }
 };
@@ -344,12 +347,14 @@ export const customerGroupSchemas = {
   },
   updateCustomers: {
     body: Joi.object({
-      customerIds: Joi.array().items(Joi.string().uuid()).required()
+      customerIds: Joi.array().items(Joi.string().uuid()).required(),
+      referralId: Joi.string().min(0).max(255).optional(),
     })
   },
   updateMainCustomer: {
     body: Joi.object({
-      mainCustomerId: Joi.string().uuid().required()
+      mainCustomerId: Joi.string().uuid().required(),
+      referralId: Joi.string().min(0).max(255).optional(),
     })
   }
 };
@@ -447,6 +452,7 @@ export const FeatureSchemas = {
         'array.base': 'Opções devem ser um array de strings.',
         'string.base': 'Cada opção deve ser uma string.',
       }),
+      referralId: Joi.string().min(0).max(255).optional(),
   }),
 };
 
@@ -675,6 +681,7 @@ export const itemSchemas = {
       .messages({
         'string.guid': 'ID da filial deve ser um UUID válido.',
       }),
+      referralId: Joi.string().min(0).max(255).optional(),
   }),
 };
 

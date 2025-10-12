@@ -145,7 +145,7 @@ class StockController {
         {
           model: Item,
           as: 'item',
-          attributes: ['id', 'name', 'companyId', 'branchId'],
+          attributes: ['id', 'name', 'companyId', 'branchId', 'referralId'],
           where: itemWhere
         },
         ...StockController.stockInclude()

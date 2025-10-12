@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { Op } from 'sequelize'
 import { Project, Company, Branch, Customer, ProductionOrder, User, Account, MovementLogEntity, sequelize } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js'
 class ProjectController {
   static async create(req, res) {
     const transaction = await sequelize.transaction()
@@ -38,9 +38,23 @@ class ProjectController {
 
       const projectId = uuidv4()
 
+      const company = await Company.findOne({ where: { id: companyId } });
+
+
+      const companyRef = company?.referralId;
+      const branchRef = branch?.referralId ?? null;
+
+      const referralId = await generateReferralId({
+        model: Project,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
+
       const project = await Project.create({
         id: projectId,
         name,
+        referralId,
         deliveryDate,
         companyId,
         branchId: branchId || null,
@@ -91,11 +105,11 @@ class ProjectController {
     const { companyId, branchId } = req.context || {}
     return {
       companyId,
-      ...(branchId ? { branchId } : {})
+      ...(branchId ? { branchId } : {}),
     }
   }
 
-   static async getAll(req, res) {
+  static async getAll(req, res) {
     try {
       const { active, customerId, term, fields } = req.query
       const where = {}
@@ -150,6 +164,148 @@ class ProjectController {
     }
   }
 
+  static async getAllOpen(req, res) {
+    try {
+      const { customerId, term, fields } = req.query
+      const where = {}
+
+      if (customerId) where.customerId = customerId
+
+      // 🔍 Filtro textual
+      if (term && fields) {
+        const searchFields = fields.split(',')
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }))
+      }
+
+      Object.assign(where, ProjectController.contextFilter(req))
+
+      // 💡 Pega somente projetos cujo último log é 'aberto'
+      where.id = {
+        [Op.in]: sequelize.literal(`
+    (
+      SELECT "entity_id" FROM (
+        SELECT DISTINCT ON ("entity_id") "entity_id", "status", "created_at"
+        FROM "movement_log_entities"
+        WHERE "entity" = 'projeto'
+        ORDER BY "entity_id", "created_at" DESC
+      ) AS last_logs
+      WHERE last_logs."status" = 'aberto'
+    )
+  `)
+      }
+
+      // 📦 Buscar apenas projetos abertos
+      const result = await buildQueryOptions(req, Project, {
+        where,
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ]
+      })
+
+      // 🔁 Adicionar o último status para exibir
+      const projectIds = result.data.map(p => p.id)
+      const logs = await MovementLogEntity.findAll({
+        where: { entity: 'projeto', entityId: { [Op.in]: projectIds } },
+        attributes: ['entityId', 'status'],
+        order: [['createdAt', 'DESC']]
+      })
+
+      const lastLogsMap = {}
+      for (const log of logs) {
+        if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log
+      }
+
+      const enrichedData = result.data.map(p => ({
+        ...p.toJSON(),
+        lastMovementLog: lastLogsMap[p.id]?.status ?? null
+      }))
+
+      res.json({ success: true, ...result, data: enrichedData })
+    } catch (error) {
+      console.error('Erro ao buscar projetos abertos:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      })
+    }
+  }
+
+  static async getAllWithoutInvoice(req, res) {
+    try {
+      const { customerId, term, fields } = req.query
+      const where = {}
+
+      if (customerId) where.customerId = customerId
+
+      // 🔍 Filtro textual
+      if (term && fields) {
+        const searchFields = fields.split(',')
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }))
+      }
+
+      Object.assign(where, ProjectController.contextFilter(req))
+
+      // ⚙️ Filtra só os projetos que NÃO têm invoice associado
+      where.id = {
+        [Op.notIn]: sequelize.literal(`
+        (
+          SELECT DISTINCT "project_id"
+          FROM "invoices"
+          WHERE "project_id" IS NOT NULL
+        )
+      `)
+      }
+
+      // 🔁 Busca paginada
+      const result = await buildQueryOptions(req, Project, {
+        where,
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ]
+      })
+
+      // 🔎 Busca último status (igual nas outras)
+      const projectIds = result.data.map(p => p.id)
+      const logs = await MovementLogEntity.findAll({
+        where: { entity: 'projeto', entityId: { [Op.in]: projectIds } },
+        attributes: ['entityId', 'status'],
+        order: [['createdAt', 'DESC']]
+      })
+
+      const lastLogsMap = {}
+      for (const log of logs) {
+        if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log
+      }
+
+      const enrichedData = result.data.map(p => ({
+        ...p.toJSON(),
+        lastMovementLog: lastLogsMap[p.id]?.status ?? null
+      }))
+
+      res.json({ success: true, ...result, data: enrichedData })
+    } catch (error) {
+      console.error('Erro ao buscar projetos sem invoice:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      })
+    }
+  }
+
+
+
+
+
   // 🔍 Buscar projeto por ID com lastMovementLog
   static async getById(req, res) {
     try {
@@ -183,7 +339,7 @@ class ProjectController {
   }
 
   // 🔄 Atualizar projeto
-   static async update(req, res) {
+  static async update(req, res) {
     const transaction = await sequelize.transaction()
     try {
       const { id } = req.params

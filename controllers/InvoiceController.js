@@ -1,7 +1,7 @@
 import { sequelize, Invoice, DeliveryNote, MovementLogEntity, Project, InvoiceItem, Box, BoxItem, ItemFeature, Item, FeatureOption, Feature, Order, Customer, OrderItem, User, Account, MovementLogEntityItem, Company, Branch } from '../models/index.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 class InvoiceController {
 
   // Cria uma nova fatura
@@ -23,9 +23,23 @@ class InvoiceController {
         return res.status(400).json({ error: 'Nenhum romaneio encontrado para gerar a fatura' });
       }
 
+       const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Invoice,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       const invoice = await Invoice.create({
         projectId,
         type,
+        referralId,
         companyId: companyId || null,
         branchId: branchId || null,
         date: new Date(),
@@ -292,7 +306,6 @@ class InvoiceController {
             model: Project,
             as: 'project',
             where: InvoiceController.projectAccessFilter(req),
-            attributes: ['id', 'name'],
             include: [
               { model: Customer, as: 'customer', attributes: ['id', 'name'] }
             ]

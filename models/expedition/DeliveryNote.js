@@ -20,7 +20,7 @@ DeliveryNote.init({
     allowNull: false,
   },
   referralId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.TEXT,
     allowNull: true,
     unique: true,
     field: 'referral_id',
@@ -110,15 +110,6 @@ DeliveryNote.init({
     { fields: ['order_id', 'customer_id'] },
     { fields: ['referral_id'], unique: true },
   ],
-});
-
-// Geração incremental do referralId
-DeliveryNote.beforeCreate(async (deliveryNote, options) => {
-  const last = await DeliveryNote.findOne({
-    order: [['referral_id', 'DESC']],
-    transaction: options.transaction,
-  });
-  deliveryNote.referralId = last ? last.referralId + 1 : 1;
 });
 
 export default DeliveryNote;

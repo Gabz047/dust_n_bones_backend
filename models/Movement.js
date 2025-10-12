@@ -13,7 +13,7 @@ Movement.init({
     allowNull: false,
   },
   referralId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.TEXT,
     allowNull: true,
     unique: true,
   },
@@ -70,15 +70,6 @@ Movement.init({
   modelName: 'Movement',
   tableName: 'movements',
   timestamps: true,
-});
-
-// Hook para gerar referralId incremental
-Movement.beforeCreate(async (movement, options) => {
-  const last = await Movement.findOne({
-    order: [['referralId', 'DESC']],
-    transaction: options.transaction,
-  });
-  movement.referralId = last ? last.referralId + 1 : 1;
 });
 
 

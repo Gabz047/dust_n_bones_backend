@@ -11,6 +11,11 @@ CustomerGroup.init({
         primaryKey: true,
         allowNull: false,
     },
+       referralId: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    unique: true,
+  },
     mainCustomer: {
       type: DataTypes.UUID,
         allowNull: false,

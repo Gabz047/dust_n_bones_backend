@@ -13,7 +13,7 @@ import {
   Order
 } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js'
 
 class ProductionOrderController {
   // 🔒 Filtro de acesso por empresa/filial (via projeto)
@@ -27,67 +27,79 @@ class ProductionOrderController {
 
 
   // 🧾 Criar OP
-  static async create(req, res) {
-    const transaction = await sequelize.transaction()
-    try {
-      const { projectId, supplierId, mainCustomerId, type, plannedQuantity, issueDate, closeDate } = req.body
+ // 🧾 Criar OP
+static async create(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const {
+      projectId,
+      supplierId,
+      mainCustomerId,
+      type,
+      plannedQuantity,
+      issueDate,
+      closeDate
+    } = req.body;
 
-
-      const project = await Project.findByPk(projectId)
-      if (!project) {
-        await transaction.rollback()
-        return res.status(400).json({ success: false, message: 'Projeto não encontrado' })
-      }
-
-
-      if (supplierId) {
-        const supplier = await Customer.findByPk(supplierId)
-        if (!supplier) {
-          await transaction.rollback()
-          return res.status(400).json({ success: false, message: 'Fornecedor não encontrado' })
-        }
-      }
-
-
-      if (mainCustomerId) {
-        const mainCustomer = await Customer.findByPk(mainCustomerId)
-        if (!mainCustomer) {
-          await transaction.rollback()
-          return res.status(400).json({ success: false, message: 'Cliente principal não encontrado' })
-        }
-      }
-
-
-      const lastOrder = await ProductionOrder.findOne({
-        order: [['referralId', 'DESC']],
-        transaction
-      })
-
-
-      const referralId = lastOrder ? lastOrder.referralId + 1 : 1
-
-
-      const order = await ProductionOrder.create({
-        id: uuidv4(),
-        projectId,
-        supplierId,
-        mainCustomerId,
-        type: type || 'Normal',
-        plannedQuantity: plannedQuantity || 0,
-        issueDate: issueDate || new Date().toISOString().split('T')[0],
-        closeDate: closeDate || null,
-        referralId
-      }, { transaction })
-
-
-      await transaction.commit()
-      return res.status(201).json({ success: true, data: order })
-    } catch (error) {
-      await transaction.rollback()
-      console.error('Erro ao criar O.P.:', error)
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+    // 🔍 Verifica se o projeto existe
+    const project = await Project.findByPk(projectId);
+    if (!project) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
     }
+
+    // 🔍 Valida fornecedor
+    if (supplierId) {
+      const supplier = await Customer.findByPk(supplierId);
+      if (!supplier) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Fornecedor não encontrado' });
+      }
+    }
+
+    // 🔍 Valida cliente principal
+    if (mainCustomerId) {
+      const mainCustomer = await Customer.findByPk(mainCustomerId);
+      if (!mainCustomer) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Cliente principal não encontrado' });
+      }
+    }
+
+    // ✅ companyId e branchId vêm do projeto
+    const companyId = project.companyId;
+    const branchId = project.branchId ?? null;
+
+    // 🔢 Gera referralId único
+    const referralId = await generateReferralId({
+      model: ProductionOrder, // Corrigido: antes usava DeliveryNote
+      transaction,
+      companyId,
+      branchId,
+    });
+
+    // 🏗️ Cria a ordem de produção
+    const order = await ProductionOrder.create({
+      id: uuidv4(),
+      projectId,
+      supplierId,
+      mainCustomerId,
+      type: type || 'Normal',
+      plannedQuantity: plannedQuantity || 0,
+      issueDate: issueDate || new Date().toISOString().split('T')[0],
+      closeDate: closeDate || null,
+      referralId,
+    }, { transaction });
+
+    await transaction.commit();
+    return res.status(201).json({ success: true, data: order });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao criar O.P.:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
 
 
   // 📦 Buscar todas as OPs com paginação e filtros

@@ -1,8 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import Package from '../models/Package.js';
+import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
-
+import Branch from '../models/Branch.js';
+import Company from '../models/Company.js';
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 class PackageController {
   // 🔒 Filtro de acesso por empresa/filial
   static packageAccessFilter(req) {
@@ -12,16 +15,31 @@ class PackageController {
       ...(branchId ? { branchId } : {})
     };
   }
+  
 
   // 🧾 Criar embalagem
   static async create(req, res) {
+     const transaction = await sequelize.transaction();
     try {
       const { name, type, material, width, height, length, weight } = req.body;
       const { companyId, branchId } = req.context;
 
+      const company = await Company.findOne({ where: { id: companyId } });
+      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+
+      const companyRef = company?.referralId;
+      const branchRef = branch?.referralId ?? null;
+
+      const referralId = await generateReferralId({
+        model: Package,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
       const packageItem = await Package.create({
         id: uuidv4(),
         name,
+        referralId,
         type,
         material,
         width,

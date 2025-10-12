@@ -4,63 +4,88 @@ import { Op } from 'sequelize'
 import sequelize from '../config/database.js'
 import {
   Movement,
+  MovementItem,
+  MovementLogEntity,
   User,
   Account,
   Item,
   ItemFeature,
   Feature,
   ProductionOrder,
-  Project
+  Project,
+  Stock,
+  StockItem
 } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
+import { generateReferralId } from '../utils/globals/generateReferralId.js'
 
 class MovementController {
   // 🧾 Criar movimentação
   static async create(req, res) {
-    const transaction = await sequelize.transaction()
-    try {
-      const { itemId, itemFeatureId, productionOrderId, userId, observation, movementType } = req.body
+  const transaction = await sequelize.transaction()
+  try {
+    const { itemId, itemFeatureId, productionOrderId, userId, observation, movementType } = req.body
 
-      if (!itemId || !itemFeatureId || !userId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Campos obrigatórios: itemId, itemFeatureId, userId'
-        })
-      }
-
-      // 🔍 Verifica se o ID pertence a User ou Account
-      const user = await User.findByPk(userId)
-      const account = user ? null : await Account.findByPk(userId)
-
-      if (!user && !account) {
-        await transaction.rollback()
-        return res.status(400).json({
-          success: false,
-          message: 'O ID informado não corresponde a um User ou Account válido'
-        })
-      }
-
-      const movementData = {
-        id: uuidv4(),
-        itemId,
-        itemFeatureId,
-        productionOrderId: productionOrderId || null,
-        observation: observation || null,
-        movementType: movementType || 'manual',
-        date: new Date(),
-        ...(user ? { userId } : { accountId: userId })
-      }
-
-      const movement = await Movement.create(movementData, { transaction })
-      await transaction.commit()
-
-      res.status(201).json({ success: true, data: movement })
-    } catch (error) {
-      await transaction.rollback()
-      console.error('Erro ao criar movimentação:', error)
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+    if (!itemId || !itemFeatureId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campos obrigatórios: itemId, itemFeatureId, userId'
+      })
     }
+
+    // 🔍 Verifica se o ID pertence a User ou Account
+    const user = await User.findByPk(userId)
+    const account = user ? null : await Account.findByPk(userId)
+
+    if (!user && !account) {
+      await transaction.rollback()
+      return res.status(400).json({
+        success: false,
+        message: 'O ID informado não corresponde a um User ou Account válido'
+      })
+    }
+
+    // ✅ PEGAR company e branch do item
+    const item = await Item.findByPk(itemId, { transaction })
+    if (!item) {
+      await transaction.rollback()
+      return res.status(404).json({ success: false, message: 'Item não encontrado' })
+    }
+
+    const companyRef = item.companyId
+    const branchRef = item.branchId || null
+
+    // ✅ GERAR referralId
+    const referralId = await generateReferralId({
+      model: Movement,
+      transaction,
+      companyId: companyRef,
+      branchId: branchRef
+    })
+
+    // Criar movimentação com referralId
+    const movementData = {
+      id: uuidv4(),
+      itemId,
+      itemFeatureId,
+      productionOrderId: productionOrderId || null,
+      observation: observation || null,
+      movementType: movementType || 'manual',
+      date: new Date(),
+      referralId,
+      ...(user ? { userId } : { accountId: userId })
+    }
+
+    const movement = await Movement.create(movementData, { transaction })
+    await transaction.commit()
+
+    res.status(201).json({ success: true, data: movement })
+  } catch (error) {
+    await transaction.rollback()
+    console.error('Erro ao criar movimentação:', error)
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
   }
+}
 
   // 🔒 Filtro de acesso por empresa/filial
   static itemAccessFilter(req) {
@@ -301,6 +326,84 @@ static async getByMovementType(req, res) {
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
   }
+
+  // 🗑 Deletar movimento e reverter alterações
+// controllers/MovementController.js
+static async delete(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { userId } = req.body; // ID do User ou Account que está realizando a ação
+
+    const movement = await Movement.findByPk(id, {
+      include: [{ model: MovementItem, as: 'items' }]
+    });
+    if (!movement) return res.status(404).json({ success: false, message: 'Movimentação não encontrada' });
+
+    // ===== Criar log de movimentação =====
+    let logUserId = null;
+    let logAccountId = null;
+    if (userId) {
+      const user = await User.findByPk(userId, { transaction });
+      if (user) logUserId = userId;
+      else {
+        const account = await Account.findByPk(userId, { transaction });
+        if (account) logAccountId = userId;
+        else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+    }
+
+    const movementData = {
+      entity: 'movimentacao',
+      entityId: movement.id,
+      method: 'remoção',
+      status: 'aberto',
+      userId: logUserId,
+      accountId: logAccountId
+    };
+
+    const lastLog = await MovementLogEntity.create(movementData, { transaction });
+
+    // ===== Reverter estoque dos itens =====
+    for (const mi of movement.items) {
+      const { itemId, itemFeatureId, featureOptionId, quantity, productionOrderId } = mi;
+
+      const stockItem = await StockItem.findOne({
+        where: { itemId, itemFeatureId, featureOptionId },
+        transaction
+      });
+      if (stockItem) await stockItem.update({ quantity: stockItem.quantity - quantity }, { transaction });
+
+      const stock = await Stock.findOne({ where: { itemId }, transaction });
+      if (stock) {
+        const totalQuantity = await StockItem.sum('quantity', { where: { itemId }, transaction });
+        await stock.update({ quantity: totalQuantity }, { transaction });
+      }
+
+      if (productionOrderId) {
+        const po = await ProductionOrder.findByPk(productionOrderId, { transaction });
+        if (po) await po.update({ deliveredQuantity: (po.deliveredQuantity || 0) - quantity }, { transaction });
+      }
+    }
+
+    // ===== Deletar itens e movimentação =====
+    await MovementItem.destroy({ where: { movementId: movement.id }, transaction });
+    await movement.destroy({ transaction });
+
+    await transaction.commit();
+    return res.status(200).json({ success: true, message: 'Movimentação removida com sucesso', lastMovementLog: lastLog });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao deletar movimentação:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
 }
+
+}
+
+
 
 export default MovementController

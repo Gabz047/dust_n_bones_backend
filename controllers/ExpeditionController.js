@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account } from '../models/index.js';
+import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account, Company, Branch } from '../models/index.js';
 import { Op } from 'sequelize';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 class ExpeditionController {
 
   // 🔒 Filtro de acesso por empresa/filial
@@ -15,59 +15,90 @@ class ExpeditionController {
   }
 
   // Criar expedição
-  static async create(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { projectId, mainCustomerId, userId } = req.body;
+  // Criar expedição
+static async create(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { projectId, mainCustomerId, userId } = req.body;
 
-      const project = await Project.findByPk(projectId, { transaction });
-      if (!project) return res.status(400).json({ success: false, message: 'Projeto não encontrado.' });
-
-      const customer = await Customer.findByPk(mainCustomerId, { transaction });
-      if (!customer) return res.status(400).json({ success: false, message: 'Cliente não encontrado.' });
-
-      const expedition = await Expedition.create(
-        {
-          id: uuidv4(),
-          projectId,
-          mainCustomerId,
-        },
-        { transaction }
-      );
-
-      // Preparar dados do log
-      let movementData = {
-        id: uuidv4(),
-        method: 'criação',
-        entity: 'expedição',
-        entityId: expedition.id,
-        status: 'aberto',
-      };
-
-      // Verifica User ou Account
-      const user = await User.findByPk(userId);
-      if (user) {
-        movementData.userId = userId;
-      } else {
-        const account = await Account.findByPk(userId);
-        if (account) {
-          movementData.accountId = userId;
-        } else {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
-        }
-      }
-
-      await MovementLogEntity.create(movementData, { transaction });
-
-      await transaction.commit();
-      return res.status(201).json({ success: true, data: expedition });
-    } catch (error) {
+    // 🔍 Busca o projeto e o cliente principal
+    const project = await Project.findByPk(projectId, { transaction });
+    if (!project) {
       await transaction.rollback();
-      console.error('Erro ao criar expedição:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      return res.status(400).json({ success: false, message: 'Projeto não encontrado.' });
     }
+
+    const customer = await Customer.findByPk(mainCustomerId, { transaction });
+    if (!customer) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Cliente não encontrado.' });
+    }
+
+    // ✅ Usa os IDs do projeto
+    const companyId = project.companyId;
+    const branchId = project.branchId ?? null;
+
+    // 🔢 Gera o referralId único
+    const referralId = await generateReferralId({
+      model: Expedition, // Corrigido: antes estava DeliveryNote
+      transaction,
+      companyId,
+      branchId,
+    });
+
+    // 🏗️ Cria a expedição
+    const expId = uuidv4()
+    const expedition = await Expedition.create(
+      {
+        id: expId,
+        projectId,
+        mainCustomerId,
+        referralId, // Inclui o código gerado
+      },
+      { transaction }
+    );
+
+    // 🧾 Cria log de movimentação
+    let movementData = {
+      id: uuidv4(),
+      method: 'criação',
+      entity: 'expedição',
+      entityId: expId,
+      status: 'aberto',
+    };
+
+    // Verifica se userId é de User ou Account
+    const user = await User.findByPk(userId, { transaction });
+    if (user) {
+      movementData.userId = userId;
+    } else {
+      const account = await Account.findByPk(userId, { transaction });
+      if (account) {
+        movementData.accountId = userId;
+      } else {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'O ID informado não corresponde a um User ou Account válido',
+        });
+      }
+    }
+
+    await MovementLogEntity.create(movementData, { transaction });
+
+    await transaction.commit();
+    return res.status(201).json({ success: true, data: expedition });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao criar expedição:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message,
+    });
   }
+}
+
 
   // Atualizar expedição
   static async update(req, res) {
@@ -93,6 +124,7 @@ class ExpeditionController {
         method: 'edição',
         entity: 'expedição',
         entityId: expedition.id,
+        
         status: 'aberto',
       };
 

@@ -12,6 +12,11 @@ router.post('/', authenticateToken, validateRequest(projectSchema.create), autho
 // Rotas administrativas com tenant obrigatório
 router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ProjectController.getAll);
 
+router.get('/open', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ProjectController.getAllOpen);
+
+router.get('/no-invoice', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ProjectController.getAllWithoutInvoice);
+
+
 router.get('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), ProjectController.getById);
 
 router.put('/:id', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), validateRequest(projectSchema.update), ProjectController.update);

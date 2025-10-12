@@ -47,14 +47,4 @@ Expedition.init({
 
 // Relações
 
-
-// Hook para gerar referralId incremental
-Expedition.beforeCreate(async (expedition, options) => {
-  const last = await Expedition.findOne({
-    order: [['referralId', 'DESC']],
-    transaction: options.transaction
-  });
-  expedition.referralId = last ? last.referralId + 1 : 1;
-});
-
 export default Expedition;

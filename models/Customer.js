@@ -11,6 +11,11 @@ Customer.init({
         primaryKey: true,
         allowNull: false,
     },
+      referralId: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    unique: true,
+  },
     name: {
         type: DataTypes.STRING,
         allowNull: false,

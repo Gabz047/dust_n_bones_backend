@@ -19,7 +19,7 @@ import {
   Feature
 } from '../models/index.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 class BoxController {
 
   // 🔒 Filtro de acesso por empresa/filial
@@ -66,6 +66,7 @@ class BoxController {
   }
 
 // 🧾 Criar box
+// 🧾 Criar box
 static async create(req, res) {
   const transaction = await sequelize.transaction();
   try {
@@ -74,22 +75,31 @@ static async create(req, res) {
     // --- Validações básicas ---
     if (deliveryNoteId != null && !await DeliveryNote.findByPk(deliveryNoteId, { transaction }))
       return res.status(400).json({ success: false, message: 'Delivery Note não encontrada' });
-    if (!await Project.findByPk(projectId, { transaction }))
+
+    const project = await Project.findByPk(projectId, { transaction });
+    if (!project)
       return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
+
     if (!await Customer.findByPk(customerId, { transaction }))
       return res.status(400).json({ success: false, message: 'Cliente não encontrado' });
+
     if (!await Order.findByPk(orderId, { transaction }))
       return res.status(400).json({ success: false, message: 'Pedido não encontrado' });
+
     if (!await Package.findByPk(packageId, { transaction }))
       return res.status(400).json({ success: false, message: 'Embalagem não encontrada' });
 
-    // --- Lógica do referralId (incremental por projeto) ---
-    const lastBox = await Box.findOne({
-      where: { projectId },
-      order: [['referralId', 'DESC']],
-      transaction
+    // ✅ Pega os IDs da empresa e filial do projeto
+    const companyId = project.companyId;
+    const branchId = project.branchId ?? null;
+
+    // 🔢 Gera o referralId incremental único por empresa/filial
+    const referralId = await generateReferralId({
+      model: Box,
+      transaction,
+      companyId,
+      branchId,
     });
-    const referralId = lastBox ? lastBox.referralId + 1 : 1;
 
     // --- Lógica do orderReferralId (incremental por projeto + pedido) ---
     let orderReferralId = null;
@@ -104,6 +114,7 @@ static async create(req, res) {
 
     // --- Criação da Box ---
     const box = await Box.create({
+      id: uuidv4(),
       deliveryNoteId,
       projectId,
       customerId,
@@ -115,15 +126,21 @@ static async create(req, res) {
     }, { transaction });
 
     // --- Registro do log de movimento ---
-    let logUserId = null;
-    let logAccountId = null;
+    let movementData = {
+      id: uuidv4(),
+      entity: 'caixa',
+      entityId: box.id,
+      method: 'criação',
+      status: 'aberto',
+    };
 
     if (userId) {
       const user = await User.findByPk(userId, { transaction });
-      if (user) logUserId = userId;
-      else {
+      if (user) {
+        movementData.userId = userId;
+      } else {
         const account = await Account.findByPk(userId, { transaction });
-        if (account) logAccountId = userId;
+        if (account) movementData.accountId = userId;
         else {
           await transaction.rollback();
           return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
@@ -131,19 +148,15 @@ static async create(req, res) {
       }
     }
 
-    const movementData = {
-      entity: 'caixa',
-      entityId: box.id,
-      method: 'criação',
-      status: 'aberto',
-      userId: logUserId,
-      accountId: logAccountId
-    };
-
     const lastLog = await MovementLogEntity.create(movementData, { transaction });
 
     // --- Atualiza quantidade total da box ---
-    const boxItems = await BoxItem.findAll({ where: { boxId: box.id }, include: [{ model: Item, as: 'item' }], transaction });
+    const boxItems = await BoxItem.findAll({
+      where: { boxId: box.id },
+      include: [{ model: Item, as: 'item' }],
+      transaction
+    });
+
     const totalQty = boxItems.reduce((sum, bi) => sum + (bi.quantity || 0), 0);
     await box.update({ totalQuantity: totalQty }, { transaction });
 
@@ -156,6 +169,7 @@ static async create(req, res) {
     return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
 }
+
 
 
   // ✏️ Atualizar box

@@ -75,4 +75,13 @@ router.get(
   MovementController.getByMovementType
 );
 
+router.delete(
+  '/:id',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  MovementController.delete
+);
+
 export default router;

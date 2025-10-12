@@ -1,11 +1,16 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import Feature from '../models/Features.js';
+import Company from '../models/Company.js';
+import Branch from '../models/Branch.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
+import sequelize from '../config/database.js';
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 
 class FeatureController {
   // 🧾 Criar característica
   static async create(req, res) {
+    const transaction = await sequelize.transaction();
     try {
       const { name, options } = req.body;
       const { companyId, branchId } = req.context;
@@ -15,9 +20,22 @@ class FeatureController {
         return res.status(400).json({ success: false, message: 'Característica já existe.' });
       }
 
+       const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Feature,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       const feature = await Feature.create({
-        id: uuidv4(),
         name,
+        referralId,
         options,
         companyId,
         branchId

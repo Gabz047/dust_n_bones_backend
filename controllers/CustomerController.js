@@ -2,7 +2,7 @@ import { Customer, Company, Branch, sequelize, CustomerGroup } from '../models/i
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 class CustomerController {
   // 🔒 Filtro de acesso por empresa/filial
   static customerAccessFilter(req) {
@@ -17,7 +17,7 @@ class CustomerController {
   }
 
   // 🧾 Criar cliente
-  static async create(req, res) {
+   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const context = req.context;
@@ -70,10 +70,24 @@ class CustomerController {
         }
       }
 
+     
+     const company = await Company.findOne({ where: { id: context.companyId } });
+      const branch = context.branchId ? await Branch.findOne({ where: { id: context.branchId } }) : null;
+
+      const companyRef = company?.referralId;
+      const branchRef = branch?.referralId ?? null;
+
+      const referralId = await generateReferralId({
+        model: Customer,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
       // Cria cliente com contexto do usuário
       const customer = await Customer.create(
         {
-          id: uuidv4(),
+        
+          referralId,
           name,
           document: document || null,
           email,
@@ -107,7 +121,6 @@ class CustomerController {
       });
     }
   }
-
   // 📦 Buscar todos os clientes (COM PAGINAÇÃO)
   static async getAll(req, res) {
     try {
@@ -292,7 +305,7 @@ class CustomerController {
         });
       }
 
-      await customer.update({ active: false });
+      await customer.destroy()
 
       return res.json({
         success: true,

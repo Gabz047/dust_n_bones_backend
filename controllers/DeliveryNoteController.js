@@ -4,7 +4,7 @@ import { generateDeliveryNotePDF } from '../services/generate-pdf/delivery-note/
 import { generateLabelsZPL } from '../services/generate-pdf/delivery-note/box-label-pdf.js';
 import { Op } from 'sequelize';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
-
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 function buildContextFilter(context) {
   const { companyId, branchId } = context;
   if (branchId) return { branchId };
@@ -20,6 +20,20 @@ class DeliveryNoteController {
     try {
       const { invoiceId, projectId, companyId, branchId, customerId, orderId, expeditionId, userId, boxes } = req.body;
 
+      // ✅ GERA REFERRAL AUTOMÁTICO
+      const company = await Company.findOne({ where: { id: companyId } });
+      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+
+      const companyRef = company?.referralId;
+      const branchRef = branch?.referralId ?? null;
+
+      const referralId = await generateReferralId({
+        model: DeliveryNote,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
+
       const deliveryNote = await DeliveryNote.create({
         invoiceId,
         projectId,
@@ -29,12 +43,12 @@ class DeliveryNoteController {
         orderId,
         expeditionId,
         totalQuantity: 0,
-        boxQuantity: 0
+        boxQuantity: 0,
+        referralId
       }, { transaction });
 
       // ✅ Criar movimentação
       let movementData = {
-
         method: 'criação',
         entity: 'romaneio',
         entityId: deliveryNote.id,
@@ -60,7 +74,6 @@ class DeliveryNoteController {
       // Associa as caixas ao DeliveryNote
       for (const boxId of boxes) {
         await DeliveryNoteItem.create({ deliveryNoteId: deliveryNote.id, boxId }, { transaction });
-
         await Box.update({ deliveryNoteId: deliveryNote.id }, { where: { id: boxId }, transaction });
 
         await MovementLogEntityItem.create({
@@ -83,6 +96,7 @@ class DeliveryNoteController {
       return res.status(500).json({ success: false, message: error.message });
     }
   }
+
 
   // Atualiza um Delivery Note
   static async update(req, res) {
@@ -307,19 +321,22 @@ class DeliveryNoteController {
           {
             model: Customer,
             as: 'customer',
-            attributes: ['id', 'name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'phone']
+            attributes: ['name', 'address', 'city', 'state', ['zip_code', 'zipcode'], 'country', 'phone']
           },
           {
             model: Box,
             as: 'boxes',
-            attributes: ['id', 'referralId', 'totalQuantity'],
             include: [
               {
                 model: BoxItem,
                 as: 'items',
-                attributes: ['id', 'quantity'],
                 include: [
                   { model: Item, as: 'item', attributes: ['id', 'name', 'weight'] },
+                  {
+                    model: OrderItem,
+                    as: 'orderItem',
+                    include: [{ model: FeatureOption, as: 'featureOption', attributes: ['name'] }]
+                  },
                   {
                     model: ItemFeature,
                     as: 'itemFeature',
@@ -336,12 +353,42 @@ class DeliveryNoteController {
       if (!deliveryNote)
         return res.status(404).json({ error: 'Romaneio não encontrado ou sem permissão' });
 
-      return res.json(deliveryNote);
+      // 🔹 Pegar todos os IDs das caixas
+      const boxIds = deliveryNote.boxes.map(b => b.id);
+
+      // 🔹 Buscar último log de cada box
+      const logs = await MovementLogEntity.findAll({
+        where: {
+          entity: 'caixa',
+          entityId: { [Op.in]: boxIds }
+        },
+        attributes: ['entityId', 'status'],
+        order: [['createdAt', 'DESC']]
+      });
+
+      const lastLogsMap = {};
+      for (const log of logs) {
+        if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log.status;
+      }
+
+      // 🔹 Anexar lastMovementLog a cada box
+      const boxesWithLogs = deliveryNote.boxes.map(box => ({
+        ...box.toJSON(),
+        lastMovementLog: lastLogsMap[box.id] || null
+      }));
+
+      const deliveryNoteWithLogs = {
+        ...deliveryNote.toJSON(),
+        boxes: boxesWithLogs
+      };
+
+      return res.json(deliveryNoteWithLogs);
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: error.message });
     }
   }
+
 
   static async getByInvoice(req, res) {
     try {
@@ -405,81 +452,81 @@ class DeliveryNoteController {
   }
 
   static async getByExpedition(req, res) {
-  try {
-    const { expeditionId } = req.params
-    const where = { expeditionId, ...buildContextFilter(req.context) }
+    try {
+      const { expeditionId } = req.params
+      const where = { expeditionId, ...buildContextFilter(req.context) }
 
-    // 1️⃣ Busca os romaneios normalmente
-    const result = await buildQueryOptions(req, DeliveryNote, {
-      where,
-      include: [
-        {
-          model: Box,
-          as: 'boxes',
-          include: [
-            {
-              model: BoxItem,
-              as: 'items',
-              include: [
-                {
-                  model: OrderItem,
-                  as: 'orderItem',
-                  include: [
-                    { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
-                  ]
-                },
-                { model: Item, as: 'item', attributes: ['name', 'price'] },
-                {
-                  model: ItemFeature,
-                  as: 'itemFeature',
-                  include: [{ model: Feature, as: 'feature', attributes: ['name'] }]
-                }
-              ]
-            }
-          ]
+      // 1️⃣ Busca os romaneios normalmente
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where,
+        include: [
+          {
+            model: Box,
+            as: 'boxes',
+            include: [
+              {
+                model: BoxItem,
+                as: 'items',
+                include: [
+                  {
+                    model: OrderItem,
+                    as: 'orderItem',
+                    include: [
+                      { model: FeatureOption, as: 'featureOption', attributes: ['name'] }
+                    ]
+                  },
+                  { model: Item, as: 'item', attributes: ['name', 'price'] },
+                  {
+                    model: ItemFeature,
+                    as: 'itemFeature',
+                    include: [{ model: Feature, as: 'feature', attributes: ['name'] }]
+                  }
+                ]
+              }
+            ]
+          },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+        ],
+      })
+
+      const deliveryNoteIds = result.data.map(dn => dn.id)
+
+      // 3️⃣ Busca o último log de cada romaneio
+      const logs = await MovementLogEntity.findAll({
+        where: {
+          entity: 'romaneio',
+          entityId: { [Op.in]: deliveryNoteIds },
         },
-        { model: Customer, as: 'customer', attributes: ['id', 'name'] },
-      ],
-    })
+        attributes: ['entityId', 'status'],
+        order: [['createdAt', 'DESC']],
+      })
 
-    const deliveryNoteIds = result.data.map(dn => dn.id)
-
-    // 3️⃣ Busca o último log de cada romaneio
-    const logs = await MovementLogEntity.findAll({
-      where: {
-        entity: 'romaneio',
-        entityId: { [Op.in]: deliveryNoteIds },
-      },
-      attributes: ['entityId', 'status'],
-      order: [['createdAt', 'DESC']],
-    })
-
-    // 4️⃣ Cria um map: entityId -> último log
-    const lastLogs = {}
-    for (const log of logs) {
-      if (!lastLogs[log.entityId]) {
-        lastLogs[log.entityId] = log
+      // 4️⃣ Cria um map: entityId -> último log
+      const lastLogs = {}
+      for (const log of logs) {
+        if (!lastLogs[log.entityId]) {
+          lastLogs[log.entityId] = log
+        }
       }
+
+      // 5️⃣ Anexa o último log a cada DeliveryNote
+      const enrichedRows = result.data.map(dn => ({
+        ...dn.toJSON(),
+        lastMovementLog: lastLogs[dn.id] || null,
+      }))
+
+      // 6️⃣ Substitui apenas o data e retorna o mesmo formato
+      res.json({
+        success: true,
+        ...result,
+        data: enrichedRows,
+      })
+
+    } catch (error) {
+      console.error(error)
+      return res.status(500).json({ success: false, message: error.message })
     }
-
-    // 5️⃣ Anexa o último log a cada DeliveryNote
-    const enrichedRows = result.data.map(dn => ({
-      ...dn.toJSON(),
-      lastMovementLog: lastLogs[dn.id] || null,
-    }))
-
-    // 6️⃣ Substitui apenas o data e retorna o mesmo formato
-    res.json({
-      success: true,
-      ...result,
-      data: enrichedRows,
-    })
-
-  } catch (error) {
-    console.error(error)
-    return res.status(500).json({ success: false, message: error.message })
   }
-}
 
   static async generatePDF(req, res) {
     try {

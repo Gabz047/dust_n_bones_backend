@@ -11,6 +11,12 @@ Item.init({
     primaryKey: true,
     allowNull: false,
   },
+   referralId: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      unique: true,
+      field: 'referral_id',
+    },
   name: {
     type: DataTypes.STRING,
     allowNull: false,

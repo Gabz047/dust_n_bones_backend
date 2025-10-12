@@ -1,8 +1,12 @@
 // controllers/CustomerGroupController.js
 import Customer from '../models/Customer.js';
 import CustomerGroup from '../models/CustomerGroup.js';
+import Branch from '../models/Branch.js';
+import Company from '../models/Company.js';
+import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
+import { generateReferralId } from '../utils/globals/generateReferralId.js';
 
 function groupAccessFilter(req) {
   const { companyId, branchId } = req.context || {};
@@ -14,61 +18,76 @@ function groupAccessFilter(req) {
 export default {
   // Criar grupo de clientes
   async create(req, res) {
-    try {
-      const { mainCustomer } = req.body;
-      const { companyId, branchId } = req.context;
+     const transaction = await sequelize.transaction();
+  try {
+    const { mainCustomer } = req.body
+    const { companyId, branchId } = req.context
 
-      const customer = await Customer.findByPk(mainCustomer);
-      if (!customer) {
-        return res.status(404).json({
-          success: false,
-          message: 'Cliente não encontrado.',
-        });
-      }
-
-      if (
-        (branchId && customer.branchId !== branchId) ||
-        (!branchId && companyId && customer.companyId !== companyId)
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: 'Cliente não pertence à mesma empresa ou filial.',
-        });
-      }
-
-      const isMainCustomerInAnotherGroup = await CustomerGroup.findOne({
-        where: { mainCustomer },
-      });
-
-      const isCustomerInAnotherGroup = await Customer.findOne({
-        where: { id: mainCustomer, customerGroup: { [Op.ne]: null } },
-      });
-
-      if (isMainCustomerInAnotherGroup || isCustomerInAnotherGroup) {
-        return res.status(400).json({
-          success: false,
-          message: 'Este cliente já pertence a um grupo (como principal ou comum).',
-        });
-      }
-
-      const group = await CustomerGroup.create({
-        mainCustomer,
-        companyId: companyId || null,
-        branchId: branchId || null,
-      });
-
-      await Customer.update({ customerGroup: group.id }, { where: { id: mainCustomer } });
-
-      return res.status(201).json({
-        success: true,
-        message: 'Grupo criado com sucesso.',
-        data: group,
-      });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ success: false, message: 'Erro ao criar grupo.' });
+    const customer = await Customer.findByPk(mainCustomer)
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cliente não encontrado.',
+      })
     }
-  },
+
+    if (
+      (branchId && customer.branchId !== branchId) ||
+      (!branchId && companyId && customer.companyId !== companyId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Cliente não pertence à mesma empresa ou filial.',
+      })
+    }
+
+    const isMainCustomerInAnotherGroup = await CustomerGroup.findOne({
+      where: { mainCustomer },
+    })
+
+    const isCustomerInAnotherGroup = await Customer.findOne({
+      where: { id: mainCustomer, customerGroup: { [Op.ne]: null } },
+    })
+
+    if (isMainCustomerInAnotherGroup || isCustomerInAnotherGroup) {
+      return res.status(400).json({
+        success: false,
+        message: 'Este cliente já pertence a um grupo (como principal ou comum).',
+      })
+    }
+
+       const company = await Company.findOne({ where: { id: companyId } });
+      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+
+      const companyRef = company?.referralId;
+      const branchRef = branch?.referralId ?? null;
+
+      const referralId = await generateReferralId({
+        model: CustomerGroup,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
+
+    const group = await CustomerGroup.create({
+      mainCustomer,
+      referralId,
+      companyId: companyId || null,
+      branchId: branchId || null,
+    })
+
+    await Customer.update({ customerGroup: group.id }, { where: { id: mainCustomer } })
+
+    return res.status(201).json({
+      success: true,
+      message: 'Grupo criado com sucesso.',
+      data: group,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ success: false, message: 'Erro ao criar grupo.' })
+  }
+},
 
   // 📦 Buscar todos os grupos com paginação e filtros
   async getAll(req, res) {
