@@ -134,7 +134,7 @@ class BoxController {
       const branchRef = branch?.referralId ?? null;
 
       const MreferralId = await generateReferralId({
-        model: Box,
+        model: MovementLogEntity,
         transaction,
         companyId: companyRef,
         branchId: branchRef,
@@ -224,7 +224,7 @@ class BoxController {
       const branchRef = branch?.referralId ?? null;
 
       const MreferralId = await generateReferralId({
-        model: Box,
+        model:  MovementLogEntity,
         transaction,
         companyId: companyRef,
         branchId: branchRef,
@@ -316,7 +316,7 @@ class BoxController {
       const branchRef = branch?.referralId ?? null;
 
       const MreferralId = await generateReferralId({
-        model: Box,
+        model:  MovementLogEntity,
         transaction,
         companyId: companyRef,
         branchId: branchRef,

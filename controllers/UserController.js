@@ -2,6 +2,7 @@ import { User, Company, Branch, UserBranch } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
+import jwt from 'jsonwebtoken';
 
 function userAccessFilter(req) {
   // Prioridade: user → context → tenant
@@ -89,7 +90,7 @@ class UserController {
     }
   }
     
-    static async login(req, res) {
+       static async login(req, res) {
         try {
             const { email, username, password, rememberToken } = req.body;
             
@@ -286,41 +287,60 @@ class UserController {
     }
   }
     
-    static async getById(req, res) {
-    try {
-      const { id } = req.params;
+   static async getById(req, res) {
+  try {
+    const { id } = req.params;
 
-      const where = { id, ...userAccessFilter(req) };
+    const where = { id, ...userAccessFilter(req) };
 
-      const result = await buildQueryOptions(req, User, {
-        where,
-        attributes: { exclude: ['password'] },
-        include: [
-          { model: Company, as: 'company', attributes: ['id', 'name'] },
-          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
-          { 
-            model: UserBranch, 
-            as: 'userBranches',
-            include: [
-              { model: Branch, as: 'branch', attributes: ['id', 'name'] }
-            ]
-          }
-        ],
-      });
+    const user = await User.findOne({
+      where,
+      attributes: { exclude: ['password'] },
+      include: [
+        { model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] },
+        { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+        { 
+          model: UserBranch, 
+          as: 'userBranches',
+          include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
+        }
+      ],
+    });
 
-      if (!result.data || result.data.length === 0)
-        return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
-
-      return res.json({ success: true, ...result });
-    } catch (error) {
-      console.error('Erro ao buscar usuário:', error);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao buscar usuário.',
-        error: error.message 
-      });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
     }
+
+    const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
+    const entityType = 'user';
+
+    const { password: _, ...userData } = user.toJSON();
+
+    res.json({
+      success: true,
+      message: 'Usuário encontrado com sucesso',
+      data: {
+        [entityType]: userData,
+        userInBranch: userInBranch ? true : false,
+        entityType,
+        tenant: {
+          id: user.company?.id,
+          name: user.company?.name,
+          subdomain: user.company?.subdomain,
+          logo: user.company?.logo
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao buscar usuário.',
+      error: error.message 
+    });
   }
+}
+
     
     static async update(req, res) {
   const transaction = await sequelize.transaction();
@@ -467,59 +487,73 @@ class UserController {
         }
     }
     
-    static async updateProfile(req, res) {
-        try {
-            const updates = req.body;
+   static async updateProfile(req, res) {
+  try {
+    const updates = { ...req.body };
 
-            // Remover campos que não podem ser atualizados pelo próprio usuário
-            delete updates.role;
-            delete updates.permissions;
-            delete updates.companyId;
-            delete updates.active;
+    // Remover campos que não podem ser atualizados pelo próprio usuário
+    delete updates.role;
+    delete updates.permissions;
+    delete updates.companyId;
+    delete updates.active;
 
-            const user = await User.findByPk(req.user.id);
+    const user = await User.findByPk(req.user.id);
 
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Usuário não encontrado'
-                });
-            }
-
-            // Verificar se email já existe (se está sendo atualizado)
-            if (updates.email && updates.email !== user.email) {
-                const existingUser = await User.findOne({
-                    where: {
-                        email: updates.email,
-                        companyId: user.companyId
-                    }
-                });
-                if (existingUser) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Email já está em uso nesta empresa'
-                    });
-                }
-            }
-
-            await user.update(updates);
-
-            const { password: _, ...userData } = user.toJSON();
-
-            res.json({
-                success: true,
-                message: 'Perfil atualizado com sucesso',
-                data: userData
-            });
-        } catch (error) {
-            console.error('Erro ao atualizar perfil:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
     }
+
+    // Verificar se email já existe
+    if (updates.email && updates.email !== user.email) {
+      const existingUser = await User.findOne({
+        where: {
+          email: updates.email,
+          companyId: user.companyId
+        }
+      });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email já está em uso nesta empresa'
+        });
+      }
+    }
+
+    await user.update(updates);
+
+    const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
+    const entityType = 'user';
+
+    const { password: _, ...userData } = user.toJSON();
+
+    res.json({
+      success: true,
+      message: 'Perfil atualizado com sucesso',
+      data: {
+        [entityType]: userData,
+        userInBranch: userInBranch ? true : false,
+        entityType,
+        tenant: {
+          id: user.company?.id,
+          name: user.company?.name,
+          subdomain: user.company?.subdomain,
+          logo: user.company?.logo
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar perfil:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+}
+
 }
 
 export default UserController;

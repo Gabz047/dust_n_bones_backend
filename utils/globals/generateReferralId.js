@@ -1,5 +1,4 @@
 import { Op } from 'sequelize'
-import { MovementLogEntity } from '../../models/index.js'
 /**
  * Gera um referralId incremental.
  * - Se branchId é nulo: incrementa todo o número do último registro.
@@ -20,7 +19,7 @@ export async function generateReferralId({
   const basePrefix = `${companyPrefix}${branchPrefix}`
 
   // Pega o último registro da model
-  const lastItem = await MovementLogEntity.findOne({
+  const lastItem = await model.findOne({
     order: [[referralField, 'DESC']],
     transaction,
 

@@ -65,7 +65,7 @@ class ProjectController {
   
       
             const MreferralId = await generateReferralId({
-              model: Project,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -371,7 +371,7 @@ class ProjectController {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: Project,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -466,7 +466,7 @@ class ProjectController {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: Project,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,

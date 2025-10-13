@@ -51,7 +51,7 @@ class DeliveryNoteController {
       
       
             const MreferralId = await generateReferralId({
-              model: DeliveryNote,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -164,7 +164,7 @@ class DeliveryNoteController {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: DeliveryNote,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -242,7 +242,7 @@ class DeliveryNoteController {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: DeliveryNote,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,

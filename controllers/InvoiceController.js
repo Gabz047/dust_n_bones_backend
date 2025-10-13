@@ -48,7 +48,7 @@ class InvoiceController {
 
       
             const MreferralId = await generateReferralId({
-              model: Invoice,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -194,7 +194,7 @@ class InvoiceController {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: Invoice,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -271,7 +271,7 @@ static async delete(req, res) {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: Invoice,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,

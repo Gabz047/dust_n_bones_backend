@@ -66,7 +66,7 @@ static async create(req, res) {
             const branchRef = branch?.referralId ?? null;
       
             const MreferralId = await generateReferralId({
-              model: Expedition,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -141,7 +141,7 @@ static async create(req, res) {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: Expedition,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
@@ -212,7 +212,7 @@ static async delete(req, res) {
             const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
-              model: Expedition,
+              model:  MovementLogEntity,
               transaction,
               companyId: companyRef,
               branchId: branchRef,
