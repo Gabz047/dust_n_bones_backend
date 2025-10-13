@@ -95,7 +95,7 @@ User.init({
   },
   companyId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'companies',
       key: 'id',

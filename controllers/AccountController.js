@@ -1,4 +1,4 @@
-import { Account } from '../models/index.js';
+import { Account,Company } from '../models/index.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -185,50 +185,94 @@ class AccountController {
         }
     }
 
-    static async update(req, res) {
-        try {
-            const { id } = req.params;
-            const updates = req.body;
+   static async update(req, res) {
+  try {
+    const updates = { ...req.body };
 
-            const account = await Account.findByPk(id);
-            if (!account) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Conta não encontrada'
-                });
-            }
+    // Impedir alteração de campos sensíveis
+    delete updates.role;
+    delete updates.accountType;
+    delete updates.active;
+    delete updates.companyId;
+    delete updates.referralId;
 
-            // Verificar se email já existe (se está sendo atualizado)
-            if (updates.email && updates.email !== account.email) {
-                const existingAccount = await Account.findOne({
-                    where: { email: updates.email }
-                });
-                if (existingAccount) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Email já está em uso'
-                    });
-                }
-            }
-
-            await account.update(updates);
-
-            const { password: _, ...accountData } = account.toJSON();
-
-            res.json({
-                success: true,
-                message: 'Conta atualizada com sucesso',
-                data: accountData
-            });
-        } catch (error) {
-            console.error('Erro ao atualizar conta:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
+    // Buscar conta autenticada
+    const account = await Account.findByPk(req.user.id, {
+      include: [
+        {
+          model: Company,
+          as: 'company',
+          attributes: ['id', 'name', 'subdomain', 'logo']
         }
+      ]
+    });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conta não encontrada'
+      });
     }
+
+    // Verificar se email já existe
+    if (updates.email && updates.email !== account.email) {
+      const existingAccount = await Account.findOne({
+        where: { email: updates.email }
+      });
+      if (existingAccount) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email já está em uso'
+        });
+      }
+    }
+
+    // Atualiza apenas os campos enviados
+    await account.update(updates);
+
+    // Gerar novo token atualizado
+    const token = jwt.sign(
+      {
+        id: account.id,
+        email: account.email,
+        role: account.role,
+        companyId: account.companyId,
+        entityType: 'account'
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+
+    // Remover senha
+    const { password: _, ...accountData } = account.toJSON();
+
+    // Formato de resposta igual ao UserController.login
+    res.json({
+      success: true,
+      message: 'Perfil atualizado com sucesso',
+      data: {
+        account: accountData,
+        userInBranch: false, // Accounts não possuem branches
+        entityType: 'account',
+        token,
+        tenant: {
+          id: account.company?.id || null,
+          name: account.company?.name || null,
+          subdomain: account.company?.subdomain || null,
+          logo: account.company?.logo || null
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar perfil da conta:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+}
+
 
     static async delete(req, res) {
         try {

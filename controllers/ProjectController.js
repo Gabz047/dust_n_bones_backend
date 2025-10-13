@@ -113,13 +113,36 @@ class ProjectController {
   }
 
   // 🔒 Filtro de acesso por empresa/filial
-  static contextFilter(req) {
-    const { companyId, branchId } = req.context || {}
+   static async contextFilter(req) {
+  const { companyId, branchId } = req.context || {}
+  if (!companyId) return {} // segurança extra
+
+  // 🔹 Caso o usuário tenha apenas branch (sem company explícita)
+  // (ex: operador vinculado só à filial)
+  if (branchId && !req.user?.companyId && !req.context?.companyOnly) {
+    return { branchId }
+  }
+
+  // 🔹 Caso o usuário tenha apenas company → vê empresa e todas as branches
+  if (!branchId) {
     return {
-      companyId,
-      ...(branchId ? { branchId } : {}),
+      [Op.or]: [
+        { companyId, branchId: null },
+        { '$branch.companyId$': companyId }
+      ]
     }
   }
+
+  // 🔹 Caso o usuário tenha company + branch → mesmo acesso que o company
+  return {
+    [Op.or]: [
+      { companyId, branchId: null },
+      { '$branch.companyId$': companyId }
+    ]
+  }
+}
+  // ...
+
 
   static async getAll(req, res) {
     try {

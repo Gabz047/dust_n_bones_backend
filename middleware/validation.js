@@ -39,7 +39,8 @@ export const accountSchemas = {
     username: Joi.string().min(3).max(50).optional(),
     password: Joi.string().min(6).optional(),
     role: Joi.string().valid('owner', 'manager', 'employee').optional(),
-    accountType: Joi.string().valid('client', 'admin').optional()
+    accountType: Joi.string().valid('client', 'admin').optional(),
+    id: Joi.string().uuid().allow(null).empty('').optional(),
   }),
 
   login: Joi.object({
@@ -2018,6 +2019,7 @@ companyId: Joi.string().uuid().allow(null).empty('').optional(),
     active: Joi.boolean().optional(),
     branchId: Joi.string().uuid().allow(null).empty('').optional(),
 companyId: Joi.string().uuid().allow(null).empty('').optional(),
+id: Joi.string().uuid().allow(null).empty('').optional(),
   }),
 
   login: Joi.object({
@@ -2042,7 +2044,9 @@ companyId: Joi.string().uuid().allow(null).empty('').optional(),
     firstName: Joi.string().min(2).max(50).optional(),
     lastName: Joi.string().min(2).max(50).optional(),
     phone: Joi.string().min(10).max(15).optional(),
-    avatar: Joi.string().uri().optional()
+    avatar: Joi.string().uri().optional(),
+    id: Joi.string().uuid().allow(null).empty('').optional(),
+    
   })
 };
 

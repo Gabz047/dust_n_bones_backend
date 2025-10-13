@@ -1,8 +1,9 @@
-import { User, Company, Branch, UserBranch } from '../models/index.js';
+import { User, Company, Branch, UserBranch, Account } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
+
 
 function userAccessFilter(req) {
   // Prioridade: user → context → tenant
@@ -23,8 +24,9 @@ function userAccessFilter(req) {
   return filter;
 }
 
+
 class UserController {
-   static async create(req, res) {
+  static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const {
@@ -39,6 +41,7 @@ class UserController {
         permissions,
         companyId,
         branchId,
+        assignedBranches, // Nova: lista de branches para UserBranch
       } = req.body;
 
       // Verificar se email já existe na empresa
@@ -69,9 +72,19 @@ class UserController {
         permissions: permissions || [],
       };
 
-      const user = branchId
-        ? await User.create({ branchId, ...userData }, { transaction })
-        : await User.create({ companyId: companyId || req.context?.companyId, ...userData }, { transaction });
+     const user = branchId
+  ? await User.create({ branchId, ...userData }, { transaction })
+  : await User.create({ companyId: companyId || req.context?.companyId, ...userData }, { transaction });
+
+      // Criar UserBranch registros se assignedBranches for fornecido
+      if (assignedBranches && Array.isArray(assignedBranches) && assignedBranches.length > 0) {
+        const userBranchData = assignedBranches.map(bid => ({
+          userId: user.id,
+          branchId: bid,
+          dateJoined: new Date()
+        }));
+        await UserBranch.bulkCreate(userBranchData, { transaction });
+      }
 
       await transaction.commit();
 
@@ -82,167 +95,166 @@ class UserController {
     } catch (error) {
       await transaction.rollback();
       console.error('Erro ao criar usuário:', error);
-      return res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         message: 'Erro ao criar usuário.',
-        error: error.message 
+        error: error.message
       });
     }
   }
-    
-       static async login(req, res) {
-        try {
-            const { email, username, password, rememberToken } = req.body;
-            
-            if (!email && !username) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email ou username é obrigatório'
-                });
-            }
-            // O tenant já vem do middleware extractTenant via header X-Tenant-ID
-            if (!req.tenant) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Header X-Tenant-ID é obrigatório',
-                    errors: [{
-                        field: 'X-Tenant-ID',
-                        message: 'Header X-Tenant-ID não foi fornecido ou tenant não encontrado'
-                    }]
-                });
-            }
 
-            let authenticatedEntity = null;
-            let entityType = null;
+  static async login(req, res) {
+    try {
+      const { email, username, password, rememberToken } = req.body;
 
-            // Primeiro, tentar buscar um User na empresa especificada
-            const whereConditionUser = {
-                companyId: req.tenant.id,
-                active: true
-            };
+      if (!email && !username) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email ou username é obrigatório'
+        });
+      }
+      // O tenant já vem do middleware extractTenant via header X-Tenant-ID
+      if (!req.tenant) {
+        return res.status(400).json({
+          success: false,
+          message: 'Header X-Tenant-ID é obrigatório',
+          errors: [{
+            field: 'X-Tenant-ID',
+            message: 'Header X-Tenant-ID não foi fornecido ou tenant não encontrado'
+          }]
+        });
+      }
 
-            if (email) {
-                whereConditionUser.email = email;
-            } else if (username) {
-                whereConditionUser.username = username;
-            }
+      let authenticatedEntity = null;
+      let entityType = null;
 
-            const user = await User.findOne({
-                where: whereConditionUser,
-                include: [
-                    {
-                        model: Company,
-                        as: 'company',
-                        attributes: ['id', 'name', 'subdomain', 'logo']
-                    }
-                ]
-            });
+      // Primeiro, tentar buscar um User na empresa especificada
+      const whereConditionUser = {
+        companyId: req.tenant.id,
+        active: true
+      };
 
-            if (user) {
-                // Verificar senha do User
-                const isValidPassword = await user.validPassword(password);
-                if (isValidPassword) {
-                    authenticatedEntity = user;
-                    entityType = 'user';
-                    // Atualizar último login
-                    await user.update({ lastLoginAt: new Date() });
-                }
-            }
+      if (email) {
+        whereConditionUser.email = email;
+      } else if (username) {
+        whereConditionUser.username = username;
+      }
 
-            // Se não encontrou User ou a senha não confere, tentar buscar Account vinculado ao tenant
-            if (!authenticatedEntity) {
-                const whereConditionAccount = {
-                    companyId: req.tenant.id
-                };
+      const user = await User.findOne({
+        where: whereConditionUser,
+        include: [
+          {
+            model: Company,
+            as: 'company',
+            attributes: ['id', 'name', 'subdomain', 'logo']
+          }
+        ]
+      });
 
-                if (email) {
-                    whereConditionAccount.email = email;
-                } else if (username) {
-                    whereConditionAccount.username = username;
-                }
-
-                const account = await Account.findOne({
-                    where: whereConditionAccount,
-                    include: [
-                        {
-                            model: Company,
-                            as: 'company',
-                            attributes: ['id', 'name', 'subdomain', 'logo']
-                        }
-                    ]
-                });
-
-                if (account && account.password) {
-                    // Verificar senha do Account
-                    const isValidPassword = await account.validPassword(password);
-                    if (isValidPassword) {
-                        authenticatedEntity = account;
-                        entityType = 'account';
-                    }
-                }
-            }
-
-            // Se não encontrou nem User nem Account válido
-            if (!authenticatedEntity) {
-                console.warn('Falha no login: Credenciais inválidas para email/username:', email || username);
-                return res.status(401).json({
-                    success: false,
-                    message: 'Credenciais inválidas'
-                });
-            }
-
-            // Gerar token JWT
-            const token = jwt.sign(
-                {
-                    id: authenticatedEntity.id,
-                    email: authenticatedEntity.email,
-                    role: authenticatedEntity.role,
-                    companyId: authenticatedEntity.companyId,
-                    entityType: entityType // Adicionar tipo da entidade para diferenciar
-                },
-                process.env.JWT_SECRET,
-                { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
-            );
-
-            const { password: _, ...entityData } = authenticatedEntity.toJSON();
-
-            const userInBranch = await UserBranch.findOne({where: { userId: authenticatedEntity.id}})
-
-            res.cookie('token', token, {
-                httpOnly: true,
-                // secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-                secure: false,
-                sameSite: 'lax', // Protege contra CSRF
-                maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
-            })
-
-            res.json({
-                success: true,
-                message: 'Login realizado com sucesso',
-                data: {
-                    [entityType]: entityData, // user ou account,
-                    ['userInBranch']: userInBranch ? true : false, // Verifica se o usuário está vinculado a uma filial ou diretamente à empresa
-                    entityType,
-                    token,
-                    tenant: {
-                        id: req.tenant.id,
-                        name: req.tenant.name,
-                        subdomain: req.tenant.subdomain,
-                        logo: req.tenant.logo
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Erro no login:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
+      if (user) {
+        // Verificar senha do User
+        const isValidPassword = await user.validPassword(password);
+        if (isValidPassword) {
+          authenticatedEntity = user;
+          entityType = 'user';
+          // Atualizar último login
+          await user.update({ lastLoginAt: new Date() });
         }
+      }
+
+      // Se não encontrou User ou a senha não confere, tentar buscar Account vinculado ao tenant
+      if (!authenticatedEntity) {
+        const whereConditionAccount = {
+          companyId: req.tenant.id
+        };
+
+        if (email) {
+          whereConditionAccount.email = email;
+        } else if (username) {
+          whereConditionAccount.username = username;
+        }
+
+        const account = await Account.findOne({
+          where: whereConditionAccount,
+          include: [
+            {
+              model: Company,
+              as: 'company',
+              attributes: ['id', 'name', 'subdomain', 'logo']
+            }
+          ]
+        });
+
+        if (account && account.password) {
+          // Verificar senha do Account
+          const isValidPassword = await account.validPassword(password);
+          if (isValidPassword) {
+            authenticatedEntity = account;
+            entityType = 'account';
+          }
+        }
+      }
+
+      // Se não encontrou nem User nem Account válido
+      if (!authenticatedEntity) {
+        console.warn('Falha no login: Credenciais inválidas para email/username:', email || username);
+        return res.status(401).json({
+          success: false,
+          message: 'Credenciais inválidas'
+        });
+      }
+
+      // Gerar token JWT
+      const token = jwt.sign(
+        {
+          id: authenticatedEntity.id,
+          email: authenticatedEntity.email,
+          role: authenticatedEntity.role,
+          companyId: authenticatedEntity.companyId,
+          entityType: entityType // Adicionar tipo da entidade para diferenciar
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
+      );
+
+      const { password: _, ...entityData } = authenticatedEntity.toJSON();
+
+      const userInBranch = await UserBranch.findOne({ where: { userId: authenticatedEntity.id } })
+
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+      })
+
+      res.json({
+        success: true,
+        message: 'Login realizado com sucesso',
+        data: {
+          [entityType]: entityData,
+          userInBranch: userInBranch ? true : false,
+          entityType,
+          token,
+          tenant: {
+            id: req.tenant.id,
+            name: req.tenant.name,
+            subdomain: req.tenant.subdomain,
+            logo: req.tenant.logo
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Erro no login:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
-    
-    static async getAll(req, res) {
+  }
+
+  static async getAll(req, res) {
     try {
       const { term, fields, role, active } = req.query;
 
@@ -272,6 +284,11 @@ class UserController {
         include: [
           { model: Company, as: 'company', attributes: ['id', 'name'] },
           { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          {
+            model: UserBranch,
+            as: 'userBranches',
+            include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
+          }
         ],
         order: [['createdAt', 'DESC']],
       });
@@ -279,129 +296,147 @@ class UserController {
       return res.json({ success: true, ...result });
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
-      return res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         message: 'Erro ao buscar usuários.',
-        error: error.message 
+        error: error.message
       });
     }
   }
-    
-   static async getById(req, res) {
-  try {
-    const { id } = req.params;
 
-    const where = { id, ...userAccessFilter(req) };
+  static async getById(req, res) {
+    try {
+      const { id } = req.params;
 
-    const user = await User.findOne({
-      where,
-      attributes: { exclude: ['password'] },
-      include: [
-        { model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] },
-        { model: Branch, as: 'branch', attributes: ['id', 'name'] },
-        { 
-          model: UserBranch, 
-          as: 'userBranches',
-          include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
-        }
-      ],
-    });
+      const where = { id, ...userAccessFilter(req) };
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
-    }
+      const user = await User.findOne({
+        where,
+        attributes: { exclude: ['password'] },
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          {
+            model: UserBranch,
+            as: 'userBranches',
+            include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
+          }
+        ],
+      });
 
-    const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
-    const entityType = 'user';
-
-    const { password: _, ...userData } = user.toJSON();
-
-    res.json({
-      success: true,
-      message: 'Usuário encontrado com sucesso',
-      data: {
-        [entityType]: userData,
-        userInBranch: userInBranch ? true : false,
-        entityType,
-        tenant: {
-          id: user.company?.id,
-          name: user.company?.name,
-          subdomain: user.company?.subdomain,
-          logo: user.company?.logo
-        }
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
       }
-    });
-  } catch (error) {
-    console.error('Erro ao buscar usuário:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao buscar usuário.',
-      error: error.message 
-    });
-  }
-}
 
-    
-    static async update(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const { id } = req.params;
-    const updates = { ...req.body };
+      const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
+      const entityType = 'user';
 
-    const user = await User.findByPk(id);
-    if (!user) {
-      await transaction.rollback();
-      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
-    }
+      const { password: _, ...userData } = user.toJSON();
 
-    // Tratar branchId e companyId
-    if ('branchId' in updates) {
-      updates.branchId = updates.branchId || null; // '' vira null
-    }
-    if ('companyId' in updates) {
-      updates.companyId = updates.companyId || null; // '' vira null
-    }
-
-    // Verificar se email já existe (se está sendo atualizado)
-    if (updates.email && updates.email !== user.email) {
-      const existingUser = await User.findOne({
-        where: {
-          email: updates.email,
-          companyId: user.companyId,
-          id: { [Op.ne]: id }
+      res.json({
+        success: true,
+        message: 'Usuário encontrado com sucesso',
+        data: {
+          [entityType]: userData,
+          userInBranch: userInBranch ? true : false,
+          entityType,
+          tenant: {
+            id: user.company?.id,
+            name: user.company?.name,
+            subdomain: user.company?.subdomain,
+            logo: user.company?.logo
+          }
         }
       });
+    } catch (error) {
+      console.error('Erro ao buscar usuário:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao buscar usuário.',
+        error: error.message
+      });
+    }
+  }
 
-      if (existingUser) {
+  static async update(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const { id } = req.params;
+      const updates = { ...req.body };
+      const assignedBranches = updates.assignedBranches; // Extrair antes de atualizar
+
+      delete updates.assignedBranches; // Remover do objeto de updates
+
+      const user = await User.findByPk(id);
+      if (!user) {
         await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Email já está em uso nesta empresa'
-        });
+        return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
       }
+
+      // Tratar branchId e companyId
+      if ('branchId' in updates) {
+        updates.branchId = updates.branchId || null;
+      }
+      if ('companyId' in updates) {
+        updates.companyId = updates.companyId || null;
+      }
+
+      // Verificar se email já existe (se está sendo atualizado)
+      if (updates.email && updates.email !== user.email) {
+        const existingUser = await User.findOne({
+          where: {
+            email: updates.email,
+            companyId: user.companyId,
+            id: { [Op.ne]: id }
+          }
+        });
+
+        if (existingUser) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: 'Email já está em uso nesta empresa'
+          });
+        }
+      }
+
+      // Atualizar apenas campos que vieram no payload
+      const fieldsToUpdate = Object.keys(updates);
+      await user.update(updates, { transaction, fields: fieldsToUpdate });
+
+      // Gerenciar UserBranch se assignedBranches foi fornecido
+      if (assignedBranches !== undefined && Array.isArray(assignedBranches)) {
+        // Deletar todos os UserBranch existentes
+        await UserBranch.destroy({ where: { userId: id }, transaction });
+
+        // Criar novos registros se a lista não estiver vazia
+        if (assignedBranches.length > 0) {
+          const userBranchData = assignedBranches.map(branchId => ({
+            userId: id,
+            branchId: branchId,
+            dateJoined: new Date()
+          }));
+          await UserBranch.bulkCreate(userBranchData, { transaction });
+        }
+      }
+
+      await transaction.commit();
+
+      const { password: _, ...userResponse } = user.toJSON();
+      return res.json({ success: true, data: userResponse });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao atualizar usuário:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao atualizar usuário.',
+        error: error.message
+      });
     }
-
-    // Atualizar apenas campos que vieram no payload
-    const fieldsToUpdate = Object.keys(updates);
-    await user.update(updates, { transaction, fields: fieldsToUpdate });
-
-    await transaction.commit();
-
-    const { password: _, ...userResponse } = user.toJSON();
-    return res.json({ success: true, data: userResponse });
-
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao atualizar usuário:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao atualizar usuário.',
-      error: error.message 
-    });
   }
-}
-    
-  static  async delete(req, res) {
+
+  static async delete(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { id } = req.params;
@@ -434,6 +469,9 @@ class UserController {
         }
       }
 
+      // Deletar todos os UserBranch associados
+      await UserBranch.destroy({ where: { userId: id }, transaction });
+
       // Soft delete - apenas desativar
       await user.update({ active: false }, { transaction });
       await transaction.commit();
@@ -452,108 +490,113 @@ class UserController {
       });
     }
   }
-    
-    static async profile(req, res) {
-        try {
-            const user = await User.findByPk(req.user.id, {
-                attributes: { exclude: ['password'] },
-                include: [
-                    {
-                        model: Company,
-                        as: 'company',
-                        attributes: ['id', 'name', 'subdomain', 'logo']
-                    }
-                ]
-            });
 
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Usuário não encontrado'
-                });
-            }
-
-            res.json({
-                success: true,
-                data: user
-            });
-        } catch (error) {
-            console.error('Erro ao buscar perfil:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
-    }
-    
-   static async updateProfile(req, res) {
-  try {
-    const updates = { ...req.body };
-
-    // Remover campos que não podem ser atualizados pelo próprio usuário
-    delete updates.role;
-    delete updates.permissions;
-    delete updates.companyId;
-    delete updates.active;
-
-    const user = await User.findByPk(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Usuário não encontrado'
+  static async profile(req, res) {
+    try {
+      const user = await User.findByPk(req.user.id, {
+        attributes: { exclude: ['password'] },
+        include: [
+          {
+            model: Company,
+            as: 'company',
+            attributes: ['id', 'name', 'subdomain', 'logo']
+          },
+          {
+            model: UserBranch,
+            as: 'userBranches',
+            include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
+          }
+        ]
       });
-    }
 
-    // Verificar se email já existe
-    if (updates.email && updates.email !== user.email) {
-      const existingUser = await User.findOne({
-        where: {
-          email: updates.email,
-          companyId: user.companyId
-        }
-      });
-      if (existingUser) {
-        return res.status(400).json({
+      if (!user) {
+        return res.status(404).json({
           success: false,
-          message: 'Email já está em uso nesta empresa'
+          message: 'Usuário não encontrado'
         });
       }
+
+      res.json({
+        success: true,
+        data: user
+      });
+    } catch (error) {
+      console.error('Erro ao buscar perfil:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
     }
+  }
 
-    await user.update(updates);
+  static async updateProfile(req, res) {
+    try {
+      const updates = { ...req.body };
 
-    const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
-    const entityType = 'user';
+      // Remover campos que não podem ser atualizados pelo próprio usuário
+      delete updates.role;
+      delete updates.permissions;
+      delete updates.companyId;
+      delete updates.active;
+      delete updates.assignedBranches; // Não permite auto-editar branches
 
-    const { password: _, ...userData } = user.toJSON();
+      const user = await User.findByPk(req.user.id);
 
-    res.json({
-      success: true,
-      message: 'Perfil atualizado com sucesso',
-      data: {
-        [entityType]: userData,
-        userInBranch: userInBranch ? true : false,
-        entityType,
-        tenant: {
-          id: user.company?.id,
-          name: user.company?.name,
-          subdomain: user.company?.subdomain,
-          logo: user.company?.logo
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Usuário não encontrado'
+        });
+      }
+
+      // Verificar se email já existe
+      if (updates.email && updates.email !== user.email) {
+        const existingUser = await User.findOne({
+          where: {
+            email: updates.email,
+            companyId: user.companyId
+          }
+        });
+        if (existingUser) {
+          return res.status(400).json({
+            success: false,
+            message: 'Email já está em uso nesta empresa'
+          });
         }
       }
-    });
-  } catch (error) {
-    console.error('Erro ao atualizar perfil:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
-  }
-}
 
+      await user.update(updates);
+
+      const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
+      const entityType = 'user';
+
+      const { password: _, ...userData } = user.toJSON();
+
+      res.json({
+        success: true,
+        message: 'Perfil atualizado com sucesso',
+        data: {
+          [entityType]: userData,
+          userInBranch: userInBranch ? true : false,
+          entityType,
+          tenant: {
+            id: user.company?.id,
+            name: user.company?.name,
+            subdomain: user.company?.subdomain,
+            logo: user.company?.logo
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar perfil:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
+  }
 }
 
 export default UserController;
