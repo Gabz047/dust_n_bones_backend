@@ -13,6 +13,11 @@ MovementLogEntity.init({
     primaryKey: true,
     allowNull: false,
   },
+    referralId: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    unique: true,
+  },
   status: {
     type: DataTypes.ENUM('aberto', 'finalizado'),
     allowNull: false,

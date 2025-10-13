@@ -59,12 +59,27 @@ static async create(req, res) {
     );
 
     // 🧾 Cria log de movimentação
+    const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const MreferralId = await generateReferralId({
+              model: Expedition,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
     let movementData = {
       id: uuidv4(),
       method: 'criação',
       entity: 'expedição',
       entityId: expId,
       status: 'aberto',
+      companyId: companyId || null,
+        branchId: branchId || null,
+        referralId: MreferralId,
     };
 
     // Verifica se userId é de User ou Account
@@ -117,15 +132,30 @@ static async create(req, res) {
         return res.status(400).json({ success: false, message: 'Cliente não encontrado.' });
 
       await expedition.update({ projectId, mainCustomerId }, { transaction });
+      const project = await Project.findByPk(projectId, { transaction });
 
+      const company = await Company.findOne({ where: { id: project.companyId } });
+            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Expedition,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
       // Preparar dados do log
       let movementData = {
         id: uuidv4(),
         method: 'edição',
         entity: 'expedição',
         entityId: expedition.id,
-        
+        companyId: project.companyId || null,
+        branchId: project.branchId || null,
         status: 'aberto',
+        referralId,
       };
 
       // Verifica User ou Account
@@ -173,7 +203,20 @@ static async delete(req, res) {
         message: 'Não é possível deletar a expedição porque existem romaneios vinculados.' 
       });
     }
+    const project = await Project.findByPk(expedition.projectId, { transaction }); 
 
+    const company = await Company.findOne({ where: { id: project.companyId } });
+            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Expedition,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
     // Preparar dados do log
     let movementData = {
       id: uuidv4(),
@@ -181,6 +224,9 @@ static async delete(req, res) {
       entity: 'expedição',
       entityId: expedition.id,
       status: 'aberto',
+      companyId: project.companyId || null,
+        branchId: project.branchId || null,
+        referralId,
     };
 
     // Verifica User ou Account

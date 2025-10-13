@@ -46,13 +46,24 @@ class InvoiceController {
         totalPrice: 0
       }, { transaction });
 
+      
+            const MreferralId = await generateReferralId({
+              model: Invoice,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       // Preparar dados do log
       let movementData = {
         method: 'criação',
         entity: 'fatura',
         entityId: invoice.id,
         status: 'aberto',
-        date: new Date()
+        date: new Date(),
+         companyId: companyId || null,
+        branchId: branchId || null,
+        referralId: MreferralId,
       };
 
       // Verifica User ou Account
@@ -176,12 +187,28 @@ class InvoiceController {
 
       await invoice.update({ totalPrice }, { transaction });
 
+      const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Invoice,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       const movementData = {
         method: 'edição',
         entity: 'fatura',
         entityId: invoice.id,
         status: 'aberto',
-        date: new Date()
+        date: new Date(),
+         companyId: companyId || null,
+        branchId: branchId || null,
+        referralId,
       };
 
       // Verifica User ou Account
@@ -237,12 +264,28 @@ static async delete(req, res) {
 
     await invoice.destroy({ transaction });
 
+    const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Invoice,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
     const movementData = {
       method: 'remoção',
       entity: 'fatura',
       entityId: id,
       status: 'aberto',
-      date: new Date()
+      date: new Date(),
+       companyId: companyId || null,
+        branchId: branchId || null,
+        referralId,
     };
 
     // Verifica User ou Account

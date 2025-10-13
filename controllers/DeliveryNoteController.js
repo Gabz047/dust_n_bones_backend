@@ -47,12 +47,25 @@ class DeliveryNoteController {
         referralId
       }, { transaction });
 
+     
+      
+      
+            const MreferralId = await generateReferralId({
+              model: DeliveryNote,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       // ✅ Criar movimentação
       let movementData = {
         method: 'criação',
         entity: 'romaneio',
         entityId: deliveryNote.id,
-        status: 'aberto'
+        status: 'aberto',
+        companyId: companyId || null,
+        branchId: branchId || null,
+        referralId: MreferralId,
       };
 
       // Verifica User ou Account
@@ -144,13 +157,28 @@ class DeliveryNoteController {
 
       await deliveryNote.update({ boxQuantity: updatedBoxIds.length, totalQuantity }, { transaction });
 
+      const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: DeliveryNote,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
       // ✅ Criar movimentação
       let movementData = {
         id: uuidv4(),
         method: 'edição',
         entity: 'romaneio',
         entityId: deliveryNote.id,
-        status: 'aberto'
+        status: 'aberto',
+        companyId: companyId || null,
+        branchId: branchId || null,
+        referralId,
       };
 
       // Verifica User ou Account
@@ -207,13 +235,29 @@ class DeliveryNoteController {
 
     await deliveryNote.destroy({ transaction });
 
+    const company = await Company.findOne({ where: { id: deliveryNote.companyId } });
+            const branch = deliveryNote.branchId ? await Branch.findOne({ where: { id: deliveryNote.branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: DeliveryNote,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
     // Cria movimentação de remoção
     let movementData = {
       id: uuidv4(),
       method: 'remoção',
       entity: 'romaneio',
       entityId: id,
-      status: 'finalizado'
+      status: 'finalizado',
+      companyId: deliveryNote.companyId || null,
+        branchId: deliveryNote.branchId || null,
+        referralId,
     };
 
     const user = await User.findByPk(userId);

@@ -62,13 +62,25 @@ class ProjectController {
         totalQuantity: totalQuantity || 0
       }, { transaction })
 
+  
+      
+            const MreferralId = await generateReferralId({
+              model: Project,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       // ✅ Criar movimentação
       let movementData = {
-        id: uuidv4(),
+      
         method: 'criação',
         entity: 'projeto',
         entityId: project.id,
-        status: 'aberto'
+        status: 'aberto',
+         companyId: companyId || null,
+        branchId: branchId || null,
+        referralId: MreferralId,
       }
 
       // Verifica User ou Account
@@ -352,13 +364,29 @@ class ProjectController {
 
       await project.update(updates, { transaction })
 
+      const company = await Company.findOne({ where: { id: project.companyId } });
+            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Project,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
       // ✅ Criar movimentação
       let movementData = {
-        id: uuidv4(),
+      
         method: 'edição',
         entity: 'projeto',
         entityId: project.id,
-        status: 'aberto'
+        status: 'aberto',
+         companyId: project.companyId || null,
+        branchId: project.branchId || null,
+        referralId,
       }
 
       // Verifica User ou Account
@@ -431,13 +459,29 @@ class ProjectController {
 
     await project.destroy({ transaction })
 
+       const company = await Company.findOne({ where: { id: project.companyId } });
+            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Project,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
     // ✅ Criar movimentação
     let movementData = {
-      id: uuidv4(),
+      
       method: 'remoção',
       entity: 'projeto',
       entityId: project.id,
-      status: 'finalizado'
+      status: 'finalizado',
+       companyId: project.companyId || null,
+        branchId: project.branchId || null,
+        referralId,
     }
 
     // Verifica User ou Account

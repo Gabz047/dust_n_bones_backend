@@ -14,7 +14,9 @@ import {
   ProductionOrder,
   Project,
   Stock,
-  StockItem
+  StockItem,
+  Company,
+  Branch,
 } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 import { generateReferralId } from '../utils/globals/generateReferralId.js'
@@ -65,7 +67,7 @@ class MovementController {
 
     // Criar movimentação com referralId
     const movementData = {
-      id: uuidv4(),
+   
       itemId,
       itemFeatureId,
       productionOrderId: productionOrderId || null,
@@ -334,6 +336,7 @@ static async delete(req, res) {
   try {
     const { id } = req.params;
     const { userId } = req.body; // ID do User ou Account que está realizando a ação
+    const { companyId, branchId } = req.context;
 
     const movement = await Movement.findByPk(id, {
       include: [{ model: MovementItem, as: 'items' }]
@@ -356,13 +359,29 @@ static async delete(req, res) {
       }
     }
 
+    const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const referralId = await generateReferralId({
+              model: Movement,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
     const movementData = {
       entity: 'movimentacao',
       entityId: movement.id,
       method: 'remoção',
       status: 'aberto',
       userId: logUserId,
-      accountId: logAccountId
+      accountId: logAccountId,
+       companyId: companyId || null,
+        branchId: branchId || null,
+        referralId,
     };
 
     const lastLog = await MovementLogEntity.create(movementData, { transaction });

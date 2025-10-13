@@ -16,7 +16,9 @@ import {
   Account,
   ItemFeature,
   FeatureOption,
-  Feature
+  Feature,
+  Company,
+  Branch
 } from '../models/index.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { generateReferralId } from '../utils/globals/generateReferralId.js';
@@ -125,6 +127,19 @@ static async create(req, res) {
       totalQuantity: 0
     }, { transaction });
 
+     const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const MreferralId = await generateReferralId({
+              model: Box,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
+
     // --- Registro do log de movimento ---
     let movementData = {
       id: uuidv4(),
@@ -132,6 +147,9 @@ static async create(req, res) {
       entityId: box.id,
       method: 'criação',
       status: 'aberto',
+      companyId: companyId,
+      branchId: branchId,
+      referralId: MreferralId,
     };
 
     if (userId) {
@@ -194,12 +212,32 @@ static async create(req, res) {
         return res.status(400).json({ success: false, message: 'Embalagem não encontrada' });
 
       await box.update(updates, { transaction });
+      const project = await Project.findByPk(box.projectId, { transaction });
+   
+       const companyId = project.companyId;
+    const branchId = project.branchId ?? null;
+
+     const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const MreferralId = await generateReferralId({
+              model: Box,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
 
       let movementData = {
         entity: 'caixa',
         entityId: box.id,
         method: 'edição',
-        status: 'aberto'
+        status: 'aberto',
+        companyId: companyId,
+      branchId: branchId,
+      referralId: MreferralId,
       };
 
       const logUserId = updates.userId;
@@ -267,13 +305,31 @@ static async delete(req, res) {
       if (stockItem)
         await stockItem.update({ quantity: stockItem.quantity + bi.quantity }, { transaction });
     }
+    const companyId = project.companyId;
+    const branchId = project.branchId ?? null;
+      const project = await Project.findByPk(box.projectId, { transaction });
 
+       const company = await Company.findOne({ where: { id: companyId } });
+            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+      
+            const companyRef = company?.referralId;
+            const branchRef = branch?.referralId ?? null;
+      
+            const MreferralId = await generateReferralId({
+              model: Box,
+              transaction,
+              companyId: companyRef,
+              branchId: branchRef,
+            });
     // --- Log de movimento
     let movementData = {
       entity: 'caixa',
       entityId: box.id,
       method: 'remoção',
-      status: 'aberto'
+      status: 'aberto',
+      companyId: companyId,
+      branchId: branchId,
+      referralId: MreferralId,
     };
 
     const user = await User.findByPk(userId, { transaction });
