@@ -285,7 +285,7 @@ DeliveryNote.belongsTo(Invoice, { as: 'invoice', foreignKey: 'invoiceId' });
 Invoice.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'invoiceId' });
 
 DeliveryNote.belongsTo(Project, { as: 'project', foreignKey: 'projectId' });
-Project.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'projectId' });
+Project.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKfey: 'projectId' });
 
 DeliveryNote.belongsTo(Company, { as: 'company', foreignKey: 'companyId' });
 Company.hasMany(DeliveryNote, { as: 'deliveryNotes', foreignKey: 'companyId' });

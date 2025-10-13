@@ -234,62 +234,74 @@ static async create(req, res) {
   }
 
   // 🗑️ Deletar box
-  static async delete(req, res) {
-    const transaction = await sequelize.transaction();
-   
-    try {
+  // 🗑️ Deletar box
+static async delete(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
     const { id } = req.params;        
     const { userId } = req.body;
 
-      const box = await Box.findByPk(id);
-      if (!box) return res.status(404).json({ success: false, message: 'Box não encontrado' });
+    const box = await Box.findByPk(id, { transaction });
+    if (!box)
+      return res.status(404).json({ success: false, message: 'Box não encontrado' });
 
-      const boxItems = await BoxItem.findAll({ where: { boxId: id }, transaction });
-      for (const bi of boxItems) {
-        const stockItem = await StockItem.findOne({
-          where: {
-            itemId: bi.itemId,
-            itemFeatureId: bi.itemFeatureId,
-            featureOptionId: bi.featureOptionId
-          },
-          transaction
-        });
-        if (stockItem) await stockItem.update({ quantity: stockItem.quantity + bi.quantity }, { transaction });
-      }
-
-      let movementData = {
-        entity: 'caixa',
-        entityId: box.id,
-        method: 'remoção',
-        status: 'aberto'
-      };
-
-      const user = await User.findByPk(userId);
-      if (user) {
-        movementData.userId = userId;
-      } else {
-        const account = await Account.findByPk(userId);
-        if (account) {
-          movementData.accountId = userId;
-        } else {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
-        }
-      }
-
-      const lastLog = await MovementLogEntity.create(movementData, { transaction });
-      await BoxItem.destroy({ where: { boxId: id }, transaction });
-      await box.destroy({ transaction });
-
-      await transaction.commit();
-      return res.status(200).json({ success: true, message: 'Box removido com sucesso', lastMovementLog: lastLog });
-
-    } catch (error) {
-      await transaction.rollback();
-      console.error('Erro ao deletar Box:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    // 🚫 Impede exclusão se estiver vinculada a um romaneio
+    if (box.deliveryNoteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível deletar uma Caixa vinculada a um Romaneio.'
+      });
     }
+
+    // --- Repor estoque dos itens
+    const boxItems = await BoxItem.findAll({ where: { boxId: id }, transaction });
+    for (const bi of boxItems) {
+      const stockItem = await StockItem.findOne({
+        where: {
+          itemId: bi.itemId,
+          itemFeatureId: bi.itemFeatureId,
+          featureOptionId: bi.featureOptionId
+        },
+        transaction
+      });
+      if (stockItem)
+        await stockItem.update({ quantity: stockItem.quantity + bi.quantity }, { transaction });
+    }
+
+    // --- Log de movimento
+    let movementData = {
+      entity: 'caixa',
+      entityId: box.id,
+      method: 'remoção',
+      status: 'aberto'
+    };
+
+    const user = await User.findByPk(userId, { transaction });
+    if (user) {
+      movementData.userId = userId;
+    } else {
+      const account = await Account.findByPk(userId, { transaction });
+      if (account) movementData.accountId = userId;
+      else {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+      }
+    }
+
+    const lastLog = await MovementLogEntity.create(movementData, { transaction });
+    await BoxItem.destroy({ where: { boxId: id }, transaction });
+    await box.destroy({ transaction });
+
+    await transaction.commit();
+    return res.status(200).json({ success: true, message: 'Box removido com sucesso', lastMovementLog: lastLog });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao deletar Box:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
 
   // 📦 Buscar todos os boxes (com paginação)
 static async getAll(req, res) {

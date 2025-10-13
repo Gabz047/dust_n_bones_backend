@@ -179,49 +179,68 @@ class DeliveryNoteController {
 
   // Deleta um Delivery Note
   static async delete(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { id } = req.params;
-      const { userId } = req.body;
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
 
-      const deliveryNote = await DeliveryNote.findByPk(id);
-      if (!deliveryNote) return res.status(404).json({ error: 'DeliveryNote não encontrado' });
+    const deliveryNote = await DeliveryNote.findByPk(id, {
+      include: [
+        { model: DeliveryNoteItem, as: 'items', attributes: ['id'] },
+      ],
+      transaction
+    });
 
-      await deliveryNote.destroy({ transaction });
+    if (!deliveryNote)
+      return res.status(404).json({ error: 'DeliveryNote não encontrado' });
 
-      // ✅ Criar movimentação
-      let movementData = {
-        id: uuidv4(),
-        method: 'remoção',
-        entity: 'romaneio',
-        entityId: id,
-        status: 'finalizado'
-      };
+    // ✅ Verifica se há vínculos diretos
+    const hasLinkedItems = deliveryNote.items.length > 0;
+   
 
-      // Verifica User ou Account
-      const user = await User.findByPk(userId);
-      if (user) {
-        movementData.userId = userId;
-      } else {
-        const account = await Account.findByPk(userId);
-        if (account) {
-          movementData.accountId = userId;
-        } else {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
-        }
-      }
-
-      await MovementLogEntity.create(movementData, { transaction });
-
-      await transaction.commit();
-      return res.json({ message: 'DeliveryNote deletado com sucesso' });
-    } catch (error) {
-      await transaction.rollback();
-      return res.status(500).json({ success: false, message: error.message });
+    if (hasLinkedItems || hasLinkedLogs) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível deletar: existem vínculos com caixas'
+      });
     }
-  }
 
+    await deliveryNote.destroy({ transaction });
+
+    // Cria movimentação de remoção
+    let movementData = {
+      id: uuidv4(),
+      method: 'remoção',
+      entity: 'romaneio',
+      entityId: id,
+      status: 'finalizado'
+    };
+
+    const user = await User.findByPk(userId);
+    if (user) {
+      movementData.userId = userId;
+    } else {
+      const account = await Account.findByPk(userId);
+      if (account) {
+        movementData.accountId = userId;
+      } else {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'O ID informado não corresponde a um User ou Account válido'
+        });
+      }
+    }
+
+    await MovementLogEntity.create(movementData, { transaction });
+    await transaction.commit();
+    return res.json({ message: 'DeliveryNote deletado com sucesso' });
+
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
   static async getAll(req, res) {
     try {
       const { projectId, customerId, term, fields } = req.query

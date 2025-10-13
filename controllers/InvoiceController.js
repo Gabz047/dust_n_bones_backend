@@ -208,51 +208,67 @@ class InvoiceController {
   }
 
   // Deleta fatura
-  static async delete(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { id } = req.params;
-      const { userId } = req.body;
-      const { companyId, branchId } = req.context;
+ // Deleta fatura apenas se não houver vínculos diretos
+static async delete(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+    const { companyId, branchId } = req.context;
 
-      const invoice = await Invoice.findOne({
-        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) },
-        transaction
+    const invoice = await Invoice.findOne({
+      where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) },
+      include: [
+        { model: InvoiceItem, as: 'items', attributes: ['id'] },
+        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id'] }
+      ],
+      transaction
+    });
+
+    if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
+
+    // Checa vínculos
+    if ((invoice.items?.length || 0) > 0 || (invoice.deliveryNotes?.length || 0) > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível deletar esta fatura, pois existem vínculos diretos com itens ou romaneios.'
       });
-      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
-
-      await invoice.destroy({ transaction });
-
-      const movementData = {
-        method: 'remoção',
-        entity: 'fatura',
-        entityId: id,
-        status: 'aberto',
-        date: new Date()
-      };
-
-      // Verifica User ou Account
-      const user = await User.findByPk(userId);
-      if (user) {
-        movementData.userId = userId;
-      } else {
-        const account = await Account.findByPk(userId);
-        if (account) {
-          movementData.accountId = userId;
-        } else {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
-        }
-      }
-
-      await MovementLogEntity.create(movementData, { transaction });
-      await transaction.commit();
-      return res.json({ success: true, message: 'Fatura deletada com sucesso' });
-    } catch (error) {
-      await transaction.rollback();
-      return res.status(500).json({ success: false, error: error.message });
     }
+
+    await invoice.destroy({ transaction });
+
+    const movementData = {
+      method: 'remoção',
+      entity: 'fatura',
+      entityId: id,
+      status: 'aberto',
+      date: new Date()
+    };
+
+    // Verifica User ou Account
+    const user = await User.findByPk(userId);
+    if (user) {
+      movementData.userId = userId;
+    } else {
+      const account = await Account.findByPk(userId);
+      if (account) {
+        movementData.accountId = userId;
+      } else {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+      }
+    }
+
+    await MovementLogEntity.create(movementData, { transaction });
+    await transaction.commit();
+    return res.json({ success: true, message: 'Fatura deletada com sucesso' });
+
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({ success: false, error: error.message });
   }
+}
+
 
   // 🔒 Filtro de acesso por empresa/filial
   static projectAccessFilter(req) {

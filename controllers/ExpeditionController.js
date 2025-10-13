@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account, Company, Branch } from '../models/index.js';
+import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account, Company, Branch, Box, Invoice, BoxItem, Order, DeliveryNote } from '../models/index.js';
 import { Op } from 'sequelize';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { generateReferralId } from '../utils/globals/generateReferralId.js';
@@ -154,49 +154,63 @@ static async create(req, res) {
   }
 
   // Deletar expedição
-  static async delete(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { id } = req.params;
-      const { userId } = req.body;
 
-      const expedition = await Expedition.findByPk(id, { transaction });
-      if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada.' });
+static async delete(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
 
-      // Preparar dados do log
-      let movementData = {
-        id: uuidv4(),
-        method: 'remoção',
-        entity: 'expedição',
-        entityId: expedition.id,
-        status: 'aberto',
-      };
+    const expedition = await Expedition.findByPk(id, { transaction });
+    if (!expedition) return res.status(404).json({ success: false, message: 'Expedição não encontrada.' });
 
-      // Verifica User ou Account
-      const user = await User.findByPk(userId);
-      if (user) {
-        movementData.userId = userId;
-      } else {
-        const account = await Account.findByPk(userId);
-        if (account) {
-          movementData.accountId = userId;
-        } else {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
-        }
-      }
-
-      await MovementLogEntity.create(movementData, { transaction });
-      await expedition.destroy({ transaction });
-
-      await transaction.commit();
-      return res.status(200).json({ success: true, message: 'Expedição removida com sucesso.' });
-    } catch (error) {
+    // 🔗 Verifica vínculos
+    const linkedDeliveryNotes = await expedition.countDeliveryNotes({ transaction });
+    if (linkedDeliveryNotes > 0) {
       await transaction.rollback();
-      console.error('Erro ao deletar expedição:', error);
-      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Não é possível deletar a expedição porque existem romaneios vinculados.' 
+      });
     }
+
+    // Preparar dados do log
+    let movementData = {
+      id: uuidv4(),
+      method: 'remoção',
+      entity: 'expedição',
+      entityId: expedition.id,
+      status: 'aberto',
+    };
+
+    // Verifica User ou Account
+    const user = await User.findByPk(userId);
+    if (user) {
+      movementData.userId = userId;
+    } else {
+      const account = await Account.findByPk(userId);
+      if (account) {
+        movementData.accountId = userId;
+      } else {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+      }
+    }
+
+    await MovementLogEntity.create(movementData, { transaction });
+    await expedition.destroy({ transaction });
+
+    await transaction.commit();
+    return res.status(200).json({ success: true, message: 'Expedição removida com sucesso.' });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao deletar expedição:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
+
+
 
   // 📦 Buscar todas as expedições COM PAGINAÇÃO
   static async getAll(req, res) {
