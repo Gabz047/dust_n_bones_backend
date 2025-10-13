@@ -438,7 +438,7 @@ class ProjectController {
     const relationsChecks = [
       { model: ProductionOrder, name: 'ordem de produção', field: 'projectId' },
       { model: Order, name: 'pedido', field: 'projectId' },
-      { model: ProjectItem, name: 'item de projeto', field: 'projectId' },
+     
       { model: Box, name: 'box', field: 'projectId' },
       { model: DeliveryNote, name: 'nota de entrega', field: 'projectId' },
       { model: Expedition, name: 'expedição', field: 'projectId' },

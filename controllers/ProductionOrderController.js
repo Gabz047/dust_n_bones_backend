@@ -410,7 +410,7 @@ static async delete(req, res) {
     // Busca a OP com todos os possíveis vínculos
     const order = await ProductionOrder.findByPk(id, {
       include: [
-        { model: ProductionOrderItem, as: 'items', attributes: ['id'] },
+        
         { model: ProductionOrderItemAdditionalFeatureOption, as: 'additionalOptionsByOrder', attributes: ['id'] },
         { model: Movement, as: 'movements', attributes: ['id'] }
       ]
@@ -420,7 +420,7 @@ static async delete(req, res) {
 
     // Checa se existe algum vínculo
     const linkedRecords = [];
-    if (order.items.length > 0) linkedRecords.push(`Item da Ordem de Produção: ${order.items.length}`);
+    
    
     if (order.additionalOptionsByOrder.length > 0) linkedRecords.push(`ProductionOrderItemAdditionalFeatureOption: ${order.additionalOptionsByOrder.length}`);
     if (order.movements.length > 0) linkedRecords.push(`Movimentação: ${order.movements.length}`);

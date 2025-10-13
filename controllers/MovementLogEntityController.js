@@ -101,8 +101,15 @@ static accessFilter(req) {
   static async getAll(req, res) {
     console.log('Access filter:', MovementLogEntityController.accessFilter(req));
     try {
-      const { status, method, entity, entityId, userId, accountId } = req.query;
+      const { status, method, entity, entityId, userId, accountId, term, fields } = req.query;
       const where = { ...MovementLogEntityController.accessFilter(req) };
+
+      if (term && fields) {
+              const searchFields = fields.split(',');
+              where[Op.or] = searchFields.map((field) => ({
+                [field]: { [Op.iLike]: `%${term}%` },
+              }));
+            }
 
       if (status) where.status = status;
       if (method) where.method = method;

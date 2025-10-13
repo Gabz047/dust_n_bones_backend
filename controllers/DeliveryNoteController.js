@@ -226,7 +226,7 @@ class DeliveryNoteController {
     const hasLinkedItems = deliveryNote.items.length > 0;
    
 
-    if (hasLinkedItems || hasLinkedLogs) {
+    if (hasLinkedItems) {
       return res.status(400).json({
         success: false,
         message: 'Não é possível deletar: existem vínculos com caixas'

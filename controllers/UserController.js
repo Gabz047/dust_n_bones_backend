@@ -1,77 +1,93 @@
-import e from 'cors';
-import { User, Company, Account, UserBranch } from '../models/index.js';
-import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
+import { User, Company, Branch, UserBranch } from '../models/index.js';
+import sequelize from '../config/database.js';
+import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
+import { Op } from 'sequelize';
+
+function userAccessFilter(req) {
+  // Prioridade: user → context → tenant
+  const companyId =
+    req.user?.companyId ||
+    req.context?.companyId ||
+    req.tenant?.id;
+
+  const branchId =
+    req.user?.branchId ||
+    req.context?.branchId ||
+    null;
+
+  const filter = {};
+  if (companyId) filter.companyId = companyId;
+  if (branchId) filter.branchId = branchId;
+
+  return filter;
+}
 
 class UserController {
-    static async create(req, res) {
-        try {
-            const {
-                email,
-                username,
-                password,
-                firstName,
-                lastName,
-                phone,
-                avatar,
-                role,
-                permissions
-            } = req.body;
+   static async create(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const {
+        email,
+        username,
+        password,
+        firstName,
+        lastName,
+        phone,
+        avatar,
+        role,
+        permissions,
+        companyId,
+        branchId,
+      } = req.body;
 
-            // Verificar se o tenant está especificado
-            if (!req.tenant) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Tenant não especificado'
-                });
-            }
-
-            // Verificar se email já existe na empresa
-            const existingUser = await User.findOne({
-                where: {
-                    email,
-                    companyId: req.tenant.id
-                }
-            });
-
-            if (existingUser) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email já está em uso nesta empresa'
-                });
-            }
-
-            const user = await User.create({
-                id: uuidv4(),
-                email,
-                username,
-                password,
-                firstName,
-                lastName,
-                phone,
-                avatar,
-                role: role || 'employee',
-                permissions: permissions || [],
-                companyId: req.tenant.id,
-            });
-
-            // Remover password da resposta
-            const { password: _, ...userData } = user.toJSON();
-
-            res.status(201).json({
-                success: true,
-                message: 'Usuário criado com sucesso',
-                data: userData
-            });
-        } catch (error) {
-            console.error('Erro ao criar usuário:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
+      // Verificar se email já existe na empresa
+      const existingUser = await User.findOne({
+        where: {
+          email,
+          companyId: companyId || req.context?.companyId
         }
+      });
+
+      if (existingUser) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Email já está em uso nesta empresa'
+        });
+      }
+
+      const userData = {
+        email,
+        username,
+        password,
+        firstName,
+        lastName,
+        phone,
+        avatar,
+        role: role || 'employee',
+        permissions: permissions || [],
+      };
+
+      const user = branchId
+        ? await User.create({ branchId, ...userData }, { transaction })
+        : await User.create({ companyId: companyId || req.context?.companyId, ...userData }, { transaction });
+
+      await transaction.commit();
+
+      // Remover password da resposta
+      const { password: _, ...userResponse } = user.toJSON();
+
+      return res.status(201).json({ success: true, data: userResponse });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao criar usuário:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao criar usuário.',
+        error: error.message 
+      });
     }
+  }
     
     static async login(req, res) {
         try {
@@ -226,203 +242,196 @@ class UserController {
     }
     
     static async getAll(req, res) {
-        try {
-            const { page = 1, limit = 10, role, active } = req.query;
-            const offset = (page - 1) * limit;
+    try {
+      const { term, fields, role, active } = req.query;
 
-            if (!req.tenant) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Tenant não especificado'
-                });
-            }
+      const where = userAccessFilter(req);
 
-            const where = {
-                companyId: req.tenant.id
-            };
+      // Filtro de pesquisa textual
+      if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` },
+        }));
+      }
 
-            if (role) where.role = role;
-            if (active !== undefined) where.active = active === 'true';
+      // Filtro por role
+      if (role) {
+        where.role = role;
+      }
 
-            const { count, rows } = await User.findAndCountAll({
-                where,
-                limit: parseInt(limit),
-                offset: parseInt(offset),
-                attributes: { exclude: ['password'] },
-                order: [['createdAt', 'DESC']]
-            });
+      // Filtro por status ativo
+      if (active !== undefined) {
+        where.active = active === 'true';
+      }
 
-            res.json({
-                success: true,
-                data: {
-                    users: rows,
-                    pagination: {
-                        total: count,
-                        page: parseInt(page),
-                        limit: parseInt(limit),
-                        totalPages: Math.ceil(count / limit)
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Erro ao buscar usuários:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
+      const result = await buildQueryOptions(req, User, {
+        where,
+        attributes: { exclude: ['password'] },
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar usuários:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar usuários.',
+        error: error.message 
+      });
     }
+  }
     
     static async getById(req, res) {
-        try {
-            const { id } = req.params;
+    try {
+      const { id } = req.params;
 
-            if (!req.tenant) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Tenant não especificado'
-                });
-            }
+      const where = { id, ...userAccessFilter(req) };
 
-            const user = await User.findOne({
-                where: {
-                    id,
-                    companyId: req.tenant.id
-                },
-                attributes: { exclude: ['password'] },
-                include: [
-                    {
-                        model: Company,
-                        as: 'company',
-                        attributes: ['id', 'name', 'subdomain']
-                    },
-                ]
-            });
+      const result = await buildQueryOptions(req, User, {
+        where,
+        attributes: { exclude: ['password'] },
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+          { 
+            model: UserBranch, 
+            as: 'userBranches',
+            include: [
+              { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+            ]
+          }
+        ],
+      });
 
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Usuário não encontrado'
-                });
-            }
+      if (!result.data || result.data.length === 0)
+        return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
 
-            res.json({
-                success: true,
-                data: user
-            });
-        } catch (error) {
-            console.error('Erro ao buscar usuário:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Erro ao buscar usuário:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar usuário.',
+        error: error.message 
+      });
     }
+  }
     
     static async update(req, res) {
-        try {
-            const { id } = req.params;
-            const updates = req.body;
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const updates = { ...req.body };
 
-            if (!req.tenant) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Tenant não especificado'
-                });
-            }
-
-            const user = await User.findOne({
-                where: {
-                    id,
-                    companyId: req.tenant.id
-                }
-            });
-
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Usuário não encontrado'
-                });
-            }
-
-            // Verificar se email já existe (se está sendo atualizado)
-            if (updates.email && updates.email !== user.email) {
-                const existingUser = await User.findOne({
-                    where: {
-                        email: updates.email,
-                        companyId: req.tenant.id
-                    }
-                });
-                if (existingUser) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Email já está em uso nesta empresa'
-                    });
-                }
-            }
-
-            await user.update(updates);
-
-            const { password: _, ...userData } = user.toJSON();
-
-            res.json({
-                success: true,
-                message: 'Usuário atualizado com sucesso',
-                data: userData
-            });
-        } catch (error) {
-            console.error('Erro ao atualizar usuário:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
-        }
+    const user = await User.findByPk(id);
+    if (!user) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
     }
+
+    // Tratar branchId e companyId
+    if ('branchId' in updates) {
+      updates.branchId = updates.branchId || null; // '' vira null
+    }
+    if ('companyId' in updates) {
+      updates.companyId = updates.companyId || null; // '' vira null
+    }
+
+    // Verificar se email já existe (se está sendo atualizado)
+    if (updates.email && updates.email !== user.email) {
+      const existingUser = await User.findOne({
+        where: {
+          email: updates.email,
+          companyId: user.companyId,
+          id: { [Op.ne]: id }
+        }
+      });
+
+      if (existingUser) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Email já está em uso nesta empresa'
+        });
+      }
+    }
+
+    // Atualizar apenas campos que vieram no payload
+    const fieldsToUpdate = Object.keys(updates);
+    await user.update(updates, { transaction, fields: fieldsToUpdate });
+
+    await transaction.commit();
+
+    const { password: _, ...userResponse } = user.toJSON();
+    return res.json({ success: true, data: userResponse });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao atualizar usuário:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao atualizar usuário.',
+      error: error.message 
+    });
+  }
+}
     
-    static async delete(req, res) {
-        try {
-            const { id } = req.params;
+  static  async delete(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const { id } = req.params;
+      const user = await User.findByPk(id);
 
-            if (!req.tenant) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Tenant não especificado'
-                });
-            }
+      if (!user) {
+        await transaction.rollback();
+        return res.status(404).json({
+          success: false,
+          message: 'Usuário não encontrado.',
+        });
+      }
 
-            const user = await User.findOne({
-                where: {
-                    id,
-                    companyId: req.tenant.id
-                }
-            });
+      // Verificar se é o único owner da empresa
+      if (user.role === 'owner') {
+        const ownerCount = await User.count({
+          where: {
+            companyId: user.companyId,
+            role: 'owner',
+            active: true
+          }
+        });
 
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Usuário não encontrado'
-                });
-            }
-
-            // Soft delete - apenas desativar
-            await user.update({ active: false });
-
-            res.json({
-                success: true,
-                message: 'Usuário desativado com sucesso'
-            });
-        } catch (error) {
-            console.error('Erro ao deletar usuário:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Erro interno do servidor',
-                error: error.message
-            });
+        if (ownerCount <= 1) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: 'Não é possível desativar o único proprietário da empresa.',
+          });
         }
+      }
+
+      // Soft delete - apenas desativar
+      await user.update({ active: false }, { transaction });
+      await transaction.commit();
+
+      return res.json({
+        success: true,
+        message: 'Usuário desativado com sucesso.',
+      });
+    } catch (error) {
+      console.error('Erro ao deletar usuário:', error);
+      await transaction.rollback();
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao deletar usuário.',
+        error: error.message,
+      });
     }
+  }
     
     static async profile(req, res) {
         try {
