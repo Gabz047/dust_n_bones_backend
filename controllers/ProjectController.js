@@ -235,76 +235,67 @@ class ProjectController {
     }
   }
 
-  static async getAllWithoutInvoice(req, res) {
-    try {
-      const { customerId, term, fields } = req.query
-      const where = {}
+ static async getAllWithoutInvoice(req, res) {
+  try {
+    const { customerId, term, fields } = req.query
+    const where = {}
 
-      if (customerId) where.customerId = customerId
+    if (customerId) where.customerId = customerId
 
-      // 🔍 Filtro textual
-      if (term && fields) {
-        const searchFields = fields.split(',')
-        where[Op.or] = searchFields.map((field) => ({
-          [field]: { [Op.iLike]: `%${term}%` }
-        }))
-      }
-
-      Object.assign(where, ProjectController.contextFilter(req))
-
-      // ⚙️ Filtra só os projetos que NÃO têm invoice associado
-      where.id = {
-        [Op.notIn]: sequelize.literal(`
-        (
-          SELECT DISTINCT "project_id"
-          FROM "invoices"
-          WHERE "project_id" IS NOT NULL
-        )
-      `)
-      }
-
-      // 🔁 Busca paginada
-      const result = await buildQueryOptions(req, Project, {
-        where,
-        include: [
-          { model: Company, as: 'company', attributes: ['id', 'name'] },
-          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
-          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-        ]
-      })
-
-      // 🔎 Busca último status (igual nas outras)
-      const projectIds = result.data.map(p => p.id)
-      const logs = await MovementLogEntity.findAll({
-        where: { entity: 'projeto', entityId: { [Op.in]: projectIds } },
-        attributes: ['entityId', 'status'],
-        order: [['createdAt', 'DESC']]
-      })
-
-      const lastLogsMap = {}
-      for (const log of logs) {
-        if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log
-      }
-
-      const enrichedData = result.data.map(p => ({
-        ...p.toJSON(),
-        lastMovementLog: lastLogsMap[p.id]?.status ?? null
+    if (term && fields) {
+      const searchFields = fields.split(',')
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` }
       }))
-
-      res.json({ success: true, ...result, data: enrichedData })
-    } catch (error) {
-      console.error('Erro ao buscar projetos sem invoice:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      })
     }
+
+    Object.assign(where, ProjectController.contextFilter(req))
+
+    // ✅ Nova forma — evita travamento com sequelize.literal
+    const usedProjectIds = await Invoice.findAll({
+      attributes: ['projectId'],
+      where: { projectId: { [Op.ne]: null } },
+      raw: true
+    })
+    const usedIds = usedProjectIds.map(p => p.projectId)
+    if (usedIds.length > 0) where.id = { [Op.notIn]: usedIds }
+
+    const result = await buildQueryOptions(req, Project, {
+      where,
+      include: [
+        { model: Company, as: 'company', attributes: ['id', 'name'] },
+        { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+      ]
+    })
+
+    const projectIds = result.data.map(p => p.id)
+    const logs = await MovementLogEntity.findAll({
+      where: { entity: 'projeto', entityId: { [Op.in]: projectIds } },
+      attributes: ['entityId', 'status'],
+      order: [['createdAt', 'DESC']]
+    })
+
+    const lastLogsMap = {}
+    for (const log of logs) {
+      if (!lastLogsMap[log.entityId]) lastLogsMap[log.entityId] = log
+    }
+
+    const enrichedData = result.data.map(p => ({
+      ...p.toJSON(),
+      lastMovementLog: lastLogsMap[p.id]?.status ?? null
+    }))
+
+    return res.status(200).json({ success: true, ...result, data: enrichedData })
+  } catch (error) {
+    console.error('Erro ao buscar projetos sem invoice:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    })
   }
-
-
-
-
+}
 
   // 🔍 Buscar projeto por ID com lastMovementLog
   static async getById(req, res) {
@@ -424,7 +415,6 @@ class ProjectController {
       { model: DeliveryNote, name: 'nota de entrega', field: 'projectId' },
       { model: Expedition, name: 'expedição', field: 'projectId' },
       { model: Invoice, name: 'invoice', field: 'projectId' },
-      { model: MovementLogEntity, name: 'movimentação', field: 'entityId', extraWhere: { entity: 'projeto' } }
     ]
 
     for (const check of relationsChecks) {
