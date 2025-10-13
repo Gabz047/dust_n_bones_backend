@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import Package from '../models/Package.js';
+import { Box } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import Branch from '../models/Branch.js';
@@ -151,33 +152,45 @@ class PackageController {
 
   // 🗑️ Deletar embalagem
   static async delete(req, res) {
-    try {
-      const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-      const packageItem = await Package.findByPk(id);
+    const packageItem = await Package.findByPk(id, {
+      include: [
+        { model: Box, as: 'boxes' } // Inclui as caixas relacionadas
+      ]
+    });
 
-      if (!packageItem) {
-        return res.status(404).json({
-          success: false,
-          message: 'Embalagem não encontrada'
-        });
-      }
-
-      await packageItem.destroy();
-
-      res.json({
-        success: true,
-        message: 'Embalagem removida com sucesso'
-      });
-    } catch (error) {
-      console.error('Erro ao deletar embalagem:', error);
-      res.status(500).json({
+    if (!packageItem) {
+      return res.status(404).json({
         success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
+        message: 'Embalagem não encontrada'
       });
     }
+
+    // Verifica se existe algum Box vinculado
+    if (packageItem.boxes && packageItem.boxes.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível deletar a embalagem, existem caixas vinculadas a ela'
+      });
+    }
+
+    await packageItem.destroy();
+
+    res.json({
+      success: true,
+      message: 'Embalagem removida com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao deletar embalagem:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
   }
+}
 }
 
 export default PackageController;

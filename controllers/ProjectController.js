@@ -1,7 +1,7 @@
 // controllers/ProjectController.js
 import { v4 as uuidv4 } from 'uuid'
 import { Op } from 'sequelize'
-import { Project, Company, Branch, Customer, ProductionOrder, User, Account, MovementLogEntity, sequelize } from '../models/index.js'
+import { Project, Company, Branch, Customer, ProductionOrder, User, Account, MovementLogEntity, Order, ProjectItem, Box, DeliveryNote, Invoice, Expedition, sequelize } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 import { generateReferralId } from '../utils/globals/generateReferralId.js'
 class ProjectController {
@@ -400,71 +400,77 @@ class ProjectController {
 
   // 🗑️ Deletar projeto
   static async delete(req, res) {
-    const transaction = await sequelize.transaction()
-    try {
-      const { id } = req.params
-      const { userId } = req.body
+  const transaction = await sequelize.transaction()
+  try {
+    const { id } = req.params
+    const { userId } = req.body
 
-      const project = await Project.findOne({
-        where: {
-          id,
-          ...ProjectController.contextFilter(req)
-        },
-        transaction
-      })
+    const project = await Project.findOne({
+      where: { id, ...ProjectController.contextFilter(req) },
+      transaction
+    })
 
-      if (!project) {
-        await transaction.rollback()
-        return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
-      }
+    if (!project) {
+      await transaction.rollback()
+      return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
+    }
 
-      const productionOrder = await ProductionOrder.findOne({ where: { projectId: id } })
-      if (productionOrder) {
+    // 🔎 Verificar relações
+    const relationsChecks = [
+      { model: ProductionOrder, name: 'ordem de produção', field: 'projectId' },
+      { model: Order, name: 'pedido', field: 'projectId' },
+      { model: ProjectItem, name: 'item de projeto', field: 'projectId' },
+      { model: Box, name: 'box', field: 'projectId' },
+      { model: DeliveryNote, name: 'nota de entrega', field: 'projectId' },
+      { model: Expedition, name: 'expedição', field: 'projectId' },
+      { model: Invoice, name: 'invoice', field: 'projectId' },
+      { model: MovementLogEntity, name: 'movimentação', field: 'entityId', extraWhere: { entity: 'projeto' } }
+    ]
+
+    for (const check of relationsChecks) {
+      const where = { [check.field]: id, ...(check.extraWhere || {}) }
+      const exists = await check.model.findOne({ where, transaction })
+      if (exists) {
         await transaction.rollback()
         return res.status(400).json({
           success: false,
-          message: 'Projeto não pode ser apagado, pois possui uma ordem de produção!'
+          message: `Projeto não pode ser apagado, pois possui ${check.name}!`
         })
       }
-
-      await project.destroy({ transaction })
-
-      // ✅ Criar movimentação
-      let movementData = {
-        id: uuidv4(),
-        method: 'remoção',
-        entity: 'projeto',
-        entityId: project.id,
-        status: 'finalizado'
-      }
-
-      // Verifica User ou Account
-      const user = await User.findByPk(userId)
-      if (user) {
-        movementData.userId = userId
-      } else {
-        const account = await Account.findByPk(userId)
-        if (account) {
-          movementData.accountId = userId
-        } else {
-          await transaction.rollback()
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' })
-        }
-      }
-
-      await MovementLogEntity.create(movementData, { transaction })
-      await transaction.commit()
-      res.json({ success: true, message: 'Projeto removido com sucesso' })
-    } catch (error) {
-      await transaction.rollback()
-      console.error('Erro ao deletar projeto:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      })
     }
+
+    await project.destroy({ transaction })
+
+    // ✅ Criar movimentação
+    let movementData = {
+      id: uuidv4(),
+      method: 'remoção',
+      entity: 'projeto',
+      entityId: project.id,
+      status: 'finalizado'
+    }
+
+    // Verifica User ou Account
+    const user = await User.findByPk(userId)
+    if (user) movementData.userId = userId
+    else {
+      const account = await Account.findByPk(userId)
+      if (account) movementData.accountId = userId
+      else {
+        await transaction.rollback()
+        return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' })
+      }
+    }
+
+    await MovementLogEntity.create(movementData, { transaction })
+    await transaction.commit()
+    res.json({ success: true, message: 'Projeto removido com sucesso' })
+  } catch (error) {
+    await transaction.rollback()
+    console.error('Erro ao deletar projeto:', error)
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
   }
+}
 
   // 👤 Buscar projetos por cliente com lastMovementLog
   static async getByCustomer(req, res) {

@@ -1,4 +1,4 @@
-import { StockItem, StockAdditionalItem, Item, ItemFeature, Feature, FeatureOption, Stock } from '../models/index.js';
+import { Stock, StockItem, StockAdditionalItem, MovementItem, ProductionOrderItemAdditionalFeatureOption, Item, ItemFeature, FeatureOption, Feature } from '../models/index.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
 
@@ -269,6 +269,61 @@ class StockController {
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
     }
   }
+
+ static async delete(req, res) {
+  try {
+    const { id } = req.params;
+
+    // Buscar stock com StockItems
+    const stock = await Stock.findOne({
+      where: { id },
+      include: [
+        {
+          model: StockItem,
+          as: 'stockItems',
+        }
+      ]
+    });
+
+    if (!stock) {
+      return res.status(404).json({ success: false, message: 'Estoque não encontrado.' });
+    }
+
+    const linkedRecords = [];
+
+    // Iterar stockItems e checar vínculos via MovementItem
+    for (const si of stock.stockItems) {
+      const movementCount = await MovementItem.count({
+        where: {
+          itemId: stock.itemId,
+          itemFeatureId: si.itemFeatureId,
+          featureOptionId: si.featureOptionId
+        }
+      });
+
+      if (movementCount > 0) {
+        linkedRecords.push(`Items do Estoque possui movimentações`);
+      } else {
+        await si.destroy(); // deletar StockItem sem adicionais
+      }
+    }
+
+    if (linkedRecords.length > 0) {
+      return res.status(500).json({
+        success: false,
+        message: `Não é possível deletar totalmente. Alguns Items do Estoque possuem vínculos: ${linkedRecords.join(', ')}.`
+      });
+    }
+
+    await stock.destroy();
+    return res.json({ success: true, message: 'Estoque deletado com sucesso.' });
+
+  } catch (error) {
+    console.error('Erro ao deletar estoque:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao deletar estoque.', error: error.message });
+  }
+}
+
 }
 
 export default StockController;

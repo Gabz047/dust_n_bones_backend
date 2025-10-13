@@ -391,28 +391,82 @@ export default {
 
   // Deletar grupo
   async delete(req, res) {
-    try {
-      const { id } = req.params;
-      const { companyId, branchId } = req.context;
+  const transaction = await sequelize.transaction()
+  try {
+    const { id } = req.params
+    const { companyId, branchId } = req.context
 
-      const whereGroup = { id };
-      if (branchId) whereGroup.branchId = branchId;
-      else if (companyId) whereGroup.companyId = companyId;
+    const whereGroup = { id }
+    if (branchId) whereGroup.branchId = branchId
+    else if (companyId) whereGroup.companyId = companyId
 
-      const group = await CustomerGroup.findOne({ where: whereGroup });
-      if (!group)
-        return res.status(404).json({
-          success: false,
-          message: 'Grupo não encontrado ou sem permissão.',
-        });
+    const group = await CustomerGroup.findOne({
+      where: whereGroup,
+      include: [
+        {
+          model: Customer,
+          as: 'customersInGroup',
+          attributes: ['id', 'name'],
+        },
+        {
+          model: Customer,
+          as: 'mainCustomerInGroup',
+          attributes: ['id', 'name'],
+        },
+      ],
+      transaction,
+    })
 
-      await Customer.update({ customerGroup: null }, { where: { customerGroup: id } });
-      await group.destroy();
-
-      return res.json({ success: true, message: 'Grupo deletado com sucesso.' });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ success: false, message: 'Erro ao deletar grupo.' });
+    if (!group) {
+      await transaction.rollback()
+      return res.status(404).json({
+        success: false,
+        message: 'Grupo não encontrado ou sem permissão.',
+      })
     }
-  },
+
+    // 🔍 Importa o modelo de Project dinamicamente
+    const { Project } = await import('../models/index.js')
+
+    // Combina o cliente principal e os clientes comuns do grupo
+    const allCustomerIds = [
+      group.mainCustomerInGroup?.id,
+      ...group.customersInGroup.map((c) => c.id),
+    ].filter(Boolean)
+
+    // Verifica se algum desses clientes está em projeto
+    const hasProjects = await Project.findOne({
+      where: { customerId: { [Op.in]: allCustomerIds } },
+      transaction,
+    })
+
+    if (hasProjects) {
+      await transaction.rollback()
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível excluir este grupo porque um ou mais clientes estão vinculados a projetos.',
+      })
+    }
+
+    // ✅ Nenhum cliente vinculado — pode excluir
+    await Customer.update(
+      { customerGroup: null },
+      { where: { customerGroup: id }, transaction }
+    )
+
+    await group.destroy({ transaction })
+    await transaction.commit()
+
+    return res.json({
+      success: true,
+      message: 'Grupo deletado com sucesso.',
+    })
+  } catch (err) {
+    await transaction.rollback()
+    console.error(err)
+    return res
+      .status(500)
+      .json({ success: false, message: 'Erro ao deletar grupo.' })
+  }
+}
 };

@@ -247,7 +247,7 @@ Package.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
 Branch.hasMany(Package, { foreignKey: 'branchId', as: 'packages' });
 
 // Box - Box item
-
+Package.hasMany(Box, { foreignKey: 'packageId', as: 'boxes' });
 Box.belongsTo(DeliveryNote, { as: 'deliveryNote', foreignKey: 'deliveryNoteId' });
 DeliveryNote.hasMany(Box, { as: 'boxes', foreignKey: 'deliveryNoteId' });
 

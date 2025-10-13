@@ -10,7 +10,10 @@ import {
   FeatureOption,
   Project,
   Customer,
-  Order
+  Order,
+  ProductionOrderStatus,
+  ProductionOrderItemAdditionalFeatureOption,
+  Movement,
 } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 import { generateReferralId } from '../utils/globals/generateReferralId.js'
@@ -399,20 +402,44 @@ static async create(req, res) {
 
 
   // 🗑️ Deletar OP
-  static async delete(req, res) {
-    try {
-      const { id } = req.params
-      const order = await ProductionOrder.findByPk(id)
-      if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' })
+  // 🔧 Deletar OP apenas se não houver vínculos
+static async delete(req, res) {
+  try {
+    const { id } = req.params;
 
+    // Busca a OP com todos os possíveis vínculos
+    const order = await ProductionOrder.findByPk(id, {
+      include: [
+        { model: ProductionOrderItem, as: 'items', attributes: ['id'] },
+        { model: ProductionOrderItemAdditionalFeatureOption, as: 'additionalOptionsByOrder', attributes: ['id'] },
+        { model: Movement, as: 'movements', attributes: ['id'] }
+      ]
+    });
 
-      await order.destroy()
-      res.json({ success: true, message: 'O.P. removida com sucesso' })
-    } catch (error) {
-      console.error('Erro ao deletar O.P.:', error)
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+    if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' });
+
+    // Checa se existe algum vínculo
+    const linkedRecords = [];
+    if (order.items.length > 0) linkedRecords.push(`Item da Ordem de Produção: ${order.items.length}`);
+   
+    if (order.additionalOptionsByOrder.length > 0) linkedRecords.push(`ProductionOrderItemAdditionalFeatureOption: ${order.additionalOptionsByOrder.length}`);
+    if (order.movements.length > 0) linkedRecords.push(`Movimentação: ${order.movements.length}`);
+
+    if (linkedRecords.length > 0) {
+      return res.status(500).json({
+        success: false,
+        message: `Não é possível deletar a O.P. porque possui vínculos. ${linkedRecords}`,
+      });
     }
+
+    await order.destroy();
+    res.json({ success: true, message: 'O.P. removida com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar O.P.:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
 }
 
 

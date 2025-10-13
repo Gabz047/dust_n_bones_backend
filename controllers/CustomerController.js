@@ -293,33 +293,66 @@ class CustomerController {
 
   // 🗑️ Desativar cliente
   static async delete(req, res) {
-    try {
-      const { id } = req.params;
-      const where = { id, ...CustomerController.customerAccessFilter(req) };
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
 
-      const customer = await Customer.findOne({ where });
-      if (!customer) {
-        return res.status(404).json({
-          success: false,
-          message: 'Cliente não encontrado ou sem permissão'
-        });
-      }
-
-      await customer.destroy()
-
-      return res.json({
-        success: true,
-        message: 'Cliente desativado com sucesso'
-      });
-    } catch (error) {
-      console.error('Erro ao desativar cliente:', error);
-      return res.status(500).json({
+    const customer = await Customer.findByPk(id);
+    if (!customer) {
+      await transaction.rollback();
+      return res.status(404).json({
         success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
+        message: 'Cliente não encontrado.',
       });
     }
+
+    // Verifica se o cliente faz parte de algum grupo
+    const isInGroup = await CustomerGroup.findOne({
+      where: { mainCustomer: id },
+      transaction,
+    });
+
+    if (isInGroup) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível excluir este cliente porque ele é o cliente principal de um grupo.',
+      });
+    }
+
+    // Verifica se o cliente participa de algum projeto
+    const { Project } = await import('../models/index.js');
+    const hasProjects = await Project.findOne({
+      where: { customerId: id },
+      transaction,
+    });
+
+    if (hasProjects) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível excluir este cliente porque ele está vinculado a um ou mais projetos.',
+      });
+    }
+
+    // Nenhum vínculo — pode apagar
+    await customer.destroy({ transaction });
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cliente excluído com sucesso.',
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao excluir cliente:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor.',
+      error: error.message,
+    });
   }
+}
 }
 
 export default CustomerController;

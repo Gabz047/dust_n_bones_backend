@@ -31,6 +31,16 @@ router.get(
   StockController.getById
 );
 
+router.delete(
+  '/:id',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  StockController.delete
+);
+
+
 // Buscar estoque por Item + ItemFeature + FeatureOption
 router.get(
   '/item-feature-option/:itemId/:itemFeatureId/:featureOptionId',

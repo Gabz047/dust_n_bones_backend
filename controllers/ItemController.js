@@ -1,6 +1,18 @@
-import Item from '../models/Item.js';
-import Company from '../models/Company.js';
-import Branch from '../models/Branch.js';
+
+import {
+  Branch,
+  Company,
+  Item,
+  OrderItem,
+  ProjectItem,
+  MovementItem,
+  Stock,
+  StockItem,
+  BoxItem,
+  ProductionOrderItem,
+  ProductionOrderItemAdditionalFeatureOption,
+  OrderItemAdditionalFeatureOption,
+} from '../models/index.js';
 import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { generateReferralId } from '../utils/globals/generateReferralId.js';
@@ -197,17 +209,65 @@ export default {
   },
 
   // Deletar item
-  async delete(req, res) {
+async delete(req, res) {
+    const transaction = await sequelize.transaction()
     try {
-      const { id } = req.params;
-      const item = await Item.findByPk(id);
-      if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
+      const { id } = req.params
+      const item = await Item.findByPk(id)
 
-      await item.destroy();
-      return res.json({ success: true, message: 'Item deletado com sucesso.' });
+      if (!item) {
+        await transaction.rollback()
+        return res.status(404).json({
+          success: false,
+          message: 'Item não encontrado.',
+        })
+      }
+
+      // 🔍 Verifica vínculos em cada modelo
+      const relations = {
+        'pedido ': await OrderItem.findOne({ where: { itemId: id } }),
+        'projeto ': await ProjectItem.findOne({ where: { itemId: id } }),
+        'movimentação ': await MovementItem.findOne({ where: { itemId: id } }),
+        'estoque ': await Stock.findOne({ where: { itemId: id } }),
+        'item em estoque ': await StockItem.findOne({ where: { itemId: id } }),
+        'caixa ': await BoxItem.findOne({ where: { itemId: id } }),
+        'ordem de produção ': await ProductionOrderItem.findOne({ where: { itemId: id } }),
+        'característica adicional de ordem ': await ProductionOrderItemAdditionalFeatureOption.findOne({ where: { itemId: id } }),
+        'opção adicional de pedido ': await OrderItemAdditionalFeatureOption.findOne({ where: { itemId: id } }),
+      }
+
+      // 🧾 Monta uma lista com os vínculos encontrados
+      const linkedEntities = Object.entries(relations)
+        .filter(([_, record]) => record)
+        .map(([label]) => label)
+
+      if (linkedEntities.length > 0) {
+        await transaction.rollback()
+        return res.status(400).json({
+          success: false,
+          message:
+            `O item não pode ser excluído, pois está vinculado a:\n- ${linkedEntities.join('\n- ')}.`,
+        })
+      }
+
+      // ✅ Nenhum vínculo — pode excluir
+      await item.destroy({ transaction })
+      await transaction.commit()
+
+      return res.json({
+        success: true,
+        message: 'Item deletado com sucesso.',
+      })
     } catch (error) {
-      console.error('Erro ao deletar item:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao deletar item.' });
+      console.error('Erro ao deletar item:', error)
+      await transaction.rollback()
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao deletar item.',
+        error: error.message,
+      })
     }
   },
+
+
 };
