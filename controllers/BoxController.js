@@ -285,11 +285,14 @@ class BoxController {
 
       // 🚫 Impede exclusão se estiver vinculada a um romaneio
       if (box.deliveryNoteId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Não é possível deletar uma Caixa vinculada a um Romaneio.'
-        });
-      }
+  const deliveryNote = await DeliveryNote.findByPk(box.deliveryNoteId, { transaction });
+  if (deliveryNote?.invoiceId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Não é possível deletar uma Caixa vinculada a um Romaneio que possui Invoice.'
+    });
+  }
+}
 
       // --- Repor estoque dos itens
       const boxItems = await BoxItem.findAll({ where: { boxId: id }, transaction });
