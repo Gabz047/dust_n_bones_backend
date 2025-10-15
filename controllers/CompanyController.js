@@ -163,11 +163,12 @@ class CompanyController {
     static async getAll(req, res) {
         try {
             const { page = 1, limit = 10, active } = req.query;
+            
             const offset = (page - 1) * limit;
 
             const where = {};
             if (active !== undefined) where.active = active === 'true';
-
+           
             const { count, rows } = await Company.findAndCountAll({
                 where,
                 limit: parseInt(limit),
