@@ -108,7 +108,7 @@ class UserController {
   // --------------------- LOGIN ---------------------
 static async login(req, res) {
   try {
-    const { email, username, password, rememberToken } = req.body;
+    const { email, username, password, rememberToken, branchId } = req.body;
 
     if (!email && !username) {
       return res.status(400).json({ success: false, message: 'Email ou username é obrigatório' });
@@ -122,9 +122,10 @@ static async login(req, res) {
     let authenticatedEntity = null;
     let entityType = null;
     let userInBranch = false;
+    let allowedBranches = [];
 
-    // Filtro e include
-    let userWhere = { active: true };
+    // ------------------- BUSCA USUÁRIO -------------------
+    const userWhere = { active: true };
     if (email) userWhere.email = email;
     if (username) userWhere.username = username;
 
@@ -133,7 +134,6 @@ static async login(req, res) {
       { model: UserBranch, as: 'userBranches', attributes: ['branchId'], required: false }
     ];
 
-    // Busca usuário
     const user = await User.findOne({ where: userWhere, include: userInclude });
 
     if (user && await user.validPassword(password)) {
@@ -141,13 +141,28 @@ static async login(req, res) {
       entityType = 'user';
       await user.update({ lastLoginAt: new Date() });
 
-      // Determina userInBranch apenas se houver userBranches
+      // Usuário tem branches atribuídas?
       userInBranch = Array.isArray(user.userBranches) && user.userBranches.length > 0;
+      if (userInBranch) {
+        // Usuário filial → pega lista de branches que ele pode logar
+        allowedBranches = user.userBranches.map(ub => ub.branchId);
+        console.log('===== Allowed branches',allowedBranches)
+        console.log('branchIddd!!!!!',branchId)
+        if (!branchId || !allowedBranches.includes(branchId)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Acesso negado: Você é usuário de uma filial, selecione uma filial válida!'
+          });
+        }
+      } else {
+        // Usuário de company ou Account pode logar em qualquer branch ou company
+        allowedBranches = null;
+      }
     }
 
-    // Se não encontrou usuário, tenta Account
+    // ------------------- BUSCA ACCOUNT SE NÃO ACHOU USUÁRIO -------------------
     if (!authenticatedEntity) {
-      let accountWhere = { companyId: tenant.id };
+      const accountWhere = { companyId: tenant.id };
       if (email) accountWhere.email = email;
       if (username) accountWhere.username = username;
 
@@ -159,7 +174,7 @@ static async login(req, res) {
       if (account && account.password && await account.validPassword(password)) {
         authenticatedEntity = account;
         entityType = 'account';
-        userInBranch = null;
+        userInBranch = false; // account não tem branch restrito
       }
     }
 
@@ -167,7 +182,7 @@ static async login(req, res) {
       return res.status(401).json({ success: false, message: 'Credenciais inválidas' });
     }
 
-    // Gera token
+    // ------------------- GERA TOKEN -------------------
     const token = jwt.sign(
       {
         id: authenticatedEntity.id,
@@ -195,6 +210,7 @@ static async login(req, res) {
       data: {
         [entityType]: entityData,
         userInBranch,
+        allowedBranches,
         entityType,
         token,
         tenant: {
@@ -211,9 +227,6 @@ static async login(req, res) {
     return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
 }
-
-
-
 
 
   // --------------------- GET ALL ---------------------

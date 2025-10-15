@@ -88,6 +88,7 @@ class BranchController {
         id: branch.id,
         name: branch.name,
         logo: branch.logo || company.customization?.logoUrl,
+        company: company,
         theme: {
           primaryColor: company.customization?.primaryColor || '#007bff',
           secondaryColor: company.customization?.secondaryColor || '#6c757d',

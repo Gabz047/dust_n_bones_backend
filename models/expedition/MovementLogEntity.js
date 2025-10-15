@@ -16,7 +16,7 @@ MovementLogEntity.init({
     referralId: {
     type: DataTypes.TEXT,
     allowNull: true,
-    unique: true,
+    unique: false,
   },
   status: {
     type: DataTypes.ENUM('aberto', 'finalizado'),

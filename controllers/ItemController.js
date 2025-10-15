@@ -12,6 +12,7 @@ import {
   ProductionOrderItem,
   ProductionOrderItemAdditionalFeatureOption,
   OrderItemAdditionalFeatureOption,
+  MovementLogEntity,
 } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
@@ -27,9 +28,18 @@ function buildItemName(name, businessItemType, genre) {
 // Filtro de acesso por empresa/filial
 function itemAccessFilter(req) {
   const { companyId, branchId } = req.context || {};
+
+  if (!companyId) return {};
+
+  // 👇 Usuário da matriz: vê tudo da empresa (inclusive filiais)
+  if (!branchId) {
+    return { companyId };
+  }
+
+  // 👇 Usuário de filial: vê apenas os itens da sua própria filial
   return {
     companyId,
-    ...(branchId ? { branchId } : {}),
+    branchId,
   };
 }
 
@@ -71,13 +81,14 @@ export default {
             const referralId = await generateReferralId({
               model: Item,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+              
             });
       
 
       const itemData = {
         name,
+        companyId,
         referralId,
         description,
         itemType,
@@ -92,7 +103,7 @@ export default {
 
       const item = branchId
         ? await Item.create({ branchId, ...itemData })
-        : await Item.create({ companyId, ...itemData });
+        : await Item.create({ ...itemData });
 
       return res.status(201).json({ success: true, data: item });
     } catch (error) {

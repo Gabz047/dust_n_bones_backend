@@ -95,17 +95,26 @@ export const optionalTenant = async (req, res, next) => {
 
 // Validar acesso ao tenant (branch ou company)
 export const validateTenantAccess = (req, res, next) => {
-    if (req.user && req.tenant) {
-        const tenantId = req.tenant.id;
+  if (!req.user || !req.tenant) return next();
 
-        // Se o usuário não for admin e não pertencer à company ou branch
-        if (req.user.accountType !== 'admin' && req.user.companyId !== tenantId && req.user.branchId !== tenantId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Acesso negado ao tenant especificado'
-            });
-        }
-    }
+  const { accountType, companyId: userCompanyId, branchId: userBranchId } = req.user;
+  const tenant = req.tenant;
 
-    next();
+  // Admin sempre tem acesso
+  if (accountType === 'admin') return next();
+
+  // Usuário de matriz: vê tudo da empresa
+  if (!userBranchId && userCompanyId === tenant.company?.id || userCompanyId === tenant.id) {
+    return next();
+  }
+
+  // Usuário de filial: só vê sua própria branch
+  if (userBranchId && userBranchId === tenant.id) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: 'Acesso negado ao tenant especificado'
+  });
 };
