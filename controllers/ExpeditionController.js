@@ -43,7 +43,7 @@ static async create(req, res) {
       model: Expedition, // Corrigido: antes estava DeliveryNote
       transaction,
       companyId,
-      branchId,
+      
     });
 
     // 🏗️ Cria a expedição
@@ -60,16 +60,12 @@ static async create(req, res) {
 
     // 🧾 Cria log de movimentação
     const company = await Company.findOne({ where: { id: companyId } });
-            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const MreferralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+              
             });
     let movementData = {
       id: uuidv4(),
@@ -135,16 +131,13 @@ static async create(req, res) {
       const project = await Project.findByPk(projectId, { transaction });
 
       const company = await Company.findOne({ where: { id: project.companyId } });
-            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
       
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+              
             });
       // Preparar dados do log
       let movementData = {
@@ -206,16 +199,11 @@ static async delete(req, res) {
     const project = await Project.findByPk(expedition.projectId, { transaction }); 
 
     const company = await Company.findOne({ where: { id: project.companyId } });
-            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
             });
     // Preparar dados do log
     let movementData = {

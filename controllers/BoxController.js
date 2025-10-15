@@ -100,7 +100,7 @@ class BoxController {
         model: Box,
         transaction,
         companyId,
-        branchId,
+       
       });
 
       // --- Lógica do orderReferralId (incremental por projeto + pedido) ---
@@ -128,16 +128,12 @@ class BoxController {
       }, { transaction });
 
       const company = await Company.findOne({ where: { id: companyId } });
-      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const MreferralId = await generateReferralId({
         model: MovementLogEntity,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
+        
       });
 
       // --- Registro do log de movimento ---
@@ -218,16 +214,11 @@ class BoxController {
       const branchId = project.branchId ?? null;
 
       const company = await Company.findOne({ where: { id: companyId } });
-      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const MreferralId = await generateReferralId({
         model:  MovementLogEntity,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
 
       let movementData = {
@@ -313,16 +304,12 @@ class BoxController {
       const companyId = project.companyId;
       const branchId = project.branchId ?? null;
       const company = await Company.findOne({ where: { id: companyId } });
-      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const MreferralId = await generateReferralId({
         model:  MovementLogEntity,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
+        
       });
       // --- Log de movimento
       let movementData = {

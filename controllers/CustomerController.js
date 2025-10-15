@@ -72,16 +72,11 @@ class CustomerController {
 
      
      const company = await Company.findOne({ where: { id: context.companyId } });
-      const branch = context.branchId ? await Branch.findOne({ where: { id: context.branchId } }) : null;
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const referralId = await generateReferralId({
         model: Customer,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
       // Cria cliente com contexto do usuário
       const customer = await Customer.create(

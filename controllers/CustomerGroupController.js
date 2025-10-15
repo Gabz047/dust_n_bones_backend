@@ -57,16 +57,12 @@ export default {
     }
 
        const company = await Company.findOne({ where: { id: companyId } });
-      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
 
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const referralId = await generateReferralId({
         model: CustomerGroup,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
 
     const group = await CustomerGroup.create({

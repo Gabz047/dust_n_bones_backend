@@ -40,15 +40,10 @@ class ProjectController {
 
       const company = await Company.findOne({ where: { id: companyId } });
 
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
-
       const referralId = await generateReferralId({
         model: Project,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
 
       const project = await Project.create({
@@ -67,8 +62,7 @@ class ProjectController {
             const MreferralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
             });
 
       // ✅ Criar movimentação
@@ -371,16 +365,14 @@ static contextFilter(req) {
       await project.update(updates, { transaction })
 
       const company = await Company.findOne({ where: { id: project.companyId } });
-            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
       
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
+
       
             const referralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+              
             });
 
       // ✅ Criar movimentação
@@ -466,16 +458,12 @@ static contextFilter(req) {
     await project.destroy({ transaction })
 
        const company = await Company.findOne({ where: { id: project.companyId } });
-            const branch = project.branchId ? await Branch.findOne({ where: { id: project.branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+             
             });
 
     // ✅ Criar movimentação

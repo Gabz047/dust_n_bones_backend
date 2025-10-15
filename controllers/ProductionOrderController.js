@@ -71,14 +71,12 @@ static async create(req, res) {
 
     // ✅ companyId e branchId vêm do projeto
     const companyId = project.companyId;
-    const branchId = project.branchId ?? null;
 
     // 🔢 Gera referralId único
     const referralId = await generateReferralId({
       model: ProductionOrder, // Corrigido: antes usava DeliveryNote
       transaction,
       companyId,
-      branchId,
     });
 
     // 🏗️ Cria a ordem de produção

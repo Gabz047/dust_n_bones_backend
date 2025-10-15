@@ -24,16 +24,11 @@ class InvoiceController {
       }
 
        const company = await Company.findOne({ where: { id: companyId } });
-            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model: Invoice,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
             });
 
       const invoice = await Invoice.create({
@@ -50,8 +45,7 @@ class InvoiceController {
             const MreferralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
             });
 
       // Preparar dados do log
@@ -188,16 +182,12 @@ class InvoiceController {
       await invoice.update({ totalPrice }, { transaction });
 
       const company = await Company.findOne({ where: { id: companyId } });
-            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+             
             });
 
       const movementData = {
@@ -265,16 +255,11 @@ static async delete(req, res) {
     await invoice.destroy({ transaction });
 
     const company = await Company.findOne({ where: { id: companyId } });
-            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model:  MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
             });
 
     const movementData = {

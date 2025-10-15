@@ -54,15 +54,11 @@ class MovementController {
       return res.status(404).json({ success: false, message: 'Item não encontrado' })
     }
 
-    const companyRef = item.companyId
-    const branchRef = item.branchId || null
-
     // ✅ GERAR referralId
     const referralId = await generateReferralId({
       model: Movement,
       transaction,
-      companyId: companyRef,
-      branchId: branchRef
+      companyId: item.companyId,
     })
 
     // Criar movimentação com referralId
@@ -360,16 +356,12 @@ static async delete(req, res) {
     }
 
     const company = await Company.findOne({ where: { id: companyId } });
-            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
       
             const referralId = await generateReferralId({
               model: MovementLogEntity,
               transaction,
-              companyId: companyRef,
-              branchId: branchRef,
+              companyId: company.id,
+              
             });
 
     const movementData = {

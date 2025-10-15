@@ -22,16 +22,11 @@ class DeliveryNoteController {
 
       // ✅ GERA REFERRAL AUTOMÁTICO
       const company = await Company.findOne({ where: { id: companyId } });
-      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const referralId = await generateReferralId({
         model: DeliveryNote,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
 
       const deliveryNote = await DeliveryNote.create({
@@ -53,8 +48,7 @@ class DeliveryNoteController {
       const MreferralId = await generateReferralId({
         model: MovementLogEntity,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
 
       // ✅ Criar movimentação
@@ -177,16 +171,11 @@ class DeliveryNoteController {
     console.log('Quantidades atualizadas:', { boxQuantity: updatedBoxIds.length, totalQuantity });
 
     const company = await Company.findOne({ where: { id: companyId } });
-    const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-
-    const companyRef = company?.referralId;
-    const branchRef = branch?.referralId ?? null;
 
     const referralId = await generateReferralId({
       model: MovementLogEntity,
       transaction,
-      companyId: companyRef,
-      branchId: branchRef,
+      companyId: company.id,
     });
 
     // ✅ Criar movimentação
@@ -262,16 +251,11 @@ class DeliveryNoteController {
       await deliveryNote.destroy({ transaction });
 
       const company = await Company.findOne({ where: { id: deliveryNote.companyId } });
-      const branch = deliveryNote.branchId ? await Branch.findOne({ where: { id: deliveryNote.branchId } }) : null;
-
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const referralId = await generateReferralId({
         model: MovementLogEntity,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
 
       // Cria movimentação de remoção

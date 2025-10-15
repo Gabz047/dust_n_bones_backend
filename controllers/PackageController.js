@@ -26,16 +26,12 @@ class PackageController {
       const { companyId, branchId } = req.context;
 
       const company = await Company.findOne({ where: { id: companyId } });
-      const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
 
-      const companyRef = company?.referralId;
-      const branchRef = branch?.referralId ?? null;
 
       const referralId = await generateReferralId({
         model: Package,
         transaction,
-        companyId: companyRef,
-        branchId: branchRef,
+        companyId: company.id,
       });
       const packageItem = await Package.create({
         id: uuidv4(),
