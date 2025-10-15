@@ -4,7 +4,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { extractTenant } from '../middleware/tenant.js';
 import { validateRequest } from '../middleware/validation.js';
 import { userSchemas } from '../middleware/validation.js';
-
+import { resolveTenant } from '../middleware/resolveTenant.js';
 const router = express.Router();
 
 // Middleware de tenant aplicado em todas as rotas
@@ -15,6 +15,7 @@ router.post('/login', UserController.login);
 
 // Middleware de autenticação aplicado nas rotas protegidas
 router.use(authenticateToken);
+// router.use(resolveTenant)
 
 // Rotas CRUD de usuários
 router.get('/', UserController.getAll);

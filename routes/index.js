@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { resolveEntityContext } from '../middleware/userContext.js';
 import { validateRequest, signupSchema } from '../middleware/validation.js';
-
+import { resolveTenant } from '../middleware/resolveTenant.js';
 import SignupController from '../controllers/SignupController.js';
 
 import accountRoutes from './accounts.js';
@@ -103,7 +103,7 @@ const protectedRouters = {
 
 // Aplica autenticação + resolveEntityContext a todos os sub-routers protegidos
 for (const [path, subRouter] of Object.entries(protectedRouters)) {
-  router.use(path, authenticateToken, resolveEntityContext, subRouter);
+  router.use(path, authenticateToken, resolveEntityContext, resolveTenant, subRouter);
 }
 
 export default router;

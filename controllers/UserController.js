@@ -3,27 +3,27 @@ import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
+import { resolveTenant } from '../middleware/resolveTenant.js';
 
 
 function userAccessFilter(req) {
-  // Prioridade: user → context → tenant
-  const companyId =
-    req.user?.companyId ||
-    req.context?.companyId ||
-    req.tenant?.id;
-
-  const branchId =
-    req.user?.branchId ||
-    req.context?.branchId ||
-    null;
-
   const filter = {};
-  if (companyId) filter.companyId = companyId;
-  if (branchId) filter.branchId = branchId;
+
+  if (!req.userTenant) return filter;
+
+  const { type, data } = req.userTenant;
+
+  if (type === 'company') {
+    // Se o tenant é uma company, pega todos os usuários da empresa
+    filter.companyId = data.id;
+    // branchId não é filtrado, pega todos
+  } else if (type === 'branch') {
+    // Se o tenant é uma branch, pega apenas usuários da branch
+    filter.branchId = data.id;
+  }
 
   return filter;
 }
-
 
 class UserController {
   static async create(req, res) {
@@ -103,206 +103,219 @@ class UserController {
     }
   }
 
-  static async login(req, res) {
-    try {
-      const { email, username, password, rememberToken } = req.body;
+ static async login(req, res) {
+  try {
+    const { email, username, password, rememberToken } = req.body;
 
-      if (!email && !username) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email ou username é obrigatório'
-        });
-      }
-      // O tenant já vem do middleware extractTenant via header X-Tenant-ID
-      if (!req.tenant) {
-        return res.status(400).json({
-          success: false,
-          message: 'Header X-Tenant-ID é obrigatório',
-          errors: [{
-            field: 'X-Tenant-ID',
-            message: 'Header X-Tenant-ID não foi fornecido ou tenant não encontrado'
-          }]
-        });
-      }
-
-      let authenticatedEntity = null;
-      let entityType = null;
-
-      // Primeiro, tentar buscar um User na empresa especificada
-      const whereConditionUser = {
-        companyId: req.tenant.id,
-        active: true
-      };
-
-      if (email) {
-        whereConditionUser.email = email;
-      } else if (username) {
-        whereConditionUser.username = username;
-      }
-
-      const user = await User.findOne({
-        where: whereConditionUser,
-        include: [
-          {
-            model: Company,
-            as: 'company',
-            attributes: ['id', 'name', 'subdomain', 'logo']
-          }
-        ]
-      });
-
-      if (user) {
-        // Verificar senha do User
-        const isValidPassword = await user.validPassword(password);
-        if (isValidPassword) {
-          authenticatedEntity = user;
-          entityType = 'user';
-          // Atualizar último login
-          await user.update({ lastLoginAt: new Date() });
-        }
-      }
-
-      // Se não encontrou User ou a senha não confere, tentar buscar Account vinculado ao tenant
-      if (!authenticatedEntity) {
-        const whereConditionAccount = {
-          companyId: req.tenant.id
-        };
-
-        if (email) {
-          whereConditionAccount.email = email;
-        } else if (username) {
-          whereConditionAccount.username = username;
-        }
-
-        const account = await Account.findOne({
-          where: whereConditionAccount,
-          include: [
-            {
-              model: Company,
-              as: 'company',
-              attributes: ['id', 'name', 'subdomain', 'logo']
-            }
-          ]
-        });
-
-        if (account && account.password) {
-          // Verificar senha do Account
-          const isValidPassword = await account.validPassword(password);
-          if (isValidPassword) {
-            authenticatedEntity = account;
-            entityType = 'account';
-          }
-        }
-      }
-
-      // Se não encontrou nem User nem Account válido
-      if (!authenticatedEntity) {
-        console.warn('Falha no login: Credenciais inválidas para email/username:', email || username);
-        return res.status(401).json({
-          success: false,
-          message: 'Credenciais inválidas'
-        });
-      }
-
-      // Gerar token JWT
-      const token = jwt.sign(
-        {
-          id: authenticatedEntity.id,
-          email: authenticatedEntity.email,
-          role: authenticatedEntity.role,
-          companyId: authenticatedEntity.companyId,
-          entityType: entityType // Adicionar tipo da entidade para diferenciar
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
-      );
-
-      const { password: _, ...entityData } = authenticatedEntity.toJSON();
-
-      const userInBranch = await UserBranch.findOne({ where: { userId: authenticatedEntity.id } })
-
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
-      })
-
-      res.json({
-        success: true,
-        message: 'Login realizado com sucesso',
-        data: {
-          [entityType]: entityData,
-          userInBranch: userInBranch ? true : false,
-          entityType,
-          token,
-          tenant: {
-            id: req.tenant.id,
-            name: req.tenant.name,
-            subdomain: req.tenant.subdomain,
-            logo: req.tenant.logo
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Erro no login:', error);
-      res.status(500).json({
+    if (!email && !username) {
+      console.log('[LOGIN] Nenhum email ou username fornecido');
+      return res.status(400).json({
         success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
+        message: 'Email ou username é obrigatório'
       });
     }
+
+    const tenant = req.tenant;
+    if (!tenant) {
+      console.log('[LOGIN] Tenant não encontrado no header X-Tenant-ID');
+      return res.status(400).json({
+        success: false,
+        message: 'Header X-Tenant-ID é obrigatório'
+      });
+    }
+
+    console.log('[LOGIN] Tenant:', tenant);
+
+    let authenticatedEntity = null;
+    let entityType = null;
+
+let userInclude; // ⬅️ declarar aqui, escopo da função
+
+const userWhere = { active: true };
+if (email) userWhere.email = email;
+if (username) userWhere.username = username;
+
+if (tenant.type === 'branch') {
+  userInclude = [
+    {
+      model: Company,
+      as: 'company',
+      attributes: ['id', 'name', 'subdomain', 'logo']
+    },
+    {
+      model: UserBranch,
+      as: 'userBranches',
+      attributes: ['branchId'],
+      required: true,   
+      where: { branchId: tenant.id } // filtra pelo tenant
+    }
+  ];
+  console.log('USERINCLUDE',userInclude)
+  // Não precisa de Op.or nem branchId no usuário
+} else {
+  userInclude = [
+    { model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] },
+    { model: UserBranch, as: 'userBranches', attributes: ['branchId'], required: false }
+  ];
+
+  userWhere.companyId = tenant.id;
+}
+
+   console.log('[LOGIN] userWhere:', userWhere);
+const user = await User.findOne({ where: userWhere, include: userInclude });
+
+ 
+
+   
+    console.log('[LOGIN] User encontrado:', user ? user.toJSON() : null);
+
+    if (user) {
+      const isValidPassword = await user.validPassword(password);
+      console.log('[LOGIN] Password válido?', isValidPassword);
+      if (isValidPassword) {
+        authenticatedEntity = user;
+        entityType = 'user';
+        await user.update({ lastLoginAt: new Date() });
+      }
+    }
+
+    // ------------------- BUSCA ACCOUNT -------------------
+    if (!authenticatedEntity) {
+      const accountWhere = { companyId: tenant.id };
+      if (email) accountWhere.email = email;
+      if (username) accountWhere.username = username;
+
+      const account = await Account.findOne({
+        where: accountWhere,
+        include: [{ model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] }]
+      });
+
+      console.log('[LOGIN] Account encontrado:', account ? account.toJSON() : null);
+
+      if (account && account.password) {
+        const isValidPassword = await account.validPassword(password);
+        console.log('[LOGIN] Account password válido?', isValidPassword);
+        if (isValidPassword) {
+          authenticatedEntity = account;
+          entityType = 'account';
+        }
+      }
+    }
+
+    if (!authenticatedEntity) {
+      console.log('[LOGIN] Nenhuma entidade autenticada, credenciais inválidas');
+      return res.status(401).json({
+        success: false,
+        message: 'Credenciais inválidas'
+      });
+    }
+
+    console.log('[LOGIN] Entidade autenticada:', entityType, authenticatedEntity.id);
+
+    const token = jwt.sign(
+      {
+        id: authenticatedEntity.id,
+        email: authenticatedEntity.email,
+        role: authenticatedEntity.role,
+        companyId: authenticatedEntity.companyId,
+        entityType
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
+    );
+
+    const { password: _, ...entityData } = authenticatedEntity.toJSON();
+    const userInBranch = entityType === 'user'
+      ? (await UserBranch.findOne({ where: { userId: authenticatedEntity.id } })) ? true : false
+      : null;
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+    });
+
+    res.json({
+      success: true,
+      message: 'Login realizado com sucesso',
+      data: {
+        [entityType]: entityData,
+        userInBranch,
+        entityType,
+        token,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          subdomain: tenant.subdomain,
+          logo: tenant.logo
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
   }
+}
+
+
+
 
   static async getAll(req, res) {
-    try {
-      const { term, fields, role, active } = req.query;
+  try {
+    const { term, fields, role, active } = req.query;
 
-      const where = userAccessFilter(req);
+    // Aplica o filtro de tenant (company ou branch)
+    const where = userAccessFilter(req);
 
-      // Filtro de pesquisa textual
-      if (term && fields) {
-        const searchFields = fields.split(',');
-        where[Op.or] = searchFields.map((field) => ({
-          [field]: { [Op.iLike]: `%${term}%` },
-        }));
-      }
-
-      // Filtro por role
-      if (role) {
-        where.role = role;
-      }
-
-      // Filtro por status ativo
-      if (active !== undefined) {
-        where.active = active === 'true';
-      }
-
-      const result = await buildQueryOptions(req, User, {
-        where,
-        attributes: { exclude: ['password'] },
-        include: [
-          { model: Company, as: 'company', attributes: ['id', 'name'] },
-          { model: Branch, as: 'branch', attributes: ['id', 'name'] },
-          {
-            model: UserBranch,
-            as: 'userBranches',
-            include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
-          }
-        ],
-        order: [['createdAt', 'DESC']],
-      });
-
-      return res.json({ success: true, ...result });
-    } catch (error) {
-      console.error('Erro ao buscar usuários:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Erro ao buscar usuários.',
-        error: error.message
-      });
+    // Filtro de pesquisa textual
+    if (term && fields) {
+      const searchFields = fields.split(',');
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` },
+      }));
     }
+
+    // Filtro por role
+    if (role) {
+      where.role = role;
+    }
+
+    // Filtro por status ativo
+    if (active !== undefined) {
+      where.active = active === 'true';
+    }
+
+    const result = await buildQueryOptions(req, User, {
+      where,
+      attributes: { exclude: ['password'] },
+      include: [
+        { model: Company, as: 'company', attributes: ['id', 'name'] },
+        { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+        {
+          model: UserBranch,
+          as: 'userBranches',
+          include: [{ model: Branch, as: 'branch', attributes: ['id', 'name'] }]
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Erro ao buscar usuários:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar usuários.',
+      error: error.message
+    });
   }
+}
 
   static async getById(req, res) {
     try {

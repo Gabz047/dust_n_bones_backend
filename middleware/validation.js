@@ -2,8 +2,20 @@ import Joi from 'joi';
 
 export const validateRequest = (schema) => {
   return (req, res, next) => {
+    console.log('--- Middleware validateRequest ---');
+    console.log('Payload recebido:', JSON.stringify(req.body, null, 2));
+
     const { error } = schema.validate(req.body, { abortEarly: false });
+
     if (error) {
+      console.log('Erro de validação Joi detectado:');
+      error.details.forEach((detail, index) => {
+        console.log(`Erro ${index + 1}:`);
+        console.log('  Campo:', detail.path.join('.'));
+        console.log('  Mensagem:', detail.message);
+        console.log('  Valor recebido:', detail.context?.value);
+      });
+
       return res.status(400).json({
         success: false,
         message: 'Dados inválidos',
@@ -14,6 +26,8 @@ export const validateRequest = (schema) => {
         }))
       });
     }
+
+    console.log('Validação Joi concluída com sucesso!');
     next();
   };
 };
@@ -126,7 +140,7 @@ export const companySchemas = {
     logo: Joi.string().uri().allow(null).optional(),
     cnpj: Joi.string().min(14).max(18).allow(null).optional(),
     email: Joi.string().email().allow(null).optional(),
-    phone: Joi.string().min(10).max(15).allow(null).optional(),
+    phone: Joi.string().min(10).max(20).allow(null).optional(),
     address: Joi.string().allow(null).optional(),
     city: Joi.string().allow(null).optional(),
     state: Joi.string().length(2).allow(null).optional(),
@@ -134,10 +148,10 @@ export const companySchemas = {
     country: Joi.string().default('Brasil'),
     website: Joi.string().uri().allow(null).optional(),
     description: Joi.string().allow(null).optional(),
-    subscriptionPlan: Joi.string().valid('basic', 'professional', 'enterprise').default('basic').messages({
-      'any.only': 'Plano deve ser: basic, professional ou enterprise'
+    subscriptionPlan: Joi.string().valid('basic', 'pro', 'enterprise').default('basic').messages({
+      'any.only': 'Plano deve ser: basic, pro ou enterprise'
     }),
-    maxUsers: Joi.number().integer().min(1).default(5)
+    maxUsers: Joi.number().integer().min(1).default(5).optional()
   }),
 
   update: Joi.object({
@@ -2067,7 +2081,7 @@ export const signupSchema = Joi.object({
       'string.max': 'Sobrenome deve ter no máximo 50 caracteres',
       'any.required': 'Sobrenome é obrigatório'
     }),
-    username: Joi.string().min(3).max(50).allow(null).optional(),
+    username: Joi.string().min(3).max(50).allow(null, '').optional().default(null),
     password: Joi.string().min(6).required().messages({
       'string.min': 'Senha deve ter pelo menos 6 caracteres',
       'any.required': 'Senha é obrigatória'
@@ -2078,7 +2092,7 @@ export const signupSchema = Joi.object({
   }),
 
   company: Joi.object({
-    companyName: Joi.string().min(2).max(100).required().messages({
+    name: Joi.string().min(2).max(100).required().messages({
       'string.min': 'Nome da empresa deve ter pelo menos 2 caracteres',
       'string.max': 'Nome da empresa deve ter no máximo 100 caracteres',
       'any.required': 'Nome da empresa é obrigatório'
@@ -2092,11 +2106,11 @@ export const signupSchema = Joi.object({
     cnpj: Joi.string().pattern(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/).allow(null).optional().messages({
       'string.pattern.base': 'CNPJ deve ter o formato 00.000.000/0000-00'
     }),
-    companyEmail: Joi.string().email().required().messages({
+    email: Joi.string().email().required().messages({
       'string.email': 'Email da empresa deve ter um formato válido',
       'any.required': 'Email da empresa é obrigatório'
     }),
-    companyPhone: Joi.string().min(10).max(15).required().messages({
+    phone: Joi.string().min(10).max(20).required().messages({
       'string.min': 'Telefone da empresa deve ter pelo menos 10 caracteres',
       'string.max': 'Telefone da empresa deve ter no máximo 15 caracteres',
       'any.required': 'Telefone da empresa é obrigatório'
@@ -2105,7 +2119,7 @@ export const signupSchema = Joi.object({
       'string.uri': 'Website deve ser uma URL válida'
     }),
     address: Joi.string().max(500).allow(null).optional(),
-    plan: Joi.string().valid('basic', 'professional', 'enterprise').default('basic').messages({
+    subscriptionPlan: Joi.string().valid('basic', 'pro', 'enterprise').default('basic').messages({
       'any.only': 'Plano deve ser: basic, professional ou enterprise'
     })
   }).required().messages({

@@ -47,15 +47,15 @@ class DeliveryNoteController {
         referralId
       }, { transaction });
 
-     
-      
-      
-            const MreferralId = await generateReferralId({
-              model:  MovementLogEntity,
-              transaction,
-              companyId: companyRef,
-              branchId: branchRef,
-            });
+
+
+
+      const MreferralId = await generateReferralId({
+        model: MovementLogEntity,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
 
       // ✅ Criar movimentação
       let movementData = {
@@ -113,75 +113,179 @@ class DeliveryNoteController {
 
   // Atualiza um Delivery Note
   static async update(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const {companyId, branchId } = req.context
+    console.log('DeliveryNote ID (req.params.id):', id); // 🔹 log do id
+
+    if (!id) return res.status(400).json({ success: false, message: 'ID do DeliveryNote não informado' });
+
+    const { invoiceId, projectId, customerId, orderId, expeditionId, userId, boxes = [] } = req.body;
+    console.log('Payload recebido:', req.body); // 🔹 log do body
+    console.log('Boxes recebidas:', boxes);
+
+    const deliveryNote = await DeliveryNote.findByPk(id, { transaction });
+    console.log('DeliveryNote encontrado:', deliveryNote ? deliveryNote.id : null); // 🔹 log da consulta
+
+    if (!deliveryNote) return res.status(404).json({ error: 'DeliveryNote não encontrado' });
+
+    await deliveryNote.update({
+      invoiceId,
+      projectId,
+      
+      customerId,
+      orderId,
+      expeditionId
+    }, { transaction });
+    console.log('DeliveryNote atualizado com sucesso');
+
+    // Pegar todas as caixas atualmente associadas
+    const currentItems = await DeliveryNoteItem.findAll({ where: { deliveryNoteId: id }, transaction });
+    const currentBoxIds = currentItems.map(item => item.boxId);
+    console.log('Caixas atuais:', currentBoxIds);
+
+    // 1️⃣ Remover caixas que não foram enviadas pelo frontend
+    const boxesToRemove = currentBoxIds.filter(bid => !boxes.includes(bid));
+    console.log('Caixas a remover:', boxesToRemove);
+
+    if (boxesToRemove.length) {
+      await DeliveryNoteItem.destroy({ where: { deliveryNoteId: id, boxId: boxesToRemove }, transaction });
+      await Box.update({ deliveryNoteId: null }, { where: { id: boxesToRemove }, transaction });
+      console.log('Caixas removidas com sucesso');
+    }
+
+    // 2️⃣ Adicionar novas caixas enviadas pelo frontend
+    const boxesToAdd = boxes.filter(bid => !currentBoxIds.includes(bid));
+    console.log('Caixas a adicionar:', boxesToAdd);
+
+    for (const boxId of boxesToAdd) {
+      console.log('Adicionando caixa:', boxId); // 🔹 log de cada boxId
+      await DeliveryNoteItem.create({ deliveryNoteId: id, boxId }, { transaction });
+      await Box.update({ deliveryNoteId: id }, { where: { id: boxId }, transaction });
+    }
+
+    const updatedItems = await DeliveryNoteItem.findAll({ where: { deliveryNoteId: id }, transaction });
+    const updatedBoxIds = updatedItems.map(item => item.boxId);
+    console.log('Caixas atualizadas:', updatedBoxIds);
+
+    const totalQuantity = updatedBoxIds.length
+      ? await Box.sum('totalQuantity', { where: { id: updatedBoxIds }, transaction }) || 0
+      : 0;
+
+    await deliveryNote.update({ boxQuantity: updatedBoxIds.length, totalQuantity }, { transaction });
+    console.log('Quantidades atualizadas:', { boxQuantity: updatedBoxIds.length, totalQuantity });
+
+    const company = await Company.findOne({ where: { id: companyId } });
+    const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
+
+    const companyRef = company?.referralId;
+    const branchRef = branch?.referralId ?? null;
+
+    const referralId = await generateReferralId({
+      model: MovementLogEntity,
+      transaction,
+      companyId: companyRef,
+      branchId: branchRef,
+    });
+
+    // ✅ Criar movimentação
+    let movementData = {
+      id: uuidv4(),
+      method: 'edição',
+      entity: 'romaneio',
+      entityId: deliveryNote.id,
+      status: 'aberto',
+      companyId: companyId || null,
+      branchId: branchId || null,
+      referralId,
+    };
+
+    // Verifica User ou Account
+    const user = await User.findByPk(userId);
+    if (user) {
+      movementData.userId = userId;
+    } else {
+      const account = await Account.findByPk(userId);
+      if (account) {
+        movementData.accountId = userId;
+      } else {
+        console.log('User e Account não encontrados para userId:', userId); // 🔹 log de falha
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+      }
+    }
+
+    await MovementLogEntity.create(movementData, { transaction });
+    console.log('Movimentação criada:', movementData);
+
+    await transaction.commit();
+    console.log('Transação commitada com sucesso');
+    return res.json(deliveryNote);
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro no update do DeliveryNote:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+
+  // Deleta um Delivery Note
+  static async delete(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { id } = req.params;
-      const { invoiceId, projectId, companyId, branchId, customerId, orderId, expeditionId, userId, boxes = [] } = req.body;
+      const { userId } = req.body;
 
-      const deliveryNote = await DeliveryNote.findByPk(id, { transaction });
-      if (!deliveryNote) return res.status(404).json({ error: 'DeliveryNote não encontrado' });
+      const deliveryNote = await DeliveryNote.findByPk(id, {
+        include: [
+          { model: DeliveryNoteItem, as: 'items', attributes: ['id'] },
+        ],
+        transaction
+      });
 
-      await deliveryNote.update({
-        invoiceId,
-        projectId,
-        companyId,
-        branchId,
-        customerId,
-        orderId,
-        expeditionId
-      }, { transaction });
+      if (!deliveryNote)
+        return res.status(404).json({ error: 'DeliveryNote não encontrado' });
 
-      // Pegar todas as caixas atualmente associadas
-      const currentItems = await DeliveryNoteItem.findAll({ where: { deliveryNoteId: id }, transaction });
-      const currentBoxIds = currentItems.map(item => item.boxId);
+      // ✅ Verifica se há vínculos diretos
+      const hasLinkedItems = deliveryNote.items.length > 0;
 
-      // 1️⃣ Remover caixas que não foram enviadas pelo frontend
-      const boxesToRemove = currentBoxIds.filter(bid => !boxes.includes(bid));
-      if (boxesToRemove.length) {
-        await DeliveryNoteItem.destroy({ where: { deliveryNoteId: id, boxId: boxesToRemove }, transaction });
-        await Box.update({ deliveryNoteId: null }, { where: { id: boxesToRemove }, transaction });
+
+      if (hasLinkedItems) {
+        return res.status(400).json({
+          success: false,
+          message: 'Não é possível deletar: existem vínculos com caixas'
+        });
       }
 
-      // 2️⃣ Adicionar novas caixas enviadas pelo frontend
-      const boxesToAdd = boxes.filter(bid => !currentBoxIds.includes(bid));
-      for (const boxId of boxesToAdd) {
-        await DeliveryNoteItem.create({ deliveryNoteId: id, boxId }, { transaction });
-        await Box.update({ deliveryNoteId: id }, { where: { id: boxId }, transaction });
-      }
+      await deliveryNote.destroy({ transaction });
 
-      const updatedItems = await DeliveryNoteItem.findAll({ where: { deliveryNoteId: id }, transaction });
-      const updatedBoxIds = updatedItems.map(item => item.boxId);
-      const totalQuantity = updatedBoxIds.length
-        ? await Box.sum('totalQuantity', { where: { id: updatedBoxIds }, transaction }) || 0
-        : 0;
+      const company = await Company.findOne({ where: { id: deliveryNote.companyId } });
+      const branch = deliveryNote.branchId ? await Branch.findOne({ where: { id: deliveryNote.branchId } }) : null;
 
-      await deliveryNote.update({ boxQuantity: updatedBoxIds.length, totalQuantity }, { transaction });
+      const companyRef = company?.referralId;
+      const branchRef = branch?.referralId ?? null;
 
-      const company = await Company.findOne({ where: { id: companyId } });
-            const branch = branchId ? await Branch.findOne({ where: { id: branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
-      
-            const referralId = await generateReferralId({
-              model:  MovementLogEntity,
-              transaction,
-              companyId: companyRef,
-              branchId: branchRef,
-            });
-      // ✅ Criar movimentação
+      const referralId = await generateReferralId({
+        model: MovementLogEntity,
+        transaction,
+        companyId: companyRef,
+        branchId: branchRef,
+      });
+
+      // Cria movimentação de remoção
       let movementData = {
         id: uuidv4(),
-        method: 'edição',
+        method: 'remoção',
         entity: 'romaneio',
-        entityId: deliveryNote.id,
-        status: 'aberto',
-        companyId: companyId || null,
-        branchId: branchId || null,
+        entityId: id,
+        status: 'finalizado',
+        companyId: deliveryNote.companyId || null,
+        branchId: deliveryNote.branchId || null,
         referralId,
       };
 
-      // Verifica User ou Account
       const user = await User.findByPk(userId);
       if (user) {
         movementData.userId = userId;
@@ -191,100 +295,22 @@ class DeliveryNoteController {
           movementData.accountId = userId;
         } else {
           await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+          return res.status(400).json({
+            success: false,
+            message: 'O ID informado não corresponde a um User ou Account válido'
+          });
         }
       }
 
       await MovementLogEntity.create(movementData, { transaction });
-
       await transaction.commit();
-      return res.json(deliveryNote);
+      return res.json({ message: 'DeliveryNote deletado com sucesso' });
+
     } catch (error) {
       await transaction.rollback();
       return res.status(500).json({ success: false, message: error.message });
     }
   }
-
-  // Deleta um Delivery Note
-  static async delete(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const { id } = req.params;
-    const { userId } = req.body;
-
-    const deliveryNote = await DeliveryNote.findByPk(id, {
-      include: [
-        { model: DeliveryNoteItem, as: 'items', attributes: ['id'] },
-      ],
-      transaction
-    });
-
-    if (!deliveryNote)
-      return res.status(404).json({ error: 'DeliveryNote não encontrado' });
-
-    // ✅ Verifica se há vínculos diretos
-    const hasLinkedItems = deliveryNote.items.length > 0;
-   
-
-    if (hasLinkedItems) {
-      return res.status(400).json({
-        success: false,
-        message: 'Não é possível deletar: existem vínculos com caixas'
-      });
-    }
-
-    await deliveryNote.destroy({ transaction });
-
-    const company = await Company.findOne({ where: { id: deliveryNote.companyId } });
-            const branch = deliveryNote.branchId ? await Branch.findOne({ where: { id: deliveryNote.branchId } }) : null;
-      
-            const companyRef = company?.referralId;
-            const branchRef = branch?.referralId ?? null;
-      
-            const referralId = await generateReferralId({
-              model:  MovementLogEntity,
-              transaction,
-              companyId: companyRef,
-              branchId: branchRef,
-            });
-
-    // Cria movimentação de remoção
-    let movementData = {
-      id: uuidv4(),
-      method: 'remoção',
-      entity: 'romaneio',
-      entityId: id,
-      status: 'finalizado',
-      companyId: deliveryNote.companyId || null,
-        branchId: deliveryNote.branchId || null,
-        referralId,
-    };
-
-    const user = await User.findByPk(userId);
-    if (user) {
-      movementData.userId = userId;
-    } else {
-      const account = await Account.findByPk(userId);
-      if (account) {
-        movementData.accountId = userId;
-      } else {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'O ID informado não corresponde a um User ou Account válido'
-        });
-      }
-    }
-
-    await MovementLogEntity.create(movementData, { transaction });
-    await transaction.commit();
-    return res.json({ message: 'DeliveryNote deletado com sucesso' });
-
-  } catch (error) {
-    await transaction.rollback();
-    return res.status(500).json({ success: false, message: error.message });
-  }
-}
   static async getAll(req, res) {
     try {
       const { projectId, customerId, term, fields } = req.query
