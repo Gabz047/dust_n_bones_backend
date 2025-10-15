@@ -103,7 +103,7 @@ const protectedRouters = {
 
 // Aplica autenticação + resolveEntityContext a todos os sub-routers protegidos
 for (const [path, subRouter] of Object.entries(protectedRouters)) {
-  router.use(path, authenticateToken, resolveEntityContext, resolveTenant, subRouter);
+  router.use(path, authenticateToken, resolveEntityContext, subRouter);
 }
 
 export default router;
