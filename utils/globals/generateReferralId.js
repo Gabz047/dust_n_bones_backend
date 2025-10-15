@@ -23,14 +23,41 @@ export async function generateReferralId({
     // Movement → Item → Company
     whereCondition = { '$item.company_id$': companyId }
     include = [
-      { 
-        model: model.sequelize.models.Item, 
+      {
+        model: model.sequelize.models.Item,
         as: 'item',
         required: true // força INNER JOIN
       }
     ]
     console.log('🔹 [Movement] whereCondition:', whereCondition)
     console.log('🔹 [Movement] include:', include)
+  } else if (model.name === 'Expedition') {
+    whereCondition = { '$project.company_id$': companyId }
+    include = [
+      {
+        model: model.sequelize.models.Project,
+        as: 'project',
+        required: true // força INNER JOIN
+      }
+    ]
+  } else if (model.name === 'Box') {
+    whereCondition = { '$project.company_id$': companyId }
+    include = [
+      {
+        model: model.sequelize.models.Project,
+        as: 'project',
+        required: true // força INNER JOIN
+      }
+    ]
+  } else if (model.name === 'ProductionOrder') {
+    whereCondition = { '$project.company_id$': companyId }
+    include = [
+      {
+        model: model.sequelize.models.Project,
+        as: 'project',
+        required: true // força INNER JOIN
+      }
+    ]
   } else {
     // padrão: company_id direto
     whereCondition = { company_id: companyId }
