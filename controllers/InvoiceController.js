@@ -2,51 +2,75 @@ import { sequelize, Invoice, DeliveryNote, MovementLogEntity, Project, InvoiceIt
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
 import { generateReferralId } from '../utils/globals/generateReferralId.js';
+
 class InvoiceController {
+
+  // 🔒 Filtro de acesso por empresa/filial (via projeto)
+  static projectAccessFilter(req) {
+    const { companyId, branchId } = req.context || {};
+    return {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+  }
 
   // Cria uma nova fatura
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
       const { projectId, type, deliveryNoteIds, userId } = req.body;
-      const { companyId, branchId } = req.context;
+
+      // 🔍 Verifica se o projeto existe e aplica filtro de acesso
+      const project = await Project.findOne({
+        where: {
+          id: projectId,
+          ...InvoiceController.projectAccessFilter(req)
+        }
+      });
+
+      if (!project) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Projeto não encontrado ou sem acesso' });
+      }
+
+      // ✅ companyId e branchId vêm do projeto
+      const companyId = project.companyId;
+      const branchId = project.branchId || null;
 
       let romaneios = [];
       const dnWhere = {
         ...(deliveryNoteIds?.length ? { id: deliveryNoteIds } : { projectId }),
-        ...(companyId ? { companyId } : {}),
+        companyId,
         ...(branchId ? { branchId } : {})
       };
 
       romaneios = await DeliveryNote.findAll({ where: dnWhere, transaction });
       if (romaneios.length === 0) {
-        return res.status(400).json({ error: 'Nenhum romaneio encontrado para gerar a fatura' });
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Nenhum romaneio encontrado para gerar a fatura' });
       }
 
-       const company = await Company.findOne({ where: { id: companyId } });
-      
-            const referralId = await generateReferralId({
-              model: Invoice,
-              transaction,
-              companyId: company.id,
-            });
+      const referralId = await generateReferralId({
+        model: Invoice,
+        transaction,
+        companyId,
+      });
 
       const invoice = await Invoice.create({
         projectId,
         type,
         referralId,
-        companyId: companyId || null,
-        branchId: branchId || null,
+        companyId,
+        branchId,
         date: new Date(),
         totalPrice: 0
       }, { transaction });
 
-      
-            const MreferralId = await generateReferralId({
-              model:  MovementLogEntity,
-              transaction,
-              companyId: company.id,
-            });
+      const MreferralId = await generateReferralId({
+        model: MovementLogEntity,
+        transaction,
+        companyId,
+      });
 
       // Preparar dados do log
       let movementData = {
@@ -55,8 +79,8 @@ class InvoiceController {
         entityId: invoice.id,
         status: 'aberto',
         date: new Date(),
-         companyId: companyId || null,
-        branchId: branchId || null,
+        companyId,
+        branchId,
         referralId: MreferralId,
       };
 
@@ -160,8 +184,8 @@ class InvoiceController {
 
     } catch (error) {
       await transaction.rollback();
-      console.error(error);
-      return res.status(500).json({ success: false, error: 'Erro ao criar fatura' });
+      console.error('Erro ao criar fatura:', error);
+      return res.status(500).json({ success: false, error: 'Erro ao criar fatura', message: error.message });
     }
   }
 
@@ -171,24 +195,35 @@ class InvoiceController {
     try {
       const { id } = req.params;
       const { totalPrice, userId } = req.body;
-      const { companyId, branchId } = req.context;
 
       const invoice = await Invoice.findOne({
-        where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) },
+        where: { id },
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'companyId', 'branchId']
+          }
+        ],
         transaction
       });
-      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
+
+      if (!invoice) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, error: 'Fatura não encontrada ou sem acesso' });
+      }
 
       await invoice.update({ totalPrice }, { transaction });
 
-      const company = await Company.findOne({ where: { id: companyId } });
-      
-            const referralId = await generateReferralId({
-              model:  MovementLogEntity,
-              transaction,
-              companyId: company.id,
-             
-            });
+      const companyId = invoice.project.companyId;
+      const branchId = invoice.project.branchId || null;
+
+      const referralId = await generateReferralId({
+        model: MovementLogEntity,
+        transaction,
+        companyId,
+      });
 
       const movementData = {
         method: 'edição',
@@ -196,8 +231,8 @@ class InvoiceController {
         entityId: invoice.id,
         status: 'aberto',
         date: new Date(),
-         companyId: companyId || null,
-        branchId: branchId || null,
+        companyId,
+        branchId,
         referralId,
       };
 
@@ -220,101 +255,109 @@ class InvoiceController {
       return res.json({ success: true, data: invoice });
     } catch (error) {
       await transaction.rollback();
+      console.error('Erro ao atualizar fatura:', error);
       return res.status(500).json({ success: false, error: error.message });
     }
   }
 
-  // Deleta fatura
- // Deleta fatura apenas se não houver vínculos diretos
-static async delete(req, res) {
-  const transaction = await sequelize.transaction();
-  try {
-    const { id } = req.params;
-    const { userId } = req.body;
-    const { companyId, branchId } = req.context;
+  // Deleta fatura apenas se não houver vínculos diretos
+  static async delete(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const { id } = req.params;
+      const { userId } = req.body;
 
-    const invoice = await Invoice.findOne({
-      where: { id, ...(companyId ? { companyId } : {}), ...(branchId ? { branchId } : {}) },
-      include: [
-        { model: InvoiceItem, as: 'items', attributes: ['id'] },
-        { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id'] }
-      ],
-      transaction
-    });
-
-    if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
-
-    // Checa vínculos
-    if ((invoice.items?.length || 0) > 0 || (invoice.deliveryNotes?.length || 0) > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Não é possível deletar esta fatura, pois existem vínculos diretos com itens ou romaneios.'
+      const invoice = await Invoice.findOne({
+        where: { id },
+        include: [
+          { model: InvoiceItem, as: 'items', attributes: ['id'] },
+          { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id'] },
+          {
+            model: Project,
+            as: 'project',
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['companyId', 'branchId']
+          }
+        ],
+        transaction
       });
-    }
 
-    await invoice.destroy({ transaction });
-
-    const company = await Company.findOne({ where: { id: companyId } });
-      
-            const referralId = await generateReferralId({
-              model:  MovementLogEntity,
-              transaction,
-              companyId: company.id,
-            });
-
-    const movementData = {
-      method: 'remoção',
-      entity: 'fatura',
-      entityId: id,
-      status: 'aberto',
-      date: new Date(),
-       companyId: companyId || null,
-        branchId: branchId || null,
-        referralId,
-    };
-
-    // Verifica User ou Account
-    const user = await User.findByPk(userId);
-    if (user) {
-      movementData.userId = userId;
-    } else {
-      const account = await Account.findByPk(userId);
-      if (account) {
-        movementData.accountId = userId;
-      } else {
+      if (!invoice) {
         await transaction.rollback();
-        return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        return res.status(404).json({ success: false, error: 'Fatura não encontrada ou sem acesso' });
       }
+
+      // Checa vínculos
+      if ((invoice.items?.length || 0) > 0 || (invoice.deliveryNotes?.length || 0) > 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Não é possível deletar esta fatura, pois existem vínculos diretos com itens ou romaneios.'
+        });
+      }
+
+      const companyId = invoice.project.companyId;
+      const branchId = invoice.project.branchId || null;
+
+      await invoice.destroy({ transaction });
+
+      const referralId = await generateReferralId({
+        model: MovementLogEntity,
+        transaction,
+        companyId,
+      });
+
+      const movementData = {
+        method: 'remoção',
+        entity: 'fatura',
+        entityId: id,
+        status: 'finalizado',
+        date: new Date(),
+        companyId,
+        branchId,
+        referralId,
+      };
+
+      // Verifica User ou Account
+      const user = await User.findByPk(userId);
+      if (user) {
+        movementData.userId = userId;
+      } else {
+        const account = await Account.findByPk(userId);
+        if (account) {
+          movementData.accountId = userId;
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'O ID informado não corresponde a um User ou Account válido' });
+        }
+      }
+
+      await MovementLogEntity.create(movementData, { transaction });
+      await transaction.commit();
+      return res.json({ success: true, message: 'Fatura deletada com sucesso' });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Erro ao deletar fatura:', error);
+      return res.status(500).json({ success: false, error: error.message });
     }
-
-    await MovementLogEntity.create(movementData, { transaction });
-    await transaction.commit();
-    return res.json({ success: true, message: 'Fatura deletada com sucesso' });
-
-  } catch (error) {
-    await transaction.rollback();
-    return res.status(500).json({ success: false, error: error.message });
-  }
-}
-
-
-  // 🔒 Filtro de acesso por empresa/filial
-  static projectAccessFilter(req) {
-    const { companyId, branchId } = req.context || {};
-    return {
-      ...(companyId && { companyId }),
-      ...(branchId && { branchId })
-    };
   }
 
   // 📦 Buscar todas as faturas (COM PAGINAÇÃO)
   static async getAll(req, res) {
     try {
-      const { projectId, type } = req.query;
+      const { projectId, type, branchId, term, fields } = req.query;
       const where = {};
 
       if (projectId) where.projectId = projectId;
       if (type) where.type = type;
+
+          if (term && fields) {
+      const searchFields = fields.split(',');
+      where[Op.or] = searchFields.map(field => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }));
+    }
 
       const result = await buildQueryOptions(req, Invoice, {
         where,
@@ -323,11 +366,19 @@ static async delete(req, res) {
           {
             model: Project,
             as: 'project',
-            where: InvoiceController.projectAccessFilter(req),
-            attributes: ['id', 'name']
+            where: {
+              ...InvoiceController.projectAccessFilter(req),
+              ...(branchId ? { branchId } : {})
+            },
+            attributes: ['id', 'name', 'companyId', 'branchId'],
+            include: [
+              { model: Company, as: 'company', attributes: ['name'] },
+              { model: Branch, as: 'branch', attributes: ['name'] }
+            ]
           },
           { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
-        ]
+        ],
+        distinct: true
       });
 
       res.json({ success: true, ...result });
@@ -350,6 +401,7 @@ static async delete(req, res) {
             model: Project,
             as: 'project',
             where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'name', 'companyId', 'branchId'],
             include: [
               { model: Customer, as: 'customer', attributes: ['id', 'name'] }
             ]
@@ -365,7 +417,7 @@ static async delete(req, res) {
         ]
       });
 
-      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
+      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada ou sem acesso' });
 
       const lastMovement = await MovementLogEntity.findOne({
         where: { entity: 'fatura', entityId: id },
@@ -399,7 +451,7 @@ static async delete(req, res) {
             model: Project,
             as: 'project',
             where: InvoiceController.projectAccessFilter(req),
-            attributes: ['id', 'name']
+            attributes: ['id', 'name', 'companyId', 'branchId']
           },
           { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
         ]
@@ -436,7 +488,7 @@ static async delete(req, res) {
             model: Project,
             as: 'project',
             where: InvoiceController.projectAccessFilter(req),
-            attributes: ['id', 'name']
+            attributes: ['id', 'name', 'companyId', 'branchId']
           },
           { model: DeliveryNote, as: 'deliveryNotes', attributes: ['id', 'referralId'] }
         ]
@@ -454,13 +506,15 @@ static async delete(req, res) {
     try {
       const { id } = req.params;
 
-      const invoice = await Invoice.findByPk(id, {
+      const invoice = await Invoice.findOne({
+        where: { id },
         attributes: ['id', 'createdAt', 'totalPrice', 'type'],
         include: [
           {
             model: Project,
             as: 'project',
-            attributes: ['id', 'name'],
+            where: InvoiceController.projectAccessFilter(req),
+            attributes: ['id', 'name', 'companyId', 'branchId'],
             include: [
               {
                 model: Customer,
@@ -509,7 +563,7 @@ static async delete(req, res) {
         ]
       });
 
-      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada' });
+      if (!invoice) return res.status(404).json({ success: false, error: 'Fatura não encontrada ou sem acesso' });
 
       const slimInvoice = {
         id: invoice.id,
@@ -599,7 +653,7 @@ static async delete(req, res) {
       res.json({ success: true, data: slimInvoice });
 
     } catch (error) {
-      console.error(error);
+      console.error('Erro ao gerar PDF:', error);
       return res.status(500).json({ success: false, error: error.message });
     }
   }
