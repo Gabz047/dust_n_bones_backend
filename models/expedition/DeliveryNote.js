@@ -108,7 +108,7 @@ DeliveryNote.init({
     { fields: ['company_id', 'branch_id'] },
     { fields: ['project_id', 'customer_id'] },
     { fields: ['order_id', 'customer_id'] },
-    { fields: ['referral_id'], unique: true },
+    { fields: ['referral_id'] },
   ],
 });
 
