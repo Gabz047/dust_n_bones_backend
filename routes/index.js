@@ -4,7 +4,7 @@ import { resolveEntityContext } from '../middleware/userContext.js';
 import { validateRequest, signupSchema } from '../middleware/validation.js';
 import { resolveTenant } from '../middleware/resolveTenant.js';
 import SignupController from '../controllers/SignupController.js';
-
+import reportRoutes from './reports.js'
 import accountRoutes from './accounts.js';
 import companyRoutes from './companies.js';
 import companySettingsRoutes from './company-settings.js';
@@ -68,6 +68,7 @@ router.use( '/branches', branchRoutes)
 
 // Sub-routers que precisam de autenticação + resolveEntityContext
 const protectedRouters = {
+  '/reports': reportRoutes,
   '/userBranches': userBranchRoutes,
   '/customers': customerRoutes,
   '/customers_group': customerGroupRoutes,

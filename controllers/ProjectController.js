@@ -7,54 +7,42 @@ import { generateReferralId } from '../utils/globals/generateReferralId.js'
 import { resolveCompanyId, userAccessFilter } from '../utils/globals/requestHelpers.js'
 class ProjectController {
    static async create(req, res) {
+  try {
+    const { branchId, customerId, totalQuantity, name, deliveryDate, userId } = req.body
+
+    // 🔸 Resolve companyId
+    const resolvedCompanyId = resolveCompanyId(req)
+    if (!resolvedCompanyId) return res.status(400).json({ success: false, message: 'Não foi possível determinar a empresa.' })
+
+    // ✅ Validar empresa
+    const company = await Company.findByPk(resolvedCompanyId)
+    if (!company || !company.active) return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' })
+
+    // ✅ Validar filial
+    let branch = null
+    if (branchId) {
+      branch = await Branch.findByPk(branchId)
+      if (!branch || !branch.active) return res.status(400).json({ success: false, message: 'Filial inválida ou inativa' })
+    }
+
+    // ✅ Validar cliente
+    let customer = null
+    if (customerId) {
+      customer = await Customer.findByPk(customerId)
+      if (!customer) return res.status(400).json({ success: false, message: 'Cliente não encontrado' })
+    }
+
+    // ✅ Validar usuário/conta
+    const user = await User.findByPk(userId)
+    let account = null
+    if (!user) account = await Account.findByPk(userId)
+    if (!user && !account) return res.status(400).json({ success: false, message: 'ID inválido de usuário ou conta' })
+
+    // 🔹 Transação apenas para criação
     const transaction = await sequelize.transaction()
     try {
-      const { branchId, customerId, totalQuantity, name, deliveryDate, userId } = req.body
-
-      // 🔸 Resolve companyId com base no contexto (igual ao UserController)
-      const resolvedCompanyId = resolveCompanyId(req)
-      if (!resolvedCompanyId) {
-        await transaction.rollback()
-        return res.status(400).json({
-          success: false,
-          message: 'Não foi possível determinar a empresa associada a este projeto.'
-        })
-      }
-
-      // ✅ Validar empresa
-      const company = await Company.findByPk(resolvedCompanyId)
-      if (!company || !company.active) {
-        await transaction.rollback()
-        return res.status(400).json({ success: false, message: 'Empresa inválida ou inativa' })
-      }
-
-      // ✅ Validar filial
-      let branch = null
-      if (branchId) {
-        branch = await Branch.findByPk(branchId)
-        if (!branch || !branch.active) {
-          await transaction.rollback()
-          return res.status(400).json({ success: false, message: 'Filial inválida ou inativa' })
-        }
-      }
-
-      // ✅ Validar cliente
-      let customer = null
-      if (customerId) {
-        customer = await Customer.findByPk(customerId)
-        if (!customer) {
-          await transaction.rollback()
-          return res.status(400).json({ success: false, message: 'Cliente não encontrado' })
-        }
-      }
-
-      // ✅ Criação do projeto
       const projectId = uuidv4()
-      const referralId = await generateReferralId({
-        model: Project,
-        transaction,
-        companyId: resolvedCompanyId
-      })
+      const referralId = await generateReferralId({ model: Project, transaction, companyId: resolvedCompanyId })
 
       const project = await Project.create({
         id: projectId,
@@ -67,12 +55,7 @@ class ProjectController {
         totalQuantity: totalQuantity || 0
       }, { transaction })
 
-      // ✅ Movimento (log de criação)
-      const MreferralId = await generateReferralId({
-        model: MovementLogEntity,
-        transaction,
-        companyId: resolvedCompanyId
-      })
+      const MreferralId = await generateReferralId({ model: MovementLogEntity, transaction, companyId: resolvedCompanyId })
 
       const movementData = {
         method: 'criação',
@@ -81,37 +64,27 @@ class ProjectController {
         status: 'aberto',
         companyId: resolvedCompanyId,
         branchId: branchId || null,
-        referralId: MreferralId
-      }
-
-      // ✅ Verifica se é User ou Account
-      const user = await User.findByPk(userId)
-      if (user) movementData.userId = userId
-      else {
-        const account = await Account.findByPk(userId)
-        if (account) movementData.accountId = userId
-        else {
-          await transaction.rollback()
-          return res.status(400).json({
-            success: false,
-            message: 'O ID informado não corresponde a um User ou Account válido'
-          })
-        }
+        referralId: MreferralId,
+        userId: user?.id || undefined,
+        accountId: account?.id || undefined
       }
 
       await MovementLogEntity.create(movementData, { transaction })
       await transaction.commit()
       return res.status(201).json({ success: true, data: project })
+
     } catch (error) {
       await transaction.rollback()
-      console.error('Erro ao criar projeto:', error)
-      return res.status(500).json({
-        success: false,
-        message: 'Erro interno do servidor',
-        error: error.message
-      })
+      console.error('Erro ao criar projeto (transação):', error)
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
+
+  } catch (error) {
+    console.error('Erro ao criar projeto:', error)
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
   }
+}
+
 
 
   // 🔒 Filtro de acesso por empresa/filial
@@ -362,29 +335,31 @@ static contextFilter(req) {
   }
 }
 
- static async update(req, res) {
+static async update(req, res) {
+  try {
+    const { id } = req.params
+    const updates = req.body
+    const { userId } = updates
+
+    // 🔸 Valida usuário/conta
+    const user = await User.findByPk(userId)
+    const account = user ? null : await Account.findByPk(userId)
+    if (!user && !account) return res.status(400).json({ success: false, message: 'ID inválido de usuário ou conta' })
+
+    // 🔹 Transação apenas para update
     const transaction = await sequelize.transaction()
     try {
-      const { id } = req.params
-      const updates = req.body
-      const { userId } = updates
-
       const where = { id, ...(await userAccessFilter(req)) }
       const project = await Project.findOne({ where, transaction })
-
       if (!project) {
         await transaction.rollback()
         return res.status(404).json({ success: false, message: 'Projeto não encontrado' })
       }
 
       await project.update(updates, { transaction })
-      const companyId = resolveCompanyId(req, project.companyId)
 
-      const referralId = await generateReferralId({
-        model: MovementLogEntity,
-        transaction,
-        companyId
-      })
+      const companyId = resolveCompanyId(req, project.companyId)
+      const referralId = await generateReferralId({ model: MovementLogEntity, transaction, companyId })
 
       const movementData = {
         method: 'edição',
@@ -393,29 +368,27 @@ static contextFilter(req) {
         status: 'aberto',
         companyId,
         branchId: project.branchId || null,
-        referralId
-      }
-
-      const user = await User.findByPk(userId)
-      if (user) movementData.userId = userId
-      else {
-        const account = await Account.findByPk(userId)
-        if (account) movementData.accountId = userId
-        else {
-          await transaction.rollback()
-          return res.status(400).json({ success: false, message: 'ID inválido de usuário ou conta' })
-        }
+        referralId,
+        userId: user?.id || undefined,
+        accountId: account?.id || undefined
       }
 
       await MovementLogEntity.create(movementData, { transaction })
       await transaction.commit()
-      res.json({ success: true, data: project })
+      return res.json({ success: true, data: project })
+
     } catch (error) {
       await transaction.rollback()
-      console.error('Erro ao atualizar projeto:', error)
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+      console.error('Erro ao atualizar projeto (transação):', error)
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
+
+  } catch (error) {
+    console.error('Erro ao atualizar projeto:', error)
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
   }
+}
+
 
   // 🗑️ Deletar projeto
  static async delete(req, res) {
