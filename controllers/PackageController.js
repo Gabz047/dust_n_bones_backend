@@ -18,44 +18,47 @@ class PackageController {
   
 
   // 🧾 Criar embalagem
-  static async create(req, res) {
-     const transaction = await sequelize.transaction();
-    try {
-      const { name, type, material, width, height, length, weight } = req.body;
-      const { companyId, branchId } = req.context;
+ static async create(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { name, type, material, width, height, length, weight } = req.body;
+    const { companyId, branchId } = req.context;
 
-      const company = await Company.findOne({ where: { id: companyId } });
+    const company = await Company.findOne({ where: { id: companyId } });
 
+    const referralId = await generateReferralId({
+      model: Package,
+      transaction,
+      companyId: company.id,
+    });
 
-      const referralId = await generateReferralId({
-        model: Package,
-        transaction,
-        companyId: company.id,
-      });
-      const packageItem = await Package.create({
-        id: uuidv4(),
-        name,
-        referralId,
-        type,
-        material,
-        width,
-        height,
-        length,
-        weight,
-        companyId,
-        branchId
-      });
+    const packageItem = await Package.create({
+      id: uuidv4(),
+      name,
+      referralId,
+      type,
+      material,
+      width,
+      height,
+      length,
+      weight,
+      companyId,
+      branchId
+    }, { transaction }); // ✅ inclui a transação aqui
 
-      return res.status(201).json({ success: true, data: packageItem });
-    } catch (error) {
-      console.error('Erro ao criar embalagem:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Erro ao criar embalagem',
-        error: error.message
-      });
-    }
+    await transaction.commit(); // ✅ finaliza a transação
+
+    return res.status(201).json({ success: true, data: packageItem });
+  } catch (error) {
+    await transaction.rollback(); // ✅ desfaz se der erro
+    console.error('Erro ao criar embalagem:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao criar embalagem',
+      error: error.message
+    });
   }
+}
 
   // 📦 Buscar todas as embalagens com paginação
   static async getAll(req, res) {
