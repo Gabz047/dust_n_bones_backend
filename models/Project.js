@@ -18,7 +18,7 @@ Project.init({
     type: DataTypes.TEXT,
     allowNull: true,
     unique: false,
-    field: 'referral_id',
+   
   },
   name: {
     type: DataTypes.STRING,
