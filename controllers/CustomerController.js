@@ -6,13 +6,11 @@ import { generateReferralId } from '../utils/globals/generateReferralId.js';
 class CustomerController {
   // 🔒 Filtro de acesso por empresa/filial
   static customerAccessFilter(req) {
-    const { companyId, branchId } = req.context || {};
+    const { companyId } = req.context || {};
     
-    if (branchId) {
-      return { branchId };
-    } else if (companyId) {
+  if (companyId) {
       return { companyId };
-    }
+  }
     return {};
   }
 

@@ -352,7 +352,7 @@ class BoxController {
   // 📦 Buscar todos os boxes (com paginação)
   static async getAll(req, res) {
     try {
-      const { projectId, customerId, orderId, deliveryNoteId, term, fields } = req.query
+      const { projectId, customerId, orderId, branchId, deliveryNoteId, term, fields } = req.query
       const where = {}
 
       if (projectId) where.projectId = projectId
@@ -376,7 +376,10 @@ class BoxController {
             model: Project,
             as: 'project',
             attributes: ['id', 'name', 'companyId', 'branchId'],
-            where: BoxController.projectAccessFilter(req)
+            where: {
+              ...BoxController.projectAccessFilter(req),
+              ...(branchId ? { branchId } : {}) // filtro pelo branchId do front
+            },
           },
           { model: Customer, as: 'customer', attributes: ['id', 'name'] },
           { model: Order, as: 'order', attributes: ['id', 'referralId'] },

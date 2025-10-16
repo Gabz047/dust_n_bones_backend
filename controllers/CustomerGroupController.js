@@ -11,8 +11,7 @@ import { generateReferralId } from '../utils/globals/generateReferralId.js';
 function groupAccessFilter(req) {
   const { companyId, branchId } = req.context || {};
   const where = {};
-  if (branchId) where.branchId = branchId;
-  else if (companyId) where.companyId = companyId;
+ if (companyId) where.companyId = companyId;
   return where;
 }
 export default {

@@ -15,7 +15,7 @@ Movement.init({
   referralId: {
     type: DataTypes.TEXT,
     allowNull: true,
-    unique: true,
+    unique: false,
   },
   itemId: {
     type: DataTypes.UUID,

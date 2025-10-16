@@ -14,7 +14,7 @@ Branch.init({
       referralId: {
     type: DataTypes.TEXT,
     allowNull: true,
-    unique: true,
+    unique: false,
   },
     name: {
         type: DataTypes.STRING,

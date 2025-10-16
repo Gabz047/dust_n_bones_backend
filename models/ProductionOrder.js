@@ -18,7 +18,7 @@ ProductionOrder.init({
   referralId: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    unique: true
+    unique: false
   },
   supplierId: { // fornecedor que executa
     type: DataTypes.UUID,

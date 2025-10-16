@@ -31,15 +31,11 @@ function itemAccessFilter(req) {
 
   if (!companyId) return {};
 
-  // 👇 Usuário da matriz: vê tudo da empresa (inclusive filiais)
-  if (!branchId) {
-    return { companyId };
-  }
 
   // 👇 Usuário de filial: vê apenas os itens da sua própria filial
   return {
     companyId,
-    branchId,
+   
   };
 }
 

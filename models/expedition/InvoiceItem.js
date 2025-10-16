@@ -17,7 +17,7 @@ InvoiceItem.init({
    referralId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-    unique: true,
+    unique: false,
   },
   invoiceId: { 
     type: DataTypes.UUID,

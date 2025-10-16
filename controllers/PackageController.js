@@ -12,8 +12,7 @@ class PackageController {
   static packageAccessFilter(req) {
     const { companyId, branchId } = req.context || {};
     return {
-      companyId,
-      ...(branchId ? { branchId } : {})
+      companyId
     };
   }
   

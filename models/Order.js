@@ -16,7 +16,7 @@ Order.init({
   referralId: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    unique: true,
+    unique: false,
   },
   projectId: { 
     type: DataTypes.UUID,

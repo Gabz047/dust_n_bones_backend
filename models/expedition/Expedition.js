@@ -16,7 +16,7 @@ Expedition.init({
   referralId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-    unique: true
+    unique: false
   },
   projectId: {
     type: DataTypes.UUID,

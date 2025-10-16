@@ -14,6 +14,8 @@ import {
   ProductionOrderStatus,
   ProductionOrderItemAdditionalFeatureOption,
   Movement,
+  Company,
+  Branch,
 } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 import { generateReferralId } from '../utils/globals/generateReferralId.js'
@@ -32,139 +34,159 @@ class ProductionOrderController {
   // 🧾 Criar OP
  // 🧾 Criar OP
 static async create(req, res) {
-  const transaction = await sequelize.transaction();
+    const transaction = await sequelize.transaction()
+    try {
+      const {
+        projectId,
+        supplierId,
+        mainCustomerId,
+        type,
+        plannedQuantity,
+        issueDate,
+        closeDate,
+        userId
+      } = req.body
+
+      // 🔍 Verifica se o projeto existe
+      const project = await Project.findByPk(projectId)
+      if (!project) {
+        await transaction.rollback()
+        return res.status(400).json({ success: false, message: 'Projeto não encontrado' })
+      }
+
+      // 🔍 Valida fornecedor
+      if (supplierId) {
+        const supplier = await Customer.findByPk(supplierId)
+        if (!supplier) {
+          await transaction.rollback()
+          return res.status(400).json({ success: false, message: 'Fornecedor não encontrado' })
+        }
+      }
+
+      // 🔍 Valida cliente principal
+      if (mainCustomerId) {
+        const mainCustomer = await Customer.findByPk(mainCustomerId)
+        if (!mainCustomer) {
+          await transaction.rollback()
+          return res.status(400).json({ success: false, message: 'Cliente principal não encontrado' })
+        }
+      }
+
+      // ✅ companyId e branchId vêm do projeto
+      const companyId = project.companyId
+      const branchId = project.branchId || null
+
+       // ✅ Movimento (log de criação)
+      const movementReferralId = await generateReferralId({
+        model: ProductionOrder,
+        transaction,
+        companyId,
+      })
+
+      // 🏗️ Cria a ordem de produção
+      const order = await ProductionOrder.create({
+        id: uuidv4(),
+        projectId,
+        supplierId,
+        mainCustomerId,
+        type: type || 'Normal',
+        plannedQuantity: plannedQuantity || 0,
+        issueDate: issueDate || new Date().toISOString().split('T')[0],
+        closeDate: closeDate || null,
+        referralId: movementReferralId,
+        companyId,
+        branchId
+      }, { transaction })
+
+     
+
+      // const movementData = {
+      //   method: 'criação',
+      //   entity: 'production_order',
+      //   entityId: order.id,
+      //   status: 'aberto',
+      //   companyId,
+      //   branchId,
+      //   referralId: movementReferralId
+      // }
+
+      // // Verifica se userId é User ou Account
+      // const userCheck = await Customer.findByPk(userId) || await Customer.findByPk(userId)
+      // if (userCheck) movementData.userId = userId
+
+     
+      await transaction.commit()
+      return res.status(201).json({ success: true, data: order })
+    } catch (error) {
+      await transaction.rollback()
+      console.error('Erro ao criar O.P.:', error)
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+    }
+  }
+
+  // 📦 Buscar todas as OPs com filtros
+ static async getAll(req, res) {
   try {
-    const {
-      projectId,
-      supplierId,
-      mainCustomerId,
-      type,
-      plannedQuantity,
-      issueDate,
-      closeDate
-    } = req.body;
+    const { projectId, branchId, supplierId, mainCustomerId, type, term, fields } = req.query;
+    const where = {};
 
-    // 🔍 Verifica se o projeto existe
-    const project = await Project.findByPk(projectId);
-    if (!project) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'Projeto não encontrado' });
+    // Filtros diretos da OP
+    if (projectId) where.projectId = projectId;
+    if (supplierId) where.supplierId = supplierId;
+    if (mainCustomerId) where.mainCustomerId = mainCustomerId;
+    if (type) where.type = type;
+
+    // Filtros de search
+    if (term && fields) {
+      const searchFields = fields.split(',');
+      where[Op.or] = searchFields.map(field => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }));
     }
 
-    // 🔍 Valida fornecedor
-    if (supplierId) {
-      const supplier = await Customer.findByPk(supplierId);
-      if (!supplier) {
-        await transaction.rollback();
-        return res.status(400).json({ success: false, message: 'Fornecedor não encontrado' });
-      }
-    }
-
-    // 🔍 Valida cliente principal
-    if (mainCustomerId) {
-      const mainCustomer = await Customer.findByPk(mainCustomerId);
-      if (!mainCustomer) {
-        await transaction.rollback();
-        return res.status(400).json({ success: false, message: 'Cliente principal não encontrado' });
-      }
-    }
-
-    // ✅ companyId e branchId vêm do projeto
-    const companyId = project.companyId;
-
-    // 🔢 Gera referralId único
-    const referralId = await generateReferralId({
-      model: ProductionOrder, // Corrigido: antes usava DeliveryNote
-      transaction,
-      companyId,
+    // Build query
+    const result = await buildQueryOptions(req, ProductionOrder, {
+      where,
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where: {
+            ...ProductionOrderController.projectAccessFilter(req),
+            ...(branchId ? { branchId } : {}) // filtro pelo branchId do front
+          },
+          include: [
+            { model: Company, as: 'company', attributes: ['name'] },
+            { model: Branch, as: 'branch', attributes: ['name'] },
+          ]
+        },
+        { model: Customer, as: 'supplier', attributes: ['id', 'name'] },
+        { model: Customer, as: 'mainCustomer', attributes: ['id', 'name'] },
+        {
+          model: ProductionOrderItem,
+          as: 'items',
+          include: [
+            { model: Item, as: 'item' },
+            { model: ItemFeature, as: 'itemFeature' },
+            { model: FeatureOption, as: 'featureOption' }
+          ]
+        }
+      ],
+      order: [['issueDate', 'DESC']],
+      distinct: true
     });
 
-    // 🏗️ Cria a ordem de produção
-    const order = await ProductionOrder.create({
-      id: uuidv4(),
-      projectId,
-      supplierId,
-      mainCustomerId,
-      type: type || 'Normal',
-      plannedQuantity: plannedQuantity || 0,
-      issueDate: issueDate || new Date().toISOString().split('T')[0],
-      closeDate: closeDate || null,
-      referralId,
-    }, { transaction });
-
-    await transaction.commit();
-    return res.status(201).json({ success: true, data: order });
+    res.json({ success: true, ...result });
   } catch (error) {
-    await transaction.rollback();
-    console.error('Erro ao criar O.P.:', error);
-    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    console.error('Erro ao buscar O.P.:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
 }
 
-
-
-  // 📦 Buscar todas as OPs com paginação e filtros
-  static async getAll(req, res) {
-    try {
-      const { projectId, supplierId, mainCustomerId, type, term, fields } = req.query
-      const where = {}
-
-
-      if (projectId) where.projectId = projectId
-      if (supplierId) where.supplierId = supplierId
-      if (mainCustomerId) where.mainCustomerId = mainCustomerId
-      if (type) where.type = type
-
-
-      // 🔍 Filtro de pesquisa textual
-      if (term && fields) {
-        const searchFields = fields.split(',')
-        where[Op.or] = searchFields.map((field) => ({
-          [field]: { [Op.iLike]: `%${term}%` }
-        }))
-      }
-
-
-      const result = await buildQueryOptions(req, ProductionOrder, {
-        where,
-        include: [
-          {
-            model: Project,
-            as: 'project',
-            attributes: ['id', 'name', 'companyId', 'branchId'],
-            where: ProductionOrderController.projectAccessFilter(req)
-          },
-          { model: Customer, as: 'supplier', attributes: ['id', 'name'] },
-          { model: Customer, as: 'mainCustomer', attributes: ['id', 'name'] },
-          {
-            model: ProductionOrderItem,
-            as: 'items',
-            include: [
-              { model: Item, as: 'item' },
-              { model: ItemFeature, as: 'itemFeature' },
-              { model: FeatureOption, as: 'featureOption' }
-            ]
-          }
-        ],
-        order: [['issueDate', 'DESC']],
-        distinct: true,
-      })
-
-
-      res.json({ success: true, ...result })
-    } catch (error) {
-      console.error('Erro ao buscar O.P.:', error)
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
-    }
-  }
-
-
-  // 🔍 Buscar por ID
-  static async getById(req, res) {
+static async getById(req, res) {
     try {
       const { id } = req.params
-
-
       const order = await ProductionOrder.findOne({
         where: { id },
         include: [
@@ -188,18 +210,15 @@ static async create(req, res) {
         ]
       })
 
-
-      if (!order) {
-        return res.status(404).json({ success: false, message: 'O.P. não encontrada' })
-      }
-
-
+      if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' })
       res.json({ success: true, data: order })
     } catch (error) {
       console.error('Erro ao buscar O.P.:', error)
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
   }
+
+
 
 
   // 📁 Buscar por projeto (com paginação)
@@ -362,21 +381,49 @@ static async create(req, res) {
 
 
   // ✏️ Atualizar OP
-  static async update(req, res) {
+    static async update(req, res) {
+    const transaction = await sequelize.transaction()
     try {
       const { id } = req.params
       const updates = req.body
-      const order = await ProductionOrder.findByPk(id)
-      if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' })
+      const order = await ProductionOrder.findByPk(id, { transaction })
+      if (!order) {
+        await transaction.rollback()
+        return res.status(404).json({ success: false, message: 'O.P. não encontrada' })
+      }
 
+      await order.update(updates, { transaction })
 
-      await order.update(updates)
+      // Atualiza log
+      const companyId = order.companyId
+      const branchId = order.branchId || null
+      const referralId = await generateReferralId({
+        model: Movement,
+        transaction,
+        companyId,
+        branchId
+      })
+
+      await Movement.create({
+        method: 'edição',
+        entity: 'production_order',
+        entityId: order.id,
+        status: 'aberto',
+        companyId,
+        branchId,
+        referralId,
+        userId: updates.userId || null
+      }, { transaction })
+
+      await transaction.commit()
       res.json({ success: true, data: order })
     } catch (error) {
+      await transaction.rollback()
       console.error('Erro ao atualizar O.P.:', error)
       res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
   }
+
 
 
   // 🔧 Atualização parcial (PATCH)
@@ -401,42 +448,64 @@ static async create(req, res) {
 
   // 🗑️ Deletar OP
   // 🔧 Deletar OP apenas se não houver vínculos
-static async delete(req, res) {
-  try {
-    const { id } = req.params;
+  static async delete(req, res) {
+    const transaction = await sequelize.transaction()
+    try {
+      const { id } = req.params
 
-    // Busca a OP com todos os possíveis vínculos
-    const order = await ProductionOrder.findByPk(id, {
-      include: [
-        
-        { model: ProductionOrderItemAdditionalFeatureOption, as: 'additionalOptionsByOrder', attributes: ['id'] },
-        { model: Movement, as: 'movements', attributes: ['id'] }
-      ]
-    });
+      const order = await ProductionOrder.findByPk(id, {
+        include: [
+          { model: ProductionOrderItemAdditionalFeatureOption, as: 'additionalOptionsByOrder', attributes: ['id'] },
+          { model: Movement, as: 'movements', attributes: ['id'] },
+          { model: Project, as: 'project', attributes: ['companyId', 'branchId'] }
+        ],
+        transaction
+      })
 
-    if (!order) return res.status(404).json({ success: false, message: 'O.P. não encontrada' });
+      if (!order) {
+        await transaction.rollback()
+        return res.status(404).json({ success: false, message: 'O.P. não encontrada' })
+      }
 
-    // Checa se existe algum vínculo
-    const linkedRecords = [];
-    
-   
-    if (order.additionalOptionsByOrder.length > 0) linkedRecords.push(`ProductionOrderItemAdditionalFeatureOption: ${order.additionalOptionsByOrder.length}`);
-    if (order.movements.length > 0) linkedRecords.push(`Movimentação: ${order.movements.length}`);
+      const linkedRecords = []
+      if (order.additionalOptionsByOrder.length > 0) linkedRecords.push(`ProductionOrderItemAdditionalFeatureOption: ${order.additionalOptionsByOrder.length}`)
+      if (order.movements.length > 0) linkedRecords.push(`Movimentação: ${order.movements.length}`)
 
-    if (linkedRecords.length > 0) {
-      return res.status(500).json({
-        success: false,
-        message: `Não é possível deletar a O.P. porque possui vínculos. ${linkedRecords}`,
-      });
+      if (linkedRecords.length > 0) {
+        await transaction.rollback()
+        return res.status(400).json({
+          success: false,
+          message: `Não é possível deletar a O.P. porque possui vínculos. ${linkedRecords}`
+        })
+      }
+
+      await order.destroy({ transaction })
+
+      const referralId = await generateReferralId({
+        model: Movement,
+        transaction,
+        companyId: order.project.companyId,
+        branchId: order.project.branchId || null
+      })
+
+      await Movement.create({
+        method: 'remoção',
+        entity: 'production_order',
+        entityId: order.id,
+        status: 'finalizado',
+        companyId: order.project.companyId,
+        branchId: order.project.branchId || null,
+        referralId
+      }, { transaction })
+
+      await transaction.commit()
+      res.json({ success: true, message: 'O.P. removida com sucesso' })
+    } catch (error) {
+      await transaction.rollback()
+      console.error('Erro ao deletar O.P.:', error)
+      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
     }
-
-    await order.destroy();
-    res.json({ success: true, message: 'O.P. removida com sucesso' });
-  } catch (error) {
-    console.error('Erro ao deletar O.P.:', error);
-    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
-}
 
 }
 

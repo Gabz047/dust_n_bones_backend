@@ -22,7 +22,7 @@ DeliveryNote.init({
   referralId: {
     type: DataTypes.TEXT,
     allowNull: true,
-    unique: true,
+    unique: false,
     field: 'referral_id',
   },
   invoiceId: {

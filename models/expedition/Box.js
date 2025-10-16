@@ -20,7 +20,7 @@ Box.init({
   referralId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-    unique: true,
+    unique: false,
   },
   orderReferralId:{
     type: DataTypes.INTEGER,

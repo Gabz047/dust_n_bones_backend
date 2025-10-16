@@ -59,7 +59,7 @@ class FeatureController {
     const { companyId, branchId } = req.context || {};
     return {
       companyId,
-      ...(branchId ? { branchId } : {})
+     
     };
   }
 
