@@ -16,6 +16,7 @@ import {
   Movement,
   Company,
   Branch,
+  MovementLogEntity,
 } from '../models/index.js'
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js'
 import { generateReferralId } from '../utils/globals/generateReferralId.js'
@@ -398,15 +399,15 @@ static async getById(req, res) {
       const companyId = order.companyId
       const branchId = order.branchId || null
       const referralId = await generateReferralId({
-        model: Movement,
+        model: MovementLogEntity,
         transaction,
         companyId,
         branchId
       })
 
-      await Movement.create({
+      await MovementLogEntity.create({
         method: 'edição',
-        entity: 'production_order',
+        entity: 'O.P',
         entityId: order.id,
         status: 'aberto',
         companyId,
@@ -482,15 +483,15 @@ static async getById(req, res) {
       await order.destroy({ transaction })
 
       const referralId = await generateReferralId({
-        model: Movement,
+        model: MovementLogEntity,
         transaction,
         companyId: order.project.companyId,
         branchId: order.project.branchId || null
       })
 
-      await Movement.create({
+      await MovementLogEntity.create({
         method: 'remoção',
-        entity: 'production_order',
+        entity: 'O.P',
         entityId: order.id,
         status: 'finalizado',
         companyId: order.project.companyId,
