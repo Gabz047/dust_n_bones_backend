@@ -127,12 +127,12 @@ class CustomerController {
       if (city) where.city = { [Op.iLike]: `%${city}%` };
       if (email) where.email = { [Op.iLike]: `%${email}%` };
 
-       if (term && fields) {
-            const searchFields = fields.split(',')
-            where[Op.or] = searchFields.map((field) => ({
-              [field]: { [Op.iLike]: `%${term}%` }
-            }))
-          }
+        if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
+      }
 
       const result = await buildQueryOptions(req, Customer, {
         where,

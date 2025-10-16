@@ -18,7 +18,7 @@ Box.init({
     allowNull: false,
   },
   referralId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.TEXT,
     allowNull: true,
     unique: false,
   },

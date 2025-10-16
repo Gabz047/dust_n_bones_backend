@@ -141,7 +141,7 @@ static contextFilter(req) {
     if (customerId) baseWhere.customerId = customerId
 
     // 3️⃣ Campos de texto vs UUID
-    const textFields = ['name']               // campos de texto
+    const textFields = ['name', 'referralId']               // campos de texto
     const uuidFields = ['branchId', 'referralId'] // campos UUID
 
     if (term && fields) {

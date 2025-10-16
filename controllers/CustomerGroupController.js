@@ -85,67 +85,73 @@ export default {
 },
 
   // 📦 Buscar todos os grupos com paginação e filtros
-  async getAll(req, res) {
-    try {
-      const where = groupAccessFilter(req)
+ async getAll(req, res) {
+  try {
+    const where = groupAccessFilter(req)
+    const { term, fields } = req.query
 
-      const { term, fields } = req.query
-
-      // ⚡️ Se o campo de busca envolve associação (ex: mainCustomerInGroup.name)
-      if (fields?.includes('mainCustomerInGroup.') && term) {
-        const result = await CustomerGroup.findAndCountAll({
-          where,
-          include: [
-            {
-              model: Customer,
-              as: 'mainCustomerInGroup',
-              attributes: ['id', 'name'],
-              required: true,
-              where: {
-                name: { [Op.iLike]: `%${term}%` },
-              },
-            },
-            {
-              model: Customer,
-              as: 'customersInGroup',
-              attributes: ['id', 'name'],
-            },
-          ],
-          order: [['createdAt', 'DESC']],
-          limit: req.query.limit ? parseInt(req.query.limit) : 10,
-          offset: req.query.page
-            ? (parseInt(req.query.page) - 1) * (parseInt(req.query.limit) || 10)
-            : 0,
-        })
-
-        return res.status(200).json({
-          data: result.rows,
-          count: result.count,
-          pagination: {
-            total: result.count,
-            page: parseInt(req.query.page) || 1,
-            limit: parseInt(req.query.limit) || 10,
-            totalPages: Math.ceil(result.count / (parseInt(req.query.limit) || 10)),
-          },
-        })
+    if (term && fields) {
+        const searchFields = fields.split(',');
+        where[Op.or] = searchFields.map((field) => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }));
       }
 
-      // 👇 Se não for filtro por associação, usa o util padrão
-      const result = await buildQueryOptions(req, CustomerGroup, {
+    // 🔍 Busca por associação (mainCustomerInGroup.name)
+    if (fields?.includes('mainCustomerInGroup.') && term) {
+      const result = await CustomerGroup.findAndCountAll({
         where,
         include: [
-          { model: Customer, as: 'mainCustomerInGroup', attributes: ['id', 'name'] },
-          { model: Customer, as: 'customersInGroup', attributes: ['id', 'name'] },
+          {
+            model: Customer,
+            as: 'mainCustomerInGroup',
+            attributes: ['id', 'name'],
+            required: true,
+            where: {
+              name: { [Op.iLike]: `%${term}%` },
+            },
+          },
+          {
+            model: Customer,
+            as: 'customersInGroup',
+            attributes: ['id', 'name'],
+          },
         ],
         order: [['createdAt', 'DESC']],
+        limit: req.query.limit ? parseInt(req.query.limit) : 10,
+        offset: req.query.page
+          ? (parseInt(req.query.page) - 1) * (parseInt(req.query.limit) || 10)
+          : 0,
       })
 
-      return res.status(200).json(result)
-    } catch (error) {
-      console.error('Erro ao buscar grupos de clientes:', error)
-      return res.status(500).json({ error: error.message })
+      return res.status(200).json({
+        data: result.rows,
+        count: result.count,
+        pagination: {
+          total: result.count,
+          page: parseInt(req.query.page) || 1,
+          limit: parseInt(req.query.limit) || 10,
+          totalPages: Math.ceil(result.count / (parseInt(req.query.limit) || 10)),
+        },
+      })
     }
-  },
+
+    // 🧭 Se não for filtro de associação
+    const result = await buildQueryOptions(req, CustomerGroup, {
+      where,
+      include: [
+        { model: Customer, as: 'mainCustomerInGroup', attributes: ['id', 'name'] },
+        { model: Customer, as: 'customersInGroup', attributes: ['id', 'name'] },
+      ],
+      order: [['createdAt', 'DESC']],
+    })
+
+    return res.status(200).json(result)
+  } catch (error) {
+    console.error('Erro ao buscar grupos de clientes:', error)
+    return res.status(500).json({ error: error.message })
+  }
+},
 
 
   // 🔍 Buscar grupo por ID

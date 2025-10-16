@@ -14,7 +14,7 @@ Order.init({
     allowNull: false
   },
   referralId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.TEXT,
     allowNull: false,
     unique: false,
   },
