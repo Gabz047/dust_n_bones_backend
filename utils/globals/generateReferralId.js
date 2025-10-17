@@ -58,7 +58,17 @@ export async function generateReferralId({
         required: true // força INNER JOIN
       }
     ]
-  } else {
+  } 
+  else if (model.name === 'Order') {
+    whereCondition = { '$project.company_id$': companyId }
+    include = [
+      {
+        model: model.sequelize.models.Project,
+        as: 'project',
+        required: true // força INNER JOIN
+      }
+    ]
+  }else {
     // padrão: company_id direto
     whereCondition = { company_id: companyId }
     console.log('🔹 [Default] whereCondition:', whereCondition)

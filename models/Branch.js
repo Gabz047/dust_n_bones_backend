@@ -38,15 +38,7 @@ Branch.init({
             len: [14, 18],
         },
     },
-     subdomain: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-        validate: {
-            len: [3, 50],
-            is: /^[a-z0-9-]+$/i,
-        },
-    },
+     
     email: {
         type: DataTypes.STRING,
         allowNull: true,

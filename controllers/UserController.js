@@ -141,22 +141,18 @@ static async login(req, res) {
       entityType = 'user';
       await user.update({ lastLoginAt: new Date() });
 
-      // Usuário tem branches atribuídas?
       userInBranch = Array.isArray(user.userBranches) && user.userBranches.length > 0;
-      if (userInBranch) {
-        // Usuário filial → pega lista de branches que ele pode logar
-        allowedBranches = user.userBranches.map(ub => ub.branchId);
-        console.log('===== Allowed branches',allowedBranches)
-        console.log('branchIddd!!!!!',branchId)
-        if (!branchId || !allowedBranches.includes(branchId)) {
+      allowedBranches = userInBranch ? user.userBranches.map(ub => ub.branchId) : [];
+
+      // ✅ Agora o usuário de filial também pode logar na company
+      // Se branchId for passado, apenas validamos se é uma filial que ele tem acesso
+      if (branchId) {
+        if (userInBranch && !allowedBranches.includes(branchId)) {
           return res.status(403).json({
             success: false,
-            message: 'Acesso negado: Você é usuário de uma filial, selecione uma filial válida!'
+            message: 'Acesso negado: filial selecionada não pertence a este usuário.'
           });
         }
-      } else {
-        // Usuário de company ou Account pode logar em qualquer branch ou company
-        allowedBranches = null;
       }
     }
 
@@ -174,7 +170,7 @@ static async login(req, res) {
       if (account && account.password && await account.validPassword(password)) {
         authenticatedEntity = account;
         entityType = 'account';
-        userInBranch = false; // account não tem branch restrito
+        userInBranch = false;
       }
     }
 
@@ -227,7 +223,6 @@ static async login(req, res) {
     return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
 }
-
 
   // --------------------- GET ALL ---------------------
   static async getAll(req, res) {

@@ -10,7 +10,7 @@ class BranchController {
   try {
     const {
       name, logo, cnpj, email, phone, address, city, state, zipCode,
-      country, website, description, maxUsers, companyId, ownerId, subdomain
+      country, website, description, maxUsers, companyId, ownerId,
     } = req.body;
 
     if (cnpj) {
@@ -36,7 +36,7 @@ class BranchController {
       name, logo, cnpj, email, phone, address, city, state, zipCode,
       country: country || 'Brasil', website, description,
       companyId, maxUsers: maxUsers || 5, ownerId,
-      subdomain
+    
     }, { transaction });
 
     // Cria relação UserBranch
@@ -59,36 +59,45 @@ class BranchController {
 }
 
 
- static async getBySubdomain(req, res) {
-    try {
-      const { subdomain, companyId } = req.params;
+static async getByUserBranch(req, res) {
+  try {
+    // Buscar todas as branches associadas ao usuário
+    const userBranches = await UserBranch.findAll({
+      where: { userId: req.user.id },
+      include: [
+        {
+          model: Branch,
+          as: 'branch',
+          where: { active: true },
+          include: [
+            {
+              model: Company,
+              as: 'company',
+              where: { active: true },
+              required: true,
+              include: [
+                { model: CompanySettings, as: 'settings' },
+                { model: CompanyCustomize, as: 'customization' }
+              ]
+            }
+          ]
+        }
+      ]
+    });
 
-      // Buscar filial
-      const branch = await Branch.findOne({
-        where: { subdomain: subdomain.toLowerCase(), active: true },
-        include: [
-          {
-            model: Company,
-            as: 'company',
-            where: companyId ? { id: companyId, active: true } : { active: true },
-            required: true,
-            include: [
-              { model: CompanySettings, as: 'settings' },
-              { model: CompanyCustomize, as: 'customization' }
-            ]
-          }
-        ]
-      });
+    if (!userBranches.length) {
+      return res.status(404).json({ success: false, message: 'Usuário não possui filial vinculada' });
+    }
 
-      if (!branch) return res.status(404).json({ success: false, message: 'Filial ou empresa não encontrada' });
-
+    // Mapear apenas os dados relevantes
+    const branchesData = userBranches.map(ub => {
+      const branch = ub.branch;
       const company = branch.company;
-
-      const response = {
+      return {
         id: branch.id,
         name: branch.name,
         logo: branch.logo || company.customization?.logoUrl,
-        company: company,
+        company,
         theme: {
           primaryColor: company.customization?.primaryColor || '#007bff',
           secondaryColor: company.customization?.secondaryColor || '#6c757d',
@@ -101,16 +110,18 @@ class BranchController {
           currency: company.settings?.currency || 'BRL',
           dateFormat: company.settings?.dateFormat || 'DD/MM/YYYY'
         },
-        active: company.active
+        active: branch.active
       };
+    });
 
-      res.json({ success: true, data: response });
+    res.json({ success: true, data: branchesData });
 
-    } catch (error) {
-      console.error('Erro ao buscar filial por subdomínio:', error);
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
-    }
+  } catch (error) {
+    console.error('Erro ao buscar filiais do usuário:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
+}
+
 
   // 📦 Buscar todas as filiais (COM PAGINAÇÃO E FILTROS)
   static async getAll(req, res) {

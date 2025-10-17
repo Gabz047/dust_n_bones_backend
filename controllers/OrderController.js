@@ -40,7 +40,7 @@ class OrderController {
   static async create(req, res) {
     try {
       const { projectId, customerId, status, totalQuantity, deliveryDate, userId } = req.body;
-
+  
       // 🔹 Resolve companyId via req
       const resolvedCompanyId = resolveCompanyId(req);
       if (!resolvedCompanyId) {

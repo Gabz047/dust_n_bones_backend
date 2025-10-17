@@ -8,7 +8,12 @@ import { resolveEntityContext } from '../middleware/userContext.js';
 const router = express.Router();
 
 // Rota pública para buscar empresa por subdomínio (tenants)
-router.get('/subdomain/:subdomain', BranchController.getBySubdomain);
+router.get(
+  '/me/branch',
+  authenticateToken,
+  resolveEntityContext,
+  BranchController.getByUserBranch
+);
 
 // Rotas protegidas para usuários (sem tenant obrigatório)
 router.post('/', authenticateToken, validateRequest(branchSchemas.create), resolveEntityContext, authorizeRoles('admin', 'owner'), BranchController.create);

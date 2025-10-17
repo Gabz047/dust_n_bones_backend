@@ -78,6 +78,7 @@ export const productionOrderSchemas = {
       'number.min': 'Quantidade planejada deve ser no mínimo 1',
       'any.required': 'Quantidade planejada é obrigatória'
     }),
+    
     issueDate: Joi.date().optional(),
     closeDate: Joi.date().optional().allow(null)
   }),
@@ -91,6 +92,7 @@ export const productionOrderSchemas = {
     issueDate: Joi.date().optional(),
     closeDate: Joi.date().optional().allow(null),
     referralId: Joi.string().min(0).max(255).optional(),
+        
   })
 };
 
@@ -222,12 +224,7 @@ export const branchSchemas = {
     website: Joi.string().uri().allow(null).optional(),
     description: Joi.string().allow(null).optional(),
     maxUsers: Joi.number().integer().min(1).default(5),
-    subdomain: Joi.string().min(3).max(50).pattern(/^[a-z0-9-]+$/).required().messages({
-      'string.min': 'Subdomínio deve ter pelo menos 3 caracteres',
-      'string.max': 'Subdomínio deve ter no máximo 50 caracteres',
-      'string.pattern.base': 'Subdomínio deve conter apenas letras minúsculas, números e hífens',
-      'any.required': 'Subdomínio é obrigatório'
-    }),
+    
     ownerId: Joi.string().uuid().required().messages({
       'any.required': 'ID do proprietário é obrigatório',
       'string.guid': 'ID do proprietário deve ser um UUID válido'
@@ -249,7 +246,7 @@ export const branchSchemas = {
     state: Joi.string().allow(null).optional(),
     zipCode: Joi.string().max(10).allow(null).optional(),
     country: Joi.string().optional(),
-    subdomain: Joi.string().min(3).max(50).pattern(/^[a-z0-9-]+$/).optional(),
+    
     website: Joi.string().uri().allow(null).optional(),
     description: Joi.string().allow(null).optional(),
     maxUsers: Joi.number().integer().min(1).optional(),
@@ -1928,7 +1925,11 @@ export const orderSchema = {
       'string.guid': 'O ID do cliente deve ser um UUID válido.',
       'any.required': 'O ID do cliente é obrigatório.'
     }),
-    deliveryDate: Joi.date().required().messages({ 'any.required': 'Data de entrega é obrigatório' })
+    deliveryDate: Joi.date().required().messages({ 'any.required': 'Data de entrega é obrigatório' }),
+    userId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID do usuário deve ser um UUID válido',
+      'any.required': 'Usuário é obrigatório'
+    }),
   }),
 
   update: Joi.object({
@@ -1940,7 +1941,11 @@ export const orderSchema = {
       'string.base': 'O ID do cliente deve ser uma string.',
       'string.guid': 'O ID do cliente deve ser um UUID válido.'
     }),
-    deliveryDate: Joi.date().required().messages({ 'any.required': 'Data de entrega é obrigatório' })
+    deliveryDate: Joi.date().required().messages({ 'any.required': 'Data de entrega é obrigatório' }),
+    userId: Joi.string().uuid().required().messages({
+      'string.guid': 'ID do usuário deve ser um UUID válido',
+      'any.required': 'Usuário é obrigatório'
+    }),
   })
 };
 
