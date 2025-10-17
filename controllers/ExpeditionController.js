@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account, Company, Branch } from '../models/index.js';
+import { sequelize, Expedition, Project, Customer, MovementLogEntity, User, Account, Company, Branch, Order, DeliveryNote, OrderItem, Box, BoxItem } from '../models/index.js';
 import { Op } from 'sequelize';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { generateReferralId } from '../utils/globals/generateReferralId.js';
@@ -504,6 +504,266 @@ class ExpeditionController {
         error: error.message
       });
     }
+  }
+
+  static async finalize(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    // 🔍 Busca a expedição com projeto
+    const expedition = await Expedition.findByPk(id, {
+      include: [{
+        model: Project,
+        as: 'project',
+        attributes: ['id', 'name', 'companyId', 'branchId']
+      }],
+      transaction
+    });
+
+    if (!expedition) {
+      await transaction.rollback();
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Expedição não encontrada.' 
+      });
+    }
+
+    // ✅ Valida acesso ao projeto
+    const projectFilter = ExpeditionController.projectAccessFilter(req);
+    if (expedition.project.companyId !== projectFilter.companyId) {
+      await transaction.rollback();
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Acesso negado ao projeto' 
+      });
+    }
+
+    if (projectFilter.branchId && expedition.project.branchId !== projectFilter.branchId) {
+      await transaction.rollback();
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Acesso negado à filial do projeto' 
+      });
+    }
+
+    const projectId = expedition.projectId;
+
+    // 🔍 1. Buscar todos os pedidos do projeto
+    const orders = await Order.findAll({
+      where: { projectId },
+      include: [{
+        model: OrderItem,
+        as: 'orderItems',
+        attributes: ['id', 'quantity', 'itemId', 'itemFeatureId', 'featureOptionId']
+      }],
+      transaction
+    });
+
+    if (!orders || orders.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum pedido encontrado para este projeto.'
+      });
+    }
+
+    // 🔍 2. Calcular quantidade total ordenada por item
+    const orderedQuantities = {};
+    
+    for (const order of orders) {
+      for (const orderItem of order.orderItems) {
+        const key = `${orderItem.itemId}-${orderItem.itemFeatureId || 'null'}-${orderItem.featureOptionId || 'null'}`;
+        
+        if (!orderedQuantities[key]) {
+          orderedQuantities[key] = {
+            itemId: orderItem.itemId,
+            itemFeatureId: orderItem.itemFeatureId,
+            featureOptionId: orderItem.featureOptionId,
+            totalOrdered: 0,
+            totalExpedited: 0
+          };
+        }
+        
+        orderedQuantities[key].totalOrdered += orderItem.quantity;
+      }
+    }
+
+    // 🔍 3. Buscar todos os DeliveryNotes do projeto com status 'finalizado'
+    const deliveryNotes = await DeliveryNote.findAll({
+      where: { projectId },
+      attributes: ['id'],
+      include: [{
+        model: Box,
+        as: 'boxes',
+        attributes: ['id'],
+        include: [{
+          model: BoxItem,
+          as: 'items',
+          attributes: ['id', 'quantity', 'itemId', 'itemFeatureId', 'featureOptionId']
+        }]
+      }],
+      transaction
+    });
+
+    // 🔍 4. Filtrar apenas romaneios com último status 'finalizado'
+    const deliveryNoteIds = deliveryNotes.map(dn => dn.id);
+    
+    if (deliveryNoteIds.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum romaneio encontrado para este projeto.'
+      });
+    }
+
+    const lastLogs = await MovementLogEntity.findAll({
+      where: {
+        entity: 'romaneio',
+        entityId: { [Op.in]: deliveryNoteIds }
+      },
+      attributes: ['entityId', 'status', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      transaction
+    });
+
+    // Cria um map: entityId -> último status
+    const lastStatusMap = {};
+    for (const log of lastLogs) {
+      if (!lastStatusMap[log.entityId]) {
+        lastStatusMap[log.entityId] = log.status;
+      }
+    }
+
+    // Filtra apenas romaneios finalizados
+    const finalizedDeliveryNotes = deliveryNotes.filter(
+      dn => lastStatusMap[dn.id] === 'finalizado'
+    );
+
+    if (finalizedDeliveryNotes.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum romaneio finalizado encontrado. Finalize os romaneios antes de finalizar a expedição.'
+      });
+    }
+
+    // 🔍 5. Calcular quantidade total expedida dos romaneios finalizados
+    for (const deliveryNote of finalizedDeliveryNotes) {
+      for (const box of deliveryNote.boxes) {
+        for (const boxItem of box.items) {
+          const key = `${boxItem.itemId}-${boxItem.itemFeatureId || 'null'}-${boxItem.featureOptionId || 'null'}`;
+          
+          if (orderedQuantities[key]) {
+            orderedQuantities[key].totalExpedited += boxItem.quantity;
+          }
+        }
+      }
+    }
+
+   // 🔹 6. Validar se todas as quantidades batem
+const discrepancies = [];
+
+for (const [key, data] of Object.entries(orderedQuantities)) {
+  if (data.totalOrdered !== data.totalExpedited) {
+    discrepancies.push({
+      itemId: data.itemId,
+      itemFeatureId: data.itemFeatureId,
+      featureOptionId: data.featureOptionId,
+      totalOrdered: data.totalOrdered,
+      totalExpedited: data.totalExpedited,
+      difference: data.totalOrdered - data.totalExpedited
+    });
+  }
+}
+
+// ✅ 7. Finalizar a expedição sempre
+const expReferralId = await generateReferralId({
+  model: MovementLogEntity,
+  transaction,
+  companyId: expedition.project.companyId,
+});
+
+let expeditionMovement = {
+  id: uuidv4(),
+  method: 'edição',
+  entity: 'expedição',
+  entityId: expedition.id,
+  status: 'finalizado',
+  companyId: expedition.project.companyId,
+  branchId: expedition.project.branchId || null,
+  referralId: expReferralId,
+};
+
+// Verifica User ou Account
+const user = await User.findByPk(userId, { transaction });
+if (user) {
+  expeditionMovement.userId = userId;
+} else {
+  const account = await Account.findByPk(userId, { transaction });
+  if (account) {
+    expeditionMovement.accountId = userId;
+  } else {
+    await transaction.rollback();
+    return res.status(400).json({
+      success: false,
+      message: 'O ID informado não corresponde a um User ou Account válido'
+    });
+  }
+}
+
+await MovementLogEntity.create(expeditionMovement, { transaction });
+
+// 🔹 8. Finalizar o projeto apenas se não houver divergências
+let projectFinalized = false;
+if (discrepancies.length === 0) {
+  const projReferralId = await generateReferralId({
+    model: MovementLogEntity,
+    transaction,
+    companyId: expedition.project.companyId,
+  });
+
+  let projectMovement = {
+    id: uuidv4(),
+    method: 'edição',
+    entity: 'projeto',
+    entityId: projectId,
+    status: 'finalizado',
+    companyId: expedition.project.companyId,
+    branchId: expedition.project.branchId || null,
+    referralId: projReferralId,
+  };
+
+  if (user) {
+    projectMovement.userId = userId;
+  } else {
+    projectMovement.accountId = userId;
+  }
+
+  await MovementLogEntity.create(projectMovement, { transaction });
+  projectFinalized = true;
+}
+
+await transaction.commit();
+
+return res.status(200).json({
+  success: true,
+  message: 'Expedição finalizada com sucesso!',
+  projectFinalized,
+  discrepancies,
+});
+
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao finalizar expedição:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
   }
 }
 

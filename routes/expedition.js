@@ -14,6 +14,12 @@ router.post(
   ExpeditionController.create
 );
 
+router.post(
+  '/:id/finalize',
+  authenticateToken,
+  ExpeditionController.finalize
+);
+
 // Atualizar expedição
 router.put(
   '/:id',
