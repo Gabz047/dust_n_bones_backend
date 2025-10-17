@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { sequelize, BoxItem, Box, OrderItem, Item, ItemFeature, FeatureOption, User, MovementLogEntityItem, MovementLogEntity, Stock, StockItem, Feature } from '../models/index.js';
+import { sequelize, BoxItem, Box, OrderItem, Item, ItemFeature, FeatureOption, User, MovementLogEntityItem, MovementLogEntity, Stock, StockItem, Feature, Expedition } from '../models/index.js';
 import { Op } from 'sequelize';
 class BoxItemController {
 
@@ -23,14 +23,14 @@ class BoxItemController {
           OrderItem.findByPk(orderItemId, { transaction }),
           Item.findByPk(itemId, { transaction }),
           FeatureOption.findByPk(featureOptionId, { transaction }),
-          
+
         ]);
 
         if (!box) throw new Error(`Box ${boxId} não encontrado`);
         if (!orderItem) throw new Error(`OrderItem ${orderItemId} não encontrado`);
         if (!item) throw new Error(`Item ${itemId} não encontrado`);
         if (!featureOption) throw new Error(`FeatureOption ${featureOptionId} não encontrado`);
-        
+
 
         // Stock e StockItem
         let stock = await Stock.findOne({ where: { itemId }, transaction });
@@ -52,7 +52,7 @@ class BoxItemController {
           itemFeatureId: itemFeatureId || null,
           featureOptionId,
           quantity,
-          
+
         }, { transaction });
 
         await stockItem.update({ quantity: stockItem.quantity - quantity }, { transaction });
@@ -113,6 +113,7 @@ class BoxItemController {
         const { id, quantity, ...fields } = data;
         const boxItem = await BoxItem.findByPk(id, { transaction });
         if (!boxItem) throw new Error(`BoxItem ${id} não encontrado`);
+
 
         const stockItem = await StockItem.findOne({
           where: { itemId: boxItem.itemId, itemFeatureId: boxItem.itemFeatureId, featureOptionId: boxItem.featureOptionId },
@@ -175,6 +176,7 @@ class BoxItemController {
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ success: false, message: 'Nenhum ID enviado para exclusão' });
+
 
       const boxItems = await BoxItem.findAll({ where: { id: ids }, transaction });
       if (boxItems.length !== ids.length) return res.status(404).json({ success: false, message: 'Um ou mais BoxItems não encontrados' });
@@ -279,143 +281,143 @@ class BoxItemController {
   }
 
   // ===== FILTROS SIMPLES =====
-static async getByBox(req, res) {
-  try {
-    const { boxId } = req.params;
+  static async getByBox(req, res) {
+    try {
+      const { boxId } = req.params;
 
-    const items = await BoxItem.findAll({
-      where: { boxId },
-      
-      include: [
-        {
-          model: OrderItem,
-          as: 'orderItem',
-          attributes: ['id', 'quantity', 'itemId'], // só o que importa
-          include: [
-            {
-              model: Item,
-              as: 'item',
-              attributes: ['id', 'weight', 'price', 'name'], // PSE/weight, price e nome
-            },
-            {
-              model: ItemFeature,
-              as: 'itemFeature',
-              attributes: ['id', 'featureId'],
-              include: [
-                {
-                  model: Feature,
-                  as: 'feature',
-                  attributes: ['id', 'name'], // nome da feature
-                },
-              ],
-            },
-            {
-              model: FeatureOption,
-              as: 'featureOption',
-              attributes: ['id', 'name'], // nome da opção
-            },
-            {
-              model: BoxItem,
-              as: 'boxItems', // para somar quantidade em outras caixas
-              attributes: ['quantity', 'featureOptionId'],
-            },
-          ],
+      const items = await BoxItem.findAll({
+        where: { boxId },
+
+        include: [
+          {
+            model: OrderItem,
+            as: 'orderItem',
+            attributes: ['id', 'quantity', 'itemId'], // só o que importa
+            include: [
+              {
+                model: Item,
+                as: 'item',
+                attributes: ['id', 'weight', 'price', 'name'], // PSE/weight, price e nome
+              },
+              {
+                model: ItemFeature,
+                as: 'itemFeature',
+                attributes: ['id', 'featureId'],
+                include: [
+                  {
+                    model: Feature,
+                    as: 'feature',
+                    attributes: ['id', 'name'], // nome da feature
+                  },
+                ],
+              },
+              {
+                model: FeatureOption,
+                as: 'featureOption',
+                attributes: ['id', 'name'], // nome da opção
+              },
+              {
+                model: BoxItem,
+                as: 'boxItems', // para somar quantidade em outras caixas
+                attributes: ['quantity', 'featureOptionId'],
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = items.map((boxItem) => {
+        const orderItem = boxItem.orderItem;
+
+        const sumAllBoxes = orderItem?.boxItems
+          ?.filter(bi => bi.featureOptionId === boxItem.featureOptionId)
+          .reduce((acc, bi) => acc + (bi.quantity || 0), 0) || 0;
+        console.log(boxItem.orderItem.item)
+        return {
+          id: boxItem.id,
+          quantity: boxItem.quantity,
+          featureOptionId: boxItem.featureOptionId,
+          orderItemId: boxItem.orderItemId,
+          orderItem: boxItem.orderItem,
+          orderItemQuantity: boxItem.orderItem.quantity,
+          remainingQuantity: orderItem ? orderItem.quantity - sumAllBoxes : 0,
+          weight: orderItem?.item?.weight || 0,
+          price: orderItem?.item?.price || 0,
+          itemName: orderItem?.item?.name || 'N/A',
+          featureName: orderItem?.itemFeature?.feature?.name || 'N/A',
+          featureOptionName: orderItem?.featureOption?.name || 'N/A',
+        };
+      });
+
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Erro ao buscar BoxItems por boxId:', error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  static async getByBoxIds(req, res) {
+    console.log('================================================BOX IDS===================================', req.body, req.query)
+    try {
+      let boxIds = req.body.boxIds || req.query.boxIds;
+
+      if (!boxIds || (Array.isArray(boxIds) && boxIds.length === 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'É necessário enviar um array de boxIds.'
+        });
+      }
+
+      boxIds = boxIds.map(id => id)
+
+      const boxItems = await BoxItem.findAll({
+        where: { boxId: boxIds },
+        include: [
+          { model: Box, as: 'box' },
+          { model: OrderItem, as: 'orderItem' },
+          { model: Item, as: 'item' },
+          { model: ItemFeature, as: 'itemFeature' },
+          { model: FeatureOption, as: 'featureOption' },
+
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+
+      if (!boxItems.length) {
+        return res.status(404).json({
+          success: false,
+          message: 'Nenhum BoxItem encontrado para os boxIds informados'
+        });
+      }
+
+      // Calcula remainingQuantity de forma eficiente
+      const orderItemIds = [...new Set(boxItems.map(bi => bi.orderItemId))];
+      const sums = await BoxItem.findAll({
+        attributes: ['orderItemId', 'featureOptionId', [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQuantity']],
+        where: {
+          orderItemId: { [Op.in]: orderItemIds }
         },
-      ],
-    });
-
-    const result = items.map((boxItem) => {
-      const orderItem = boxItem.orderItem;
-
-      const sumAllBoxes = orderItem?.boxItems
-        ?.filter(bi => bi.featureOptionId === boxItem.featureOptionId)
-        .reduce((acc, bi) => acc + (bi.quantity || 0), 0) || 0;
-      console.log(boxItem.orderItem.item)
-      return {
-        id: boxItem.id,
-        quantity: boxItem.quantity,
-        featureOptionId: boxItem.featureOptionId,
-        orderItemId: boxItem.orderItemId,
-        orderItem: boxItem.orderItem,
-        orderItemQuantity: boxItem.orderItem.quantity,
-        remainingQuantity: orderItem ? orderItem.quantity - sumAllBoxes : 0,
-        weight: orderItem?.item?.weight || 0,
-        price: orderItem?.item?.price || 0,
-        itemName: orderItem?.item?.name || 'N/A',
-        featureName: orderItem?.itemFeature?.feature?.name || 'N/A',
-        featureOptionName: orderItem?.featureOption?.name || 'N/A',
-      };
-    });
-
-    return res.json({ success: true, data: result });
-  } catch (error) {
-    console.error('Erro ao buscar BoxItems por boxId:', error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-}
-
-static async getByBoxIds(req, res) {
-console.log('================================================BOX IDS===================================', req.body, req.query)
-  try {
-    let boxIds = req.body.boxIds || req.query.boxIds;
-    
-    if (!boxIds || (Array.isArray(boxIds) && boxIds.length === 0)) {
-      return res.status(400).json({
-        success: false,
-        message: 'É necessário enviar um array de boxIds.'
+        group: ['orderItemId', 'featureOptionId']
       });
-    }
 
-    boxIds = boxIds.map(id => id)
-
-    const boxItems = await BoxItem.findAll({
-      where: { boxId: boxIds  },
-      include: [
-        { model: Box, as: 'box' },
-        { model: OrderItem, as: 'orderItem' },
-        { model: Item, as: 'item' },
-        { model: ItemFeature, as: 'itemFeature' },
-        { model: FeatureOption, as: 'featureOption' },
-        
-      ],
-      order: [['createdAt', 'DESC']]
-    });
-
-    if (!boxItems.length) {
-      return res.status(404).json({
-        success: false,
-        message: 'Nenhum BoxItem encontrado para os boxIds informados'
+      const sumMap = {};
+      sums.forEach(s => {
+        const key = `${s.orderItemId}_${s.featureOptionId}`;
+        sumMap[key] = parseInt(s.get('totalQuantity'));
       });
+
+      const result = boxItems.map(bi => {
+        const remainingQuantity = bi.orderItem.quantity - (sumMap[`${bi.orderItemId}_${bi.featureOptionId}`] || 0);
+        return { ...bi.toJSON(), remainingQuantity };
+      });
+
+      return res.json({ success: true, data: result });
+
+    } catch (error) {
+      console.error('Erro ao buscar BoxItems por múltiplos boxIds:', error);
+      return res.status(500).json({ success: false, message: error.message });
     }
-
-    // Calcula remainingQuantity de forma eficiente
-    const orderItemIds = [...new Set(boxItems.map(bi => bi.orderItemId))];
-    const sums = await BoxItem.findAll({
-      attributes: ['orderItemId', 'featureOptionId', [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQuantity']],
-      where: {
-        orderItemId: { [Op.in]: orderItemIds }
-      },
-      group: ['orderItemId', 'featureOptionId']
-    });
-
-    const sumMap = {};
-    sums.forEach(s => {
-      const key = `${s.orderItemId}_${s.featureOptionId}`;
-      sumMap[key] = parseInt(s.get('totalQuantity'));
-    });
-
-    const result = boxItems.map(bi => {
-      const remainingQuantity = bi.orderItem.quantity - (sumMap[`${bi.orderItemId}_${bi.featureOptionId}`] || 0);
-      return { ...bi.toJSON(), remainingQuantity };
-    });
-
-    return res.json({ success: true, data: result });
-
-  } catch (error) {
-    console.error('Erro ao buscar BoxItems por múltiplos boxIds:', error);
-    return res.status(500).json({ success: false, message: error.message });
   }
-}
 
   // ===== Outros filtros similares =====
   // getByOrderItem, getByItem, getByFeatureItem, getByFeatureOption, getByUser, getByDate

@@ -23,6 +23,8 @@ class DeliveryNoteController {
     try {
       const { invoiceId, projectId, companyId, branchId, customerId, orderId, expeditionId, userId, boxes } = req.body;
 
+           
+
       // 🔍 Verifica se o projeto existe e valida acesso
       const project = await Project.findOne({
         where: {
@@ -156,6 +158,8 @@ class DeliveryNoteController {
         transaction
       });
 
+           
+
       if (!deliveryNote) {
         await transaction.rollback();
         return res.status(404).json({ success: false, message: 'DeliveryNote não encontrado ou sem permissão de acesso' });
@@ -262,6 +266,8 @@ class DeliveryNoteController {
         ],
         transaction
       });
+
+           
 
       if (!deliveryNote) {
         await transaction.rollback();

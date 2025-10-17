@@ -18,7 +18,8 @@ import {
   FeatureOption,
   Feature,
   Company,
-  Branch
+  Branch,
+  Expedition
 } from '../models/index.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { generateReferralId } from '../utils/globals/generateReferralId.js';
@@ -90,6 +91,8 @@ class BoxController {
 
       if (!await Package.findByPk(packageId, { transaction }))
         return res.status(400).json({ success: false, message: 'Embalagem não encontrada' });
+
+             
 
       // ✅ Pega os IDs da empresa e filial do projeto
       const companyId = project.companyId;
@@ -207,6 +210,8 @@ class BoxController {
       if (updates.packageId && !await Package.findByPk(updates.packageId))
         return res.status(400).json({ success: false, message: 'Embalagem não encontrada' });
 
+          
+
       await box.update(updates, { transaction });
       const project = await Project.findByPk(box.projectId, { transaction });
 
@@ -273,6 +278,7 @@ class BoxController {
       const box = await Box.findByPk(id, { transaction });
       if (!box)
         return res.status(404).json({ success: false, message: 'Box não encontrado' });
+
 
       // 🚫 Impede exclusão se estiver vinculada a um romaneio
       if (box.deliveryNoteId) {

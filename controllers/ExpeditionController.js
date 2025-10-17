@@ -141,6 +141,21 @@ class ExpeditionController {
         return res.status(404).json({ success: false, message: 'Expedição não encontrada.' });
       }
 
+      // ❌ Bloquear edição se projeto estiver finalizado
+const lastProjectLog = await MovementLogEntity.findOne({
+  where: { entity: 'projeto', entityId: expedition.projectId },
+  order: [['createdAt', 'DESC']],
+  transaction
+});
+
+if (lastProjectLog && lastProjectLog.status === 'finalizado') {
+  await transaction.rollback();
+  return res.status(400).json({
+    success: false,
+    message: 'Não é possível editar a expedição porque o projeto já está finalizado.'
+  });
+}
+
       // ✅ Valida acesso ao projeto atual
       const projectFilter = ExpeditionController.projectAccessFilter(req);
       if (expedition.project.companyId !== projectFilter.companyId) {
