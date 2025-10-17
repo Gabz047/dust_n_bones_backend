@@ -469,16 +469,16 @@ class OrderController {
         return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
       }
 
-      const productionOrder = await ProductionOrder.findOne({
-        where: { projectId: order.projectId },
+      const orderItem = await OrderItem.findOne({
+        where: { orderId: order.id },
         transaction
       });
 
-      if (productionOrder) {
+      if (orderItem) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Pedido não pode ser apagado, pois o projeto possui uma ordem de produção!'
+          message: 'Pedido não pode ser apagado, pois possui itens cadastrados nele!'
         });
       }
 
