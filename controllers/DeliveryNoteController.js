@@ -121,56 +121,64 @@ class DeliveryNoteController {
     }
   }
 
-  static async getByDay(req, res) {
-  try {
-    const { date } = req.query; // formato esperado: "YYYY-MM-DD"
-    if (!date) {
-      return res.status(400).json({
-        success: false,
-        message: 'Parâmetro "date" é obrigatório (ex: 2025-10-17)'
-      });
-    }
+    static async getByDay(req, res) {
+    try {
+      const { startDate, endDate, customerId, projectId, term, fields } = req.query
 
-    // Cria intervalo do dia (UTC)
-    const startOfDay = new Date(`${date}T00:00:00.000Z`);
-    const endOfDay = new Date(`${date}T23:59:59.999Z`);
+      // 1️⃣ Filtro base de acesso (empresa e filial)
+      const baseWhere = await DeliveryNoteController.projectAccessFilter(req)
 
-    // 🔒 Filtro de acesso baseado em companyId e branchId do contexto
-    const { companyId, branchId } = req.context || {};
-
-    const where = {
-      createdAt: { [Op.between]: [startOfDay, endOfDay] },
-      companyId,
-      ...(branchId ? { branchId } : {})
-    };
-
-    const deliveryNotes = await DeliveryNote.findAll({
-      where,
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name', 'companyId', 'branchId'],
-          where: {
-            companyId,
-            ...(branchId ? { branchId } : {})
-          },
-          include: [
-            { model: Company, as: 'company', attributes: ['id', 'name'] },
-            { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+      // 2️⃣ Filtro de intervalo de datas
+      if (startDate && endDate) {
+        baseWhere.createdAt = {
+          [Op.between]: [
+            new Date(`${startDate}T00:00:00.000Z`),
+            new Date(`${endDate}T23:59:59.999Z`)
           ]
-        },
-        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
+        }
+      } else if (startDate) {
+        baseWhere.createdAt = { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) }
+      } else if (endDate) {
+        baseWhere.createdAt = { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) }
+      }
 
-    return res.json({ success: true, data: deliveryNotes });
-  } catch (error) {
-    console.error('Erro ao buscar DeliveryNotes por dia:', error);
-    return res.status(500).json({ success: false, message: error.message });
+      // 3️⃣ Outros filtros opcionais
+      if (customerId) baseWhere.customerId = customerId
+      if (projectId) baseWhere.projectId = projectId
+
+      // 4️⃣ Busca textual (como em ProjectController)
+      if (term && fields) {
+        const searchFields = fields.split(',')
+        baseWhere[Op.or] = searchFields.map(field => ({
+          [field]: { [Op.iLike]: `%${term}%` }
+        }))
+      }
+
+      // 5️⃣ Montar query final
+      const result = await buildQueryOptions(req, DeliveryNote, {
+        where: baseWhere,
+        include: [
+          {
+            model: Project,
+            as: 'project',
+            attributes: ['id', 'name', 'referralId', 'companyId', 'branchId'],
+            include: [
+              { model: Company, as: 'company', attributes: ['id', 'name'] },
+              { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+            ]
+          },
+          { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+        ],
+        order: [['createdAt', 'DESC']]
+      })
+
+      return res.json({ success: true, ...result })
+    } catch (error) {
+      console.error('Erro ao buscar DeliveryNotes por intervalo:', error)
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+    }
   }
-}
+
 
   static async getByCompanyOrBranch(req, res) {
     try {
