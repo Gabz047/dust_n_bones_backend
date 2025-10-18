@@ -46,6 +46,15 @@ router.get(
 );
 
 router.get(
+  '/byDay',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  DeliveryNoteController.getByDay
+);
+
+router.get(
   '/search',
   authenticateToken,
   extractTenant,

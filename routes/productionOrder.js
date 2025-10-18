@@ -26,6 +26,16 @@ router.get(
   ProductionOrderController.getAll
 );
 
+router.get(
+  '/open',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  ProductionOrderController.getOpenOrders
+);
+
+
 // Buscar OP por projeto
 router.get(
   '/project/:id',

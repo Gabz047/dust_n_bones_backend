@@ -32,6 +32,15 @@ router.get(
   BoxController.getAll
 );
 
+router.get(
+  '/open',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  BoxController.getOpenBoxes
+);
+
 // Buscar Box por ID
 router.get(
   '/:id',

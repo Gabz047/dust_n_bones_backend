@@ -185,6 +185,66 @@ static async create(req, res) {
   }
 }
 
+// 📦 Buscar todas as O.P.s em aberto (por empresa ou filial)
+static async getOpenOrders(req, res) {
+  try {
+    const { companyId, branchId } = req.context || {}
+
+    if (!companyId) {
+      return res.status(400).json({ success: false, message: 'Contexto de empresa não encontrado' })
+    }
+
+    // 🔍 Filtro dinâmico (empresa ou filial)
+    const where = branchId ? { branchId } : { companyId }
+
+    // Busca as ordens + status
+    const productionOrders = await ProductionOrder.findAll({
+      where,
+      include: [
+        {
+          model: ProductionOrderStatus,
+          as: 'status',
+          attributes: ['id', 'status', 'createdAt']
+        },
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name']
+        },
+        {
+          model: Customer,
+          as: 'supplier',
+          attributes: ['id', 'name']
+        },
+        {
+          model: Customer,
+          as: 'mainCustomer',
+          attributes: ['id', 'name']
+        }
+      ],
+      order: [['issueDate', 'DESC']]
+    })
+
+    // 🔁 Filtrar apenas as O.P.s cujo último status é "Aberto"
+    const openOrders = productionOrders.filter(order => {
+      const statuses = order.status || []
+      if (statuses.length === 0) return false
+      const lastStatus = statuses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+      return lastStatus.status === 'Aberto'
+    })
+
+    return res.json({
+      success: true,
+      count: openOrders.length,
+      data: openOrders
+    })
+  } catch (error) {
+    console.error('Erro ao buscar O.P.s em aberto:', error)
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+  }
+}
+
+
 static async getById(req, res) {
     try {
       const { id } = req.params

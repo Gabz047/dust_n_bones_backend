@@ -406,6 +406,54 @@ class BoxController {
     }
   }
 
+  static async getOpenBoxes(req, res) {
+  try {
+    const { companyId, branchId } = req.context || {}
+
+    if (!companyId) {
+      return res.status(400).json({ success: false, message: 'Contexto de empresa não encontrado' })
+    }
+
+    // 🔍 Filtro dinâmico (empresa ou filial)
+    const where = branchId ? { branchId } : { companyId }
+
+    // 🔎 Busca todas as caixas dentro da empresa/filial
+    const boxes = await Box.findAll({
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where
+        },
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+        { model: Order, as: 'order', attributes: ['id', 'referralId'] },
+        { model: Package, as: 'package', attributes: ['id', 'name'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    })
+
+    if (!boxes.length) {
+      return res.json({ success: true, count: 0, data: [] })
+    }
+
+    // 📋 Anexa o último log de movimento a cada caixa
+    const boxesWithLog = await BoxController.attachLastLog(boxes)
+
+    // 🧠 Filtra apenas as caixas cujo último log está "aberto"
+    const openBoxes = boxesWithLog.filter(box => box.lastMovementLog?.status === 'aberto')
+
+    return res.json({
+      success: true,
+      count: openBoxes.length,
+      data: openBoxes
+    })
+  } catch (error) {
+    console.error('Erro ao buscar caixas em aberto:', error)
+    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+  }
+}
+
   // 🔍 Buscar por ID
   static async getById(req, res) {
     try {

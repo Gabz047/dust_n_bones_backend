@@ -121,6 +121,57 @@ class DeliveryNoteController {
     }
   }
 
+  static async getByDay(req, res) {
+  try {
+    const { date } = req.query; // formato esperado: "YYYY-MM-DD"
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetro "date" é obrigatório (ex: 2025-10-17)'
+      });
+    }
+
+    // Cria intervalo do dia (UTC)
+    const startOfDay = new Date(`${date}T00:00:00.000Z`);
+    const endOfDay = new Date(`${date}T23:59:59.999Z`);
+
+    // 🔒 Filtro de acesso baseado em companyId e branchId do contexto
+    const { companyId, branchId } = req.context || {};
+
+    const where = {
+      createdAt: { [Op.between]: [startOfDay, endOfDay] },
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+
+    const deliveryNotes = await DeliveryNote.findAll({
+      where,
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where: {
+            companyId,
+            ...(branchId ? { branchId } : {})
+          },
+          include: [
+            { model: Company, as: 'company', attributes: ['id', 'name'] },
+            { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+          ]
+        },
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({ success: true, data: deliveryNotes });
+  } catch (error) {
+    console.error('Erro ao buscar DeliveryNotes por dia:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
   static async getByCompanyOrBranch(req, res) {
     try {
       const { companyId, branchId } = req.query;
