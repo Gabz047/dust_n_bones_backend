@@ -454,6 +454,109 @@ class BoxController {
   }
 }
 
+static async getByDay(req, res) {
+  try {
+    const { startDate, endDate, projectId, customerId, orderId, deliveryNoteId, term, fields } = req.query;
+
+    // 1️⃣ Filtro base de acesso (empresa e filial)
+    const baseWhere = {};
+
+    // 2️⃣ Filtro de intervalo de datas
+    if (startDate && endDate) {
+      baseWhere.createdAt = {
+        [Op.between]: [
+          new Date(`${startDate}T00:00:00.000Z`),
+          new Date(`${endDate}T23:59:59.999Z`)
+        ]
+      };
+    } else if (startDate) {
+      baseWhere.createdAt = { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) };
+    } else if (endDate) {
+      baseWhere.createdAt = { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) };
+    }
+
+    // 3️⃣ Outros filtros opcionais
+    if (projectId) baseWhere.projectId = projectId;
+    if (customerId) baseWhere.customerId = customerId;
+    if (orderId) baseWhere.orderId = orderId;
+    if (deliveryNoteId) baseWhere.deliveryNoteId = deliveryNoteId;
+
+    // 4️⃣ Busca textual
+    if (term && fields) {
+      const searchFields = fields.split(',');
+      baseWhere[Op.or] = searchFields.map(field => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }));
+    }
+
+    // 5️⃣ Montar query final
+    const result = await buildQueryOptions(req, Box, {
+      where: baseWhere,
+      include: [
+        { 
+          model: DeliveryNote, 
+          as: 'deliveryNote',
+          attributes: ['id', 'referralId']
+        },
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'referralId', 'companyId', 'branchId'],
+          where: BoxController.projectAccessFilter(req),
+          include: [
+            { model: Company, as: 'company', attributes: ['id', 'name'] },
+            { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+          ]
+        },
+        {
+            model: BoxItem,
+            as: 'items',
+            attributes: ['id', 'quantity'],
+            include: [
+              { model: Item, as: 'item', attributes: ['id', 'name', 'weight'] },
+              {
+                model: ItemFeature,
+                as: 'itemFeature',
+                include: [{ model: Feature, as: 'feature', attributes: ['id', 'name'] }]
+              },
+              { model: FeatureOption, as: 'featureOption', attributes: ['id', 'name'] }
+            ]
+          },
+        { 
+          model: Customer, 
+          as: 'customer', 
+          attributes: ['id', 'name'] 
+        },
+        { 
+          model: Order, 
+          as: 'order', 
+          attributes: ['id', 'referralId'] 
+        },
+        { 
+          model: Package, 
+          as: 'package', 
+          attributes: ['id', 'name'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      distinct: true
+    });
+
+    // 6️⃣ Anexa o último log a cada box
+    const boxesWithLog = await BoxController.attachLastLog(result.data);
+    result.data = boxesWithLog;
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Erro ao buscar Boxes por intervalo:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor', 
+      error: error.message 
+    });
+  }
+}
+
   // 🔍 Buscar por ID
   static async getById(req, res) {
     try {

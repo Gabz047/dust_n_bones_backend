@@ -9,6 +9,11 @@ const sequelize = new Sequelize({
     database: process.env.DB_NAME,
     username: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
+    timezone: '-03:00',
+    dialectOptions: {
+        useUTC: false,
+        timezone: 'America/Sao_Paulo'
+    },
     dialect: process.env.DB_DIALECT,
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {

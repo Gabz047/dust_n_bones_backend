@@ -46,6 +46,16 @@ router.get(
   ExpeditionController.getAll
 );
 
+
+router.get(
+  '/byDay',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  ExpeditionController.getByDay
+);
+
 // Buscar por ID
 router.get(
   '/:id',

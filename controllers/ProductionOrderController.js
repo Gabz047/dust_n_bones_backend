@@ -185,7 +185,7 @@ static async create(req, res) {
   }
 }
 
-// 📦 Buscar todas as O.P.s em aberto (por empresa ou filial)
+// 📦 Buscar todas as O.P.s em aberto (comparando empresa/filial via projeto)
 static async getOpenOrders(req, res) {
   try {
     const { companyId, branchId } = req.context || {}
@@ -194,38 +194,34 @@ static async getOpenOrders(req, res) {
       return res.status(400).json({ success: false, message: 'Contexto de empresa não encontrado' })
     }
 
-    // 🔍 Filtro dinâmico (empresa ou filial)
-    const where = branchId ? { branchId } : { companyId }
-
-    // Busca as ordens + status
+    // Busca as ordens com include de projeto (onde aplicamos o filtro de empresa/filial)
     const productionOrders = await ProductionOrder.findAll({
-      where,
       include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          where: {
+            companyId,
+            ...(branchId ? { branchId } : {})
+          },
+          include: [
+            { model: Company, as: 'company', attributes: ['name'] },
+            { model: Branch, as: 'branch', attributes: ['name'] }
+          ]
+        },
         {
           model: ProductionOrderStatus,
           as: 'status',
           attributes: ['id', 'status', 'createdAt']
         },
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        },
-        {
-          model: Customer,
-          as: 'supplier',
-          attributes: ['id', 'name']
-        },
-        {
-          model: Customer,
-          as: 'mainCustomer',
-          attributes: ['id', 'name']
-        }
+        { model: Customer, as: 'supplier', attributes: ['id', 'name'] },
+        { model: Customer, as: 'mainCustomer', attributes: ['id', 'name'] }
       ],
       order: [['issueDate', 'DESC']]
     })
 
-    // 🔁 Filtrar apenas as O.P.s cujo último status é "Aberto"
+    // 🔁 Filtra apenas as O.P.s cujo último status é "Aberto"
     const openOrders = productionOrders.filter(order => {
       const statuses = order.status || []
       if (statuses.length === 0) return false
@@ -240,7 +236,11 @@ static async getOpenOrders(req, res) {
     })
   } catch (error) {
     console.error('Erro ao buscar O.P.s em aberto:', error)
-    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message })
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    })
   }
 }
 

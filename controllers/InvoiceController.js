@@ -189,6 +189,80 @@ class InvoiceController {
     }
   }
 
+  static async getByDay(req, res) {
+  try {
+    const { startDate, endDate, customerId, projectId, type, term, fields } = req.query;
+
+    // 1️⃣ Filtro base de acesso (empresa e filial via projeto)
+    const baseWhere = {};
+
+    // 2️⃣ Filtro de intervalo de datas
+    if (startDate && endDate) {
+      baseWhere.createdAt = {
+        [Op.between]: [
+          new Date(`${startDate}T00:00:00.000Z`),
+          new Date(`${endDate}T23:59:59.999Z`)
+        ]
+      };
+    } else if (startDate) {
+      baseWhere.createdAt = { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) };
+    } else if (endDate) {
+      baseWhere.createdAt = { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) };
+    }
+
+    // 3️⃣ Outros filtros opcionais
+    if (projectId) baseWhere.projectId = projectId;
+    if (type) baseWhere.type = type;
+
+    // 4️⃣ Busca textual
+    if (term && fields) {
+      const searchFields = fields.split(',');
+      baseWhere[Op.or] = searchFields.map(field => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }));
+    }
+
+    // 5️⃣ Montar query final
+    const result = await buildQueryOptions(req, Invoice, {
+      where: baseWhere,
+      attributes: ['id', 'projectId', 'type', 'totalPrice', 'referralId', 'createdAt'],
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          where: InvoiceController.projectAccessFilter(req),
+          attributes: ['id', 'name', 'companyId', 'branchId'],
+          include: [
+            { model: Company, as: 'company', attributes: ['id', 'name'] },
+            { model: Branch, as: 'branch', attributes: ['id', 'name'] },
+            { model: Customer, as: 'customer', attributes: ['id', 'name'] }
+          ]
+        },
+        { 
+          model: DeliveryNote, 
+          as: 'deliveryNotes', 
+          attributes: ['id', 'referralId'],
+          ...(customerId ? { 
+            where: { customerId },
+            required: true 
+          } : {})
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      distinct: true
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Erro ao buscar faturas por intervalo:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor', 
+      error: error.message 
+    });
+  }
+  }
+
   // Atualiza fatura existente
   static async update(req, res) {
     const transaction = await sequelize.transaction();

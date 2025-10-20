@@ -120,6 +120,79 @@ class ExpeditionController {
     }
   }
 
+  static async getByDay(req, res) {
+  try {
+    const { startDate, endDate, mainCustomerId, projectId, term, fields } = req.query;
+    const { companyId, branchId } = req.context || {};
+
+    // 1️⃣ Filtro principal aplicado no PROJECT
+    const projectWhere = {
+      companyId,
+      ...(branchId ? { branchId } : {})
+    };
+
+    // 2️⃣ Filtros opcionais (cliente, projeto)
+    const where = {};
+    if (mainCustomerId) where.mainCustomerId = mainCustomerId;
+    if (projectId) where.projectId = projectId;
+
+    // 3️⃣ Intervalo de datas
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [
+          new Date(`${startDate}T00:00:00.000Z`),
+          new Date(`${endDate}T23:59:59.999Z`)
+        ]
+      };
+    } else if (startDate) {
+      where.createdAt = { [Op.gte]: new Date(`${startDate}T00:00:00.000Z`) };
+    } else if (endDate) {
+      where.createdAt = { [Op.lte]: new Date(`${endDate}T23:59:59.999Z`) };
+    }
+
+    // 4️⃣ Busca textual (termo de pesquisa)
+    if (term && fields) {
+      const searchFields = fields.split(',');
+      where[Op.or] = searchFields.map(field => ({
+        [field]: { [Op.iLike]: `%${term}%` }
+      }));
+    }
+
+    // 5️⃣ Executa query com o filtro de acesso aplicado em Project
+    const result = await buildQueryOptions(req, Expedition, {
+      where,
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name', 'referralId', 'companyId', 'branchId'],
+          where: projectWhere,
+          include: [
+            { model: Company, as: 'company', attributes: ['id', 'name'] },
+            { model: Branch, as: 'branch', attributes: ['id', 'name'] }
+          ]
+        },
+        { 
+          model: Customer, 
+          as: 'mainCustomer', 
+          attributes: ['id', 'name', 'email', 'phone'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Erro ao buscar expedições por intervalo:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor', 
+      error: error.message 
+    });
+  }
+}
+
+
   // ✏️ Atualizar expedição
   static async update(req, res) {
     const transaction = await sequelize.transaction();

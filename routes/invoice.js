@@ -14,6 +14,16 @@ router.post(
   InvoiceController.create
 );
 
+router.get(
+  '/byDay',
+  authenticateToken,
+  extractTenant,
+  validateTenantAccess,
+  authorizeRoles('admin', 'owner'),
+  InvoiceController.getByDay
+);
+
+
 // Atualizar fatura
 router.put(
   '/:id',
