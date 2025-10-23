@@ -13,6 +13,8 @@ router.post('/login', validateRequest(accountSchemas.login), AccountController.l
 // Rotas protegidas com tenant opcional
 router.get('/profile', authenticateToken, optionalTenant, AccountController.profile);
 router.put('/profile', authenticateToken, optionalTenant, validateRequest(accountSchemas.update), AccountController.update);
+router.post('/forgot-password', AccountController.forgotPassword)
+router.post('/reset-password/:token', AccountController.resetPassword)
 
 // Rotas administrativas com tenant obrigatório
 router.get('/', authenticateToken, extractTenant, validateTenantAccess, authorizeRoles('admin', 'owner'), AccountController.getAll);

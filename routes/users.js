@@ -14,8 +14,11 @@ router.use(extractTenant);
 router.post('/login', UserController.login);
 
 // Middleware de autenticação aplicado nas rotas protegidas
-router.use(authenticateToken);
 // router.use(resolveTenant)
+router.post('/forgot-password', UserController.forgotPassword)
+router.post('/reset-password/:token', UserController.resetPassword)
+
+router.use(authenticateToken);
 
 // Rotas CRUD de usuários
 router.get('/', UserController.getAll);

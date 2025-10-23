@@ -3,7 +3,9 @@ import sequelize from '../config/database.js';
 import { buildQueryOptions } from '../utils/filters/buildQueryOptions.js';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
-
+import { sendEmail } from '../utils/email/sendMail.js';
+import bcrypt from 'bcryptjs'
+import { resetPasswordEmailTemplate } from '../utils/email/templates/resetPasswordEmail.js'
 // Função auxiliar para garantir que companyId sempre exista
 function resolveCompanyId(req, fallbackId) {
   return req.body.companyId || req.context?.companyId || fallbackId;
@@ -105,124 +107,204 @@ class UserController {
     }
   }
 
-  // --------------------- LOGIN ---------------------
-static async login(req, res) {
-  try {
-    const { email, username, password, rememberToken, branchId } = req.body;
+  // --------------------- FORGOT PASSWORD ---------------------
+  static async forgotPassword(req, res) {
+    console.log('USER FORGOT')
 
-    if (!email && !username) {
-      return res.status(400).json({ success: false, message: 'Email ou username é obrigatório' });
-    }
+    try {
+      const { email, subdomain } = req.body;
+      if (!email) return res.status(400).json({ success: false, message: 'Email é obrigatório' });
 
-    const tenant = req.tenant;
-    if (!tenant) {
-      return res.status(400).json({ success: false, message: 'Header X-Tenant-ID é obrigatório' });
-    }
+      const user = await User.findOne({ where: { email } });
+      if (!user) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
 
-    let authenticatedEntity = null;
-    let entityType = null;
-    let userInBranch = false;
-    let allowedBranches = [];
+      const token = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+      );
 
-    // ------------------- BUSCA USUÁRIO -------------------
-    const userWhere = { active: true };
-    if (email) userWhere.email = email;
-    if (username) userWhere.username = username;
+      const sub = subdomain || req.headers.host?.split('.')[0] || 'localhost';
+      const resetLink = `http://${sub}.localhost:3001/reset-password/${token}`;
 
-    const userInclude = [
-      { model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] },
-      { model: UserBranch, as: 'userBranches', attributes: ['branchId'], required: false }
-    ];
-
-    const user = await User.findOne({ where: userWhere, include: userInclude });
-
-    if (user && await user.validPassword(password)) {
-      authenticatedEntity = user;
-      entityType = 'user';
-      await user.update({ lastLoginAt: new Date() });
-
-      userInBranch = Array.isArray(user.userBranches) && user.userBranches.length > 0;
-      allowedBranches = userInBranch ? user.userBranches.map(ub => ub.branchId) : [];
-
-      // ✅ Agora o usuário de filial também pode logar na company
-      // Se branchId for passado, apenas validamos se é uma filial que ele tem acesso
-      if (branchId) {
-        if (userInBranch && !allowedBranches.includes(branchId)) {
-          return res.status(403).json({
-            success: false,
-            message: 'Acesso negado: filial selecionada não pertence a este usuário.'
-          });
-        }
-      }
-    }
-
-    // ------------------- BUSCA ACCOUNT SE NÃO ACHOU USUÁRIO -------------------
-    if (!authenticatedEntity) {
-      const accountWhere = { companyId: tenant.id };
-      if (email) accountWhere.email = email;
-      if (username) accountWhere.username = username;
-
-      const account = await Account.findOne({
-        where: accountWhere,
-        include: [{ model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] }]
+      console.log('================SUBBBB💀💀💀💀💀', sub)
+      console.log('RESET >>>>>>>>>>>>>>>>>>>>>>🦆🦆🦆', resetLink)
+      const html = resetPasswordEmailTemplate({
+        name: user.firstName,
+        resetLink,
       });
 
-      if (account && account.password && await account.validPassword(password)) {
-        authenticatedEntity = account;
-        entityType = 'account';
-        userInBranch = false;
+      console.log('FRONTEND_URL:', process.env.FRONTEND_URL, token);
+
+
+      await sendEmail({
+        to: email,
+        subject: 'Redefinição de senha',
+        html,
+      });
+
+      // opcional: salvar no banco se quiser invalidar depois
+      await user.update({ resetToken: token, resetTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000) });
+
+      return res.json({ success: true, message: 'Email de redefinição enviado com sucesso' });
+    } catch (error) {
+      console.error('Erro em forgotPassword:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao enviar email de redefinição', error: error.message });
+    }
+  }
+
+  // --------------------- RESET PASSWORD ---------------------
+  static async resetPassword(req, res) {
+    console.log('USER RESET')
+
+    try {
+      const { newPassword } = req.body;
+      const { token } = req.params
+      if (!token || !newPassword) {
+        return res.status(400).json({ success: false, message: 'Token e nova senha são obrigatórios' });
       }
+
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (err) {
+        return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
+      }
+
+      const user = await User.findByPk(decoded.userId);
+      if (!user) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+
+      await user.update(
+        { password: newPassword, resetToken: null, resetTokenExpiresAt: null },
+        { individualHooks: true }
+      );
+
+      return res.json({ success: true, message: 'Senha redefinida com sucesso' });
+    } catch (error) {
+      console.error('Erro em resetPassword:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao redefinir senha', error: error.message });
     }
+  }
 
-    if (!authenticatedEntity) {
-      return res.status(401).json({ success: false, message: 'Credenciais inválidas' });
-    }
 
-    // ------------------- GERA TOKEN -------------------
-    const token = jwt.sign(
-      {
-        id: authenticatedEntity.id,
-        email: authenticatedEntity.email,
-        role: authenticatedEntity.role,
-        companyId: authenticatedEntity.companyId || tenant.id,
-        entityType
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
-    );
+  // --------------------- LOGIN ---------------------
+  static async login(req, res) {
+    try {
+      const { email, username, password, rememberToken, branchId } = req.body;
 
-    const { password: _, ...entityData } = authenticatedEntity.toJSON();
+      if (!email && !username) {
+        return res.status(400).json({ success: false, message: 'Email ou username é obrigatório' });
+      }
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
-    });
+      const tenant = req.tenant;
+      if (!tenant) {
+        return res.status(400).json({ success: false, message: 'Header X-Tenant-ID é obrigatório' });
+      }
 
-    return res.json({
-      success: true,
-      message: 'Login realizado com sucesso',
-      data: {
-        [entityType]: entityData,
-        userInBranch,
-        allowedBranches,
-        entityType,
-        token,
-        tenant: {
-          id: tenant.id,
-          name: tenant.name,
-          subdomain: tenant.subdomain,
-          logo: tenant.logo
+      let authenticatedEntity = null;
+      let entityType = null;
+      let userInBranch = false;
+      let allowedBranches = [];
+
+      // ------------------- BUSCA USUÁRIO -------------------
+      const userWhere = { active: true };
+      if (email) userWhere.email = email;
+      if (username) userWhere.username = username;
+
+      const userInclude = [
+        { model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] },
+        { model: UserBranch, as: 'userBranches', attributes: ['branchId'], required: false }
+      ];
+
+      const user = await User.findOne({ where: userWhere, include: userInclude });
+
+      if (user && await user.validPassword(password)) {
+        authenticatedEntity = user;
+        entityType = 'user';
+        await user.update({ lastLoginAt: new Date() });
+
+        userInBranch = Array.isArray(user.userBranches) && user.userBranches.length > 0;
+        allowedBranches = userInBranch ? user.userBranches.map(ub => ub.branchId) : [];
+
+        // ✅ Agora o usuário de filial também pode logar na company
+        // Se branchId for passado, apenas validamos se é uma filial que ele tem acesso
+        if (branchId) {
+          if (userInBranch && !allowedBranches.includes(branchId)) {
+            return res.status(403).json({
+              success: false,
+              message: 'Acesso negado: filial selecionada não pertence a este usuário.'
+            });
+          }
         }
       }
-    });
 
-  } catch (error) {
-    console.error('Erro no login:', error);
-    return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      // ------------------- BUSCA ACCOUNT SE NÃO ACHOU USUÁRIO -------------------
+      if (!authenticatedEntity) {
+        const accountWhere = { companyId: tenant.id };
+        if (email) accountWhere.email = email;
+        if (username) accountWhere.username = username;
+
+        const account = await Account.findOne({
+          where: accountWhere,
+          include: [{ model: Company, as: 'company', attributes: ['id', 'name', 'subdomain', 'logo'] }]
+        });
+
+        if (account && account.password && await account.validPassword(password)) {
+          authenticatedEntity = account;
+          entityType = 'account';
+          userInBranch = false;
+        }
+      }
+
+      if (!authenticatedEntity) {
+        return res.status(401).json({ success: false, message: 'Credenciais inválidas' });
+      }
+
+      // ------------------- GERA TOKEN -------------------
+      const token = jwt.sign(
+        {
+          id: authenticatedEntity.id,
+          email: authenticatedEntity.email,
+          role: authenticatedEntity.role,
+          companyId: authenticatedEntity.companyId || tenant.id,
+          entityType
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: rememberToken ? '7d' : process.env.JWT_EXPIRES_IN }
+      );
+
+      const { password: _, ...entityData } = authenticatedEntity.toJSON();
+
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: rememberToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+      });
+
+      return res.json({
+        success: true,
+        message: 'Login realizado com sucesso',
+        data: {
+          [entityType]: entityData,
+          userInBranch,
+          allowedBranches,
+          entityType,
+          token,
+          tenant: {
+            id: tenant.id,
+            name: tenant.name,
+            subdomain: tenant.subdomain,
+            logo: tenant.logo
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('Erro no login:', error);
+      return res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+    }
   }
-}
 
   // --------------------- GET ALL ---------------------
   static async getAll(req, res) {

@@ -1,7 +1,9 @@
 import { Account,Company } from '../models/index.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-
+import { sendEmail } from '../utils/email/sendMail.js';
+import { resetPasswordEmailTemplate } from '../utils/email/templates/resetPasswordEmail.js';
 class AccountController {
     static async create(req, res) {
         try {
@@ -43,6 +45,82 @@ class AccountController {
             });
         }
     }
+
+    // --------------------- FORGOT PASSWORD ---------------------
+  static async forgotPassword(req, res) {
+        console.log('ACCOUNT forgot')
+
+    try {
+      const { email, subdomain } = req.body;
+      if (!email) return res.status(400).json({ success: false, message: 'Email é obrigatório' });
+
+      const account = await Account.findOne({ where: { email } });
+      if (!account) return res.status(404).json({ success: false, message: 'Conta não encontrada' });
+
+      const token = jwt.sign(
+        { accountId: account.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      const sub = subdomain || req.headers.host?.split('.')[0] || 'localhost';
+      const resetLink = `http://${sub}.localhost:3001/reset-password/${token}`;
+
+      const html = resetPasswordEmailTemplate({
+        name: account.username || account.email,
+        resetLink,
+      });
+
+      await sendEmail({
+        to: email,
+        subject: 'Redefinição de senha',
+        html,
+      });
+
+      await account.update({
+        resetToken: token,
+        resetTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000)
+      });
+
+      return res.json({ success: true, message: 'Email de redefinição enviado com sucesso' });
+    } catch (error) {
+      console.error('Erro em forgotPassword:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao enviar email de redefinição', error: error.message });
+    }
+  }
+
+  // --------------------- RESET PASSWORD ---------------------
+  static async resetPassword(req, res) {
+    console.log('ACCOUNT reset')
+    try {
+      const { newPassword } = req.body;
+      const {token } = req.params
+      if (!token || !newPassword) {
+        return res.status(400).json({ success: false, message: 'Token e nova senha são obrigatórios' });
+      }
+
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (err) {
+        return res.status(400).json({ success: false, message: 'Token inválido ou expirado' });
+      }
+
+      const account = await Account.findByPk(decoded.accountId);
+      if (!account) return res.status(404).json({ success: false, message: 'Conta não encontrada' });
+
+   
+     await account.update(
+  { password: newPassword, resetToken: null, resetTokenExpiresAt: null },
+  { individualHooks: true } // <-- dispara o hook beforeUpdate
+);
+
+      return res.json({ success: true, message: 'Senha redefinida com sucesso' });
+    } catch (error) {
+      console.error('Erro em resetPassword:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao redefinir senha', error: error.message });
+    }
+  }
 
     static async login(req, res) {
         try {
