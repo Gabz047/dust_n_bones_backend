@@ -95,44 +95,68 @@ static accessFilter(req) {
 
   // 📦 Buscar todos com paginação e filtros
   static async getAll(req, res) {
-    console.log('Access filter:', MovementLogEntityController.accessFilter(req));
-    try {
-      const { status, method, entity, entityId, userId, accountId, term, fields } = req.query;
-      const where = { ...MovementLogEntityController.accessFilter(req) };
+  try {
+    const { status, method, entity, entityId, userId, accountId, term, fields } = req.query;
+    const where = { ...MovementLogEntityController.accessFilter(req) };
 
-      if (term && fields) {
-              const searchFields = fields.split(',');
-              where[Op.or] = searchFields.map((field) => ({
-                [field]: { [Op.iLike]: `%${term}%` },
-              }));
-            }
-
-      if (status) where.status = status;
-      if (method) where.method = method;
-      if (entity) where.entity = entity;
-      if (entityId) where.entityId = entityId;
-      if (userId) where.userId = userId;
-      if (accountId) where.accountId = accountId;
-
-      const result = await buildQueryOptions(req, MovementLogEntity, {
-        where,
-        include: [
-          { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
-          { model: Account, as: 'account', attributes: ['id', 'username', 'email'] }
-        ],
-        order: [['createdAt', 'DESC']]
-      });
-
-      res.json({ success: true, ...result });
-    } catch (error) {
-      console.error('Erro ao buscar logs de movimentação:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor', 
-        error: error.message 
-      });
+    if (term && fields) {
+      const searchFields = fields.split(',');
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` },
+      }));
     }
+
+    if (status) where.status = status;
+    if (method) where.method = method;
+    if (entity) where.entity = entity;
+    if (entityId) where.entityId = entityId;
+    if (userId) where.userId = userId;
+    if (accountId) where.accountId = accountId;
+
+    const result = await buildQueryOptions(req, MovementLogEntity, {
+      where,
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'username', 'email'] },
+        { model: Account, as: 'account', attributes: ['id', 'username', 'email'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Enriquecer cada log com dados da entidade relacionada
+    const enrichedData = await Promise.all(
+      result.data.map(async (log) => {
+        const Model = entityModelMap[log.entity];
+        let entityRecord = null;
+
+        if (Model) {
+          entityRecord = await Model.findByPk(log.entityId, {
+            attributes: ['referralId'], // campos principais
+          });
+        }
+
+        return {
+          ...log.toJSON(),
+          entityRecord,
+        };
+      })
+    );
+
+    res.json({
+  success: true,
+  count: result.count,
+  pagination: result.pagination, 
+  data: enrichedData,
+});
+  } catch (error) {
+    console.error('Erro ao buscar logs de movimentação:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message,
+    });
   }
+}
+
 
   // 🔍 Buscar por ID
 static async getById(req, res) {
