@@ -1,12 +1,23 @@
 import FeatureOption from '../models/FeatureOption.js';
 import Feature from '../models/Features.js';
+import {
+  ItemFeatureOption,
+  OrderItem,
+  StockItem,
+  MovementItem,
+  BoxItem,
+  OrderItemAdditionalFeatureOption,
+  ProductionOrderItemAdditionalFeatureOption,
+  StockAdditionalItem
+} from '../models/index.js';
 import sequelize from '../config/database.js';
+
 export default {
   // Criar opção de característica
-async create(req, res) {
+  async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      const { featureId, options } = req.body; // options: array de nomes
+      const { featureId, options } = req.body;
 
       if (!featureId) {
         return res.status(400).json({ success: false, message: 'featureId não fornecido.' });
@@ -15,21 +26,18 @@ async create(req, res) {
         return res.status(400).json({ success: false, message: 'Nenhuma opção fornecida.' });
       }
 
-      // Verifica se a feature existe
       const feature = await Feature.findByPk(featureId, { transaction });
       if (!feature) {
         await transaction.rollback();
         return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
       }
 
-      // Buscar opções já existentes para evitar duplicidade
       const existingOptions = await FeatureOption.findAll({
         where: { featureId, name: options },
         transaction
       });
       const existingNames = existingOptions.map(o => o.name);
 
-      // Filtrar apenas as opções novas
       const newOptionsData = options
         .filter(name => !existingNames.includes(name))
         .map(name => ({ featureId, name }));
@@ -39,9 +47,7 @@ async create(req, res) {
         return res.status(400).json({ success: false, message: 'Nenhuma opção nova para criar (todas duplicadas).' });
       }
 
-      // Criar todas as novas opções de uma vez
       const createdOptions = await FeatureOption.bulkCreate(newOptionsData, { transaction });
-
       await transaction.commit();
 
       return res.status(201).json({ success: true, data: createdOptions });
@@ -59,7 +65,6 @@ async create(req, res) {
         include: [{ model: Feature, as: 'feature' }],
         order: [['createdAt', 'DESC']]
       });
-
       return res.json({ success: true, data: options });
     } catch (error) {
       console.error('Erro ao buscar opções de característica:', error);
@@ -67,11 +72,10 @@ async create(req, res) {
     }
   },
 
-  // Buscar opção de característica por ID
+  // Buscar por ID
   async getById(req, res) {
     try {
       const { id } = req.params;
-
       const option = await FeatureOption.findByPk(id, {
         include: [{ model: Feature, as: 'feature' }]
       });
@@ -87,20 +91,16 @@ async create(req, res) {
     }
   },
 
-  // Buscar todas as opções de uma feature específica
+  // Buscar todas as opções de uma feature
   async getByFeatureId(req, res) {
     try {
       const { id } = req.params;
-      console.log('id:', id);
       const feature = await Feature.findByPk(id);
       if (!feature) {
         return res.status(404).json({ success: false, message: 'Característica não encontrada.' });
       }
 
-      const options = await FeatureOption.findAll({
-        where: { featureId: id },
-      });
-
+      const options = await FeatureOption.findAll({ where: { featureId: id } });
       return res.json({ success: true, data: options });
     } catch (error) {
       console.error('Erro ao buscar opções da característica:', error);
@@ -108,7 +108,7 @@ async create(req, res) {
     }
   },
 
-  // Atualizar opção de característica por ID
+  // Atualizar
   async update(req, res) {
     try {
       const { id } = req.params;
@@ -117,6 +117,26 @@ async create(req, res) {
       const option = await FeatureOption.findByPk(id);
       if (!option) {
         return res.status(404).json({ success: false, message: 'Opção de característica não encontrada.' });
+      }
+
+      // 🔒 Verifica se a opção está em uso
+      const linked = await Promise.all([
+        ItemFeatureOption.count({ where: { featureOptionId: id } }),
+        OrderItem.count({ where: { featureOptionId: id } }),
+        StockItem.count({ where: { featureOptionId: id } }),
+        MovementItem.count({ where: { featureOptionId: id } }),
+        BoxItem.count({ where: { featureOptionId: id } }),
+        OrderItemAdditionalFeatureOption.count({ where: { featureOptionId: id } }),
+        ProductionOrderItemAdditionalFeatureOption.count({ where: { featureOptionId: id } }),
+        StockAdditionalItem.count({ where: { featureOptionId: id } })
+      ]);
+
+      const totalLinked = linked.reduce((a, b) => a + b, 0);
+      if (totalLinked > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Não é possível atualizar — esta opção está sendo usada em outros registros.'
+        });
       }
 
       if (featureId) {
@@ -130,7 +150,6 @@ async create(req, res) {
       if (name) option.name = name;
 
       await option.save();
-
       return res.json({ success: true, data: option });
     } catch (error) {
       console.error('Erro ao atualizar opção de característica:', error);
@@ -138,7 +157,7 @@ async create(req, res) {
     }
   },
 
-  // Deletar opção de característica por ID
+  // Deletar
   async delete(req, res) {
     try {
       const { id } = req.params;
@@ -148,8 +167,27 @@ async create(req, res) {
         return res.status(404).json({ success: false, message: 'Opção de característica não encontrada.' });
       }
 
-      await option.destroy();
+      // 🔒 Verifica vínculos
+      const linked = await Promise.all([
+        ItemFeatureOption.count({ where: { featureOptionId: id } }),
+        OrderItem.count({ where: { featureOptionId: id } }),
+        StockItem.count({ where: { featureOptionId: id } }),
+        MovementItem.count({ where: { featureOptionId: id } }),
+        BoxItem.count({ where: { featureOptionId: id } }),
+        OrderItemAdditionalFeatureOption.count({ where: { featureOptionId: id } }),
+        ProductionOrderItemAdditionalFeatureOption.count({ where: { featureOptionId: id } }),
+        StockAdditionalItem.count({ where: { featureOptionId: id } })
+      ]);
 
+      const totalLinked = linked.reduce((a, b) => a + b, 0);
+      if (totalLinked > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Não é possível excluir — esta opção está sendo usada em outros registros.'
+        });
+      }
+
+      await option.destroy();
       return res.json({ success: true, message: 'Opção de característica removida com sucesso.' });
     } catch (error) {
       console.error('Erro ao deletar opção de característica:', error);
