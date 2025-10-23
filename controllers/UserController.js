@@ -387,58 +387,98 @@ class UserController {
   }
 
   // --------------------- UPDATE ---------------------
-  static async update(req, res) {
-    const transaction = await sequelize.transaction();
-    try {
-      const { id } = req.params;
-      const updates = { ...req.body };
-      const assignedBranches = updates.assignedBranches;
-      delete updates.assignedBranches;
+ // --------------------- UPDATE ---------------------
+static async update(req, res) {
+  const transaction = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const updates = { ...req.body };
+    const assignedBranches = updates.assignedBranches;
+    delete updates.assignedBranches;
 
-      const user = await User.findByPk(id);
-      if (!user) {
-        await transaction.rollback();
-        return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
-      }
-
-      updates.companyId = resolveCompanyId(req, user.companyId);
-      updates.branchId = updates.branchId || null;
-
-      if (updates.email && updates.email !== user.email) {
-        const existingUser = await User.findOne({
-          where: { email: updates.email, companyId: user.companyId, id: { [Op.ne]: id } }
-        });
-        if (existingUser) {
-          await transaction.rollback();
-          return res.status(400).json({ success: false, message: 'Email já está em uso nesta empresa' });
-        }
-      }
-
-      await user.update(updates, { transaction, fields: Object.keys(updates) });
-
-      if (assignedBranches !== undefined && Array.isArray(assignedBranches)) {
-        await UserBranch.destroy({ where: { userId: id }, transaction });
-        if (assignedBranches.length > 0) {
-          const userBranchData = assignedBranches.map(branchId => ({
-            userId: id,
-            branchId,
-            dateJoined: new Date()
-          }));
-          await UserBranch.bulkCreate(userBranchData, { transaction });
-        }
-      }
-
-      await transaction.commit();
-
-      const { password: _, ...userResponse } = user.toJSON();
-      return res.json({ success: true, data: userResponse });
-
-    } catch (error) {
+    const user = await User.findByPk(id);
+    if (!user) {
       await transaction.rollback();
-      console.error('Erro ao atualizar usuário:', error);
-      return res.status(500).json({ success: false, message: 'Erro ao atualizar usuário.', error: error.message });
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
     }
+
+    updates.companyId = resolveCompanyId(req, user.companyId);
+    updates.branchId = updates.branchId || null;
+
+    // Verifica se o e-mail já está em uso
+    if (updates.email && updates.email !== user.email) {
+      const existingUser = await User.findOne({
+        where: { email: updates.email, companyId: user.companyId, id: { [Op.ne]: id } }
+      });
+      if (existingUser) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Email já está em uso nesta empresa' });
+      }
+    }
+
+    // 🔒 --- Verificação de senha atual antes de trocar ---
+    if (updates.currentPassword || updates.newPassword) {
+      if (!updates.currentPassword || !updates.newPassword) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Para alterar a senha, envie senha atual e nova senha.',
+        });
+      }
+
+      const isValid = await bcrypt.compare(updates.currentPassword, user.password);
+      if (!isValid) {
+        await transaction.rollback();
+        return res.status(401).json({
+          success: false,
+          message: 'Senha atual incorreta.',
+        });
+      }
+
+      // Atualiza a senha (hash via hook `beforeUpdate`)
+      user.password = updates.newPassword;
+    }
+
+    // Remove campos temporários do body
+    delete updates.currentPassword;
+    delete updates.newPassword;
+
+    // Atualiza os demais campos
+    await user.update(updates, { transaction, individualHooks: true });
+
+    // Atualiza filiais vinculadas (se houver)
+    if (assignedBranches !== undefined && Array.isArray(assignedBranches)) {
+      await UserBranch.destroy({ where: { userId: id }, transaction });
+      if (assignedBranches.length > 0) {
+        const userBranchData = assignedBranches.map(branchId => ({
+          userId: id,
+          branchId,
+          dateJoined: new Date()
+        }));
+        await UserBranch.bulkCreate(userBranchData, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    const { password: _, ...userResponse } = user.toJSON();
+    return res.json({
+      success: true,
+      message: 'Usuário atualizado com sucesso.',
+      data: userResponse,
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Erro ao atualizar usuário:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao atualizar usuário.',
+      error: error.message,
+    });
   }
+}
+
 
   // --------------------- DELETE ---------------------
   static async delete(req, res) {
@@ -493,49 +533,104 @@ class UserController {
   }
 
   // --------------------- UPDATE PROFILE ---------------------
-  static async updateProfile(req, res) {
-    try {
-      const updates = { ...req.body };
-      delete updates.role;
-      delete updates.permissions;
-      delete updates.companyId;
-      delete updates.active;
-      delete updates.assignedBranches;
+  // --------------------- UPDATE PROFILE ---------------------
+// --------------------- UPDATE PROFILE ---------------------
+static async updateProfile(req, res) {
+  try {
+    const updates = { ...req.body };
 
-      const user = await User.findByPk(req.user.id);
-      if (!user) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+    // Impede atualização de campos sensíveis
+    delete updates.role;
+    delete updates.permissions;
+    delete updates.companyId;
+    delete updates.active;
+    delete updates.assignedBranches;
 
-      if (updates.email && updates.email !== user.email) {
-        const existingUser = await User.findOne({ where: { email: updates.email, companyId: user.companyId } });
-        if (existingUser) return res.status(400).json({ success: false, message: 'Email já está em uso nesta empresa' });
+    const user = await User.findByPk(req.user.id, {
+      include: [
+        {
+          model: Company,
+          as: 'company',
+          attributes: ['id', 'name', 'subdomain', 'logo'],
+        },
+      ],
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+    }
+
+    // 🔍 Verifica se o novo e-mail já existe
+    if (updates.email && updates.email !== user.email) {
+      const existingUser = await User.findOne({
+        where: { email: updates.email, companyId: user.companyId },
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email já está em uso nesta empresa',
+        });
+      }
+    }
+
+    // 🔒 --- Verificação e troca segura de senha ---
+    if (updates.currentPassword || updates.newPassword) {
+      if (!updates.currentPassword || !updates.newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Para alterar a senha, envie senha atual e nova senha.',
+        });
       }
 
-      await user.update(updates);
+      const isValid = await bcrypt.compare(updates.currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Senha atual incorreta.',
+        });
+      }
 
-      const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
-      const entityType = 'user';
-      const { password: _, ...userData } = user.toJSON();
-
-      res.json({
-        success: true,
-        message: 'Perfil atualizado com sucesso',
-        data: {
-          [entityType]: userData,
-          userInBranch: !!userInBranch,
-          entityType,
-          tenant: {
-            id: user.company?.id || resolveCompanyId(req),
-            name: user.company?.name,
-            subdomain: user.company?.subdomain,
-            logo: user.company?.logo
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Erro ao atualizar perfil:', error);
-      res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+      // ✅ Corrigido: seta a nova senha dentro do objeto updates
+      updates.password = updates.newPassword;
     }
+
+    // Remove campos temporários
+    delete updates.currentPassword;
+    delete updates.newPassword;
+
+    // Atualiza demais dados (senha inclusa, hash via hook beforeUpdate)
+    await user.update(updates, { individualHooks: true });
+
+    const userInBranch = await UserBranch.findOne({ where: { userId: user.id } });
+    const entityType = 'user';
+    const { password: _, ...userData } = user.toJSON();
+
+    res.json({
+      success: true,
+      message: 'Perfil atualizado com sucesso',
+      data: {
+        [entityType]: userData,
+        userInBranch: !!userInBranch,
+        entityType,
+        tenant: {
+          id: user.company?.id || resolveCompanyId(req),
+          name: user.company?.name,
+          subdomain: user.company?.subdomain,
+          logo: user.company?.logo,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar perfil:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message,
+    });
   }
+}
+
 }
 
 export default UserController;
