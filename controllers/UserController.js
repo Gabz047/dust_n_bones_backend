@@ -125,7 +125,7 @@ class UserController {
       );
 
       const sub = subdomain || req.headers.host?.split('.')[0] || 'localhost';
-      const resetLink = `http://${sub}.localhost:3001/reset-password/${token}`;
+      const resetLink = `https://${sub}.estoquelogia.com/reset-password/${token}`;
 
       console.log('================SUBBBB💀💀💀💀💀', sub)
       console.log('RESET >>>>>>>>>>>>>>>>>>>>>>🦆🦆🦆', resetLink)
