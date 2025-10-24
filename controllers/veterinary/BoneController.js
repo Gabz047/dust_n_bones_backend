@@ -172,6 +172,87 @@ class BoneController {
     }
   }
 
+// 📋 Listar ossos de uma espécie (igual ao getAll de Specie)
+static async getAllBySpecie(req, res) {
+  try {
+    const { term, fields, orderBy, active } = req.query;
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'É necessário informar o ID da espécie (specieId).',
+      });
+    }
+
+    const where = { specieId: id };
+
+    // 🔍 Filtro textual
+    if (term && fields) {
+      const searchFields = Array.isArray(fields) ? fields : fields.split(',');
+      where[Op.or] = searchFields.map((field) => ({
+        [field]: { [Op.iLike]: `%${term}%` },
+      }));
+    }
+
+    // 🔘 Filtro por ativo
+    if (active !== undefined) {
+      where.active = active === 'true';
+    }
+
+    // ↕️ Ordenação customizada
+    let order = [['createdAt', 'DESC']];
+
+    if (req.query.sortBy && req.query.order) {
+      order = [[req.query.sortBy, req.query.order.toUpperCase()]];
+    } else if (orderBy) {
+      // compatibilidade com versão antiga
+      switch (orderBy) {
+        case 'name_asc':
+          order = [['name', 'ASC']];
+          break;
+        case 'name_desc':
+          order = [['name', 'DESC']];
+          break;
+        case 'qtd_desc':
+          order = [['quantity', 'DESC']];
+          break;
+        case 'qtd_asc':
+          order = [['quantity', 'ASC']];
+          break;
+      }
+    }
+
+    // 📦 Paginação + include com buildQueryOptions
+    const result = await buildQueryOptions(req, Bone, {
+      where,
+      include: [
+        {
+          model: Specie,
+          as: 'specie',
+          attributes: ['id', 'name', 'scientificName', 'totalQuantity'],
+        },
+      ],
+      order,
+    });
+
+    return res.json({
+      success: true,
+      count: result.count,
+      pagination: result.pagination,
+      data: result.data,
+    });
+  } catch (error) {
+    console.error('Erro ao listar ossos por espécie:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message,
+    });
+  }
+}
+
+
   // 🔍 Buscar por ID
   static async getById(req, res) {
     try {

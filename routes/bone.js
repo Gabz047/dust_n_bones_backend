@@ -9,6 +9,7 @@ router.post('/', BoneController.create);
 // Listar todos os ossos (com filtros e ordenação)
 router.get('/', BoneController.getAll);
 
+router.get('/specie/:id', BoneController.getAllBySpecie);
 // Obter um osso específico
 router.get('/:id', BoneController.getById);
 
