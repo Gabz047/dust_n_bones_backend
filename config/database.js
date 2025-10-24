@@ -12,7 +12,11 @@ const sequelize = new Sequelize({
     timezone: '-03:00',
     dialectOptions: {
         useUTC: false,
-        timezone: 'America/Sao_Paulo'
+        timezone: 'America/Sao_Paulo',
+        ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
     },
     dialect: process.env.DB_DIALECT,
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
