@@ -38,5 +38,5 @@ const Connect = async () => {
     }
 };
 
-export { Connect };
+export { Connect, sequelize };
 export default sequelize;

@@ -1,48 +1,6 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
-import { resolveEntityContext } from '../middleware/userContext.js';
-import { validateRequest, signupSchema } from '../middleware/validation.js';
-import { resolveTenant } from '../middleware/resolveTenant.js';
-import SignupController from '../controllers/SignupController.js';
-import reportRoutes from './reports.js'
-import accountRoutes from './accounts.js';
-import companyRoutes from './companies.js';
-import companySettingsRoutes from './company-settings.js';
-import companyCustomizationRoutes from './company-customizations.js';
-import tenantRoutes from './tenants.js';
-import userRoutes from './users.js';
-import branchRoutes from './branch.js';
-import customerRoutes from './customer.js';
-import customerGroupRoutes from './customer-group.js';
-import userBranchRoutes from './userBranch.js';
-import itemRoutes from './item.js';
-import FeatureRoutes from './feature.js';
-import packageRoutes from './package.js';
-import itemFeatureRoutes from './itemFeature.js';
-import featureOptionRoutes from './featureOption.js';
-import projectRoutes from './project.js';
-import orderRoutes from './order.js';
-import orderItemRoutes from './orderItem.js';
-import ItemFeatureOptionRoutes from './itemFeatureOption.js';
-import StatusRoutes from './status.js';
-import ProjectItemRoutes from './projectItem.js';
-import ProductionOrderRoutes from './productionOrder.js';
-import ProductionOrderItemRoutes from './ProductionOrderItem.js';
-import ProductionOrderStatusRoutes from './productionOrderStatus.js';
-import OrderItemAdditionalFeatureOptionRoutes from './OrderItemAdditionalFeatureOption.js';
-import MovementRoutes from './Movement.js';
-import StockRoutes from './stock.js';
-import MovementItemRoutes from './MovementItem.js';
-import ProductionOrderItemAdditionalFeatureOptionRoutes from './productionOrderItemAdditionalFeatureOption.js';
-import BoxRoutes from './box.js';
-import BoxItemRoutes from './box-item.js';
-import DeliveryNoteRoutes from './delivery-note.js';
-import DeliveryNoteItemRoutes from './delivery-note-item.js';
-import ExpeditionRoutes from './expedition.js';
-import InvoiceRoutes from './invoice.js';
-import InvoiceItemRoutes from './invoice-item.js';
-import MovementLogEntityRoutes from './movement-log-entity.js';
-import movementLogEntityItemRoutes from './movement-log-entity-item.js';
+import specieRoutes from './specie.js';
+import boneRoutes from './bone.js';
 
 const router = express.Router();
 
@@ -50,61 +8,14 @@ const router = express.Router();
 router.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'API Estoquelogia funcionando!',
+    message: "API Dust n' Bones funcionando!",
     version: '1.0.0',
     timestamp: new Date().toISOString(),
   });
 });
 
-// Signup não precisa de autenticação
-router.post('/signup', validateRequest(signupSchema), SignupController.signup);
-router.use('/accounts', accountRoutes)
-router.use('/users', userRoutes)
-router.use('/companies', companyRoutes)
-router.use('/company-settings', companySettingsRoutes)
-router.use('/company-customizations', companyCustomizationRoutes)
-router.use( '/tenants', tenantRoutes)
-router.use( '/branches', branchRoutes)
-
-// Sub-routers que precisam de autenticação + resolveEntityContext
-const protectedRouters = {
-  '/reports': reportRoutes,
-  '/userBranches': userBranchRoutes,
-  '/customers': customerRoutes,
-  '/customers_group': customerGroupRoutes,
-  '/items': itemRoutes,
-  '/item-features': itemFeatureRoutes,
-  '/features': FeatureRoutes,
-  '/packages': packageRoutes,
-  '/projects': projectRoutes,
-  '/orders': orderRoutes,
-  '/order-items': orderItemRoutes,
-  '/item-feature-options': ItemFeatureOptionRoutes,
-  '/feature-options': featureOptionRoutes,
-  '/status': StatusRoutes,
-  '/project-items': ProjectItemRoutes,
-  '/production-orders': ProductionOrderRoutes,
-  '/production-order-items': ProductionOrderItemRoutes,
-  '/production-order-status': ProductionOrderStatusRoutes,
-  '/order-item-additional-feature-options': OrderItemAdditionalFeatureOptionRoutes,
-  '/movements': MovementRoutes,
-  '/movement-itens': MovementItemRoutes,
-  '/stocks': StockRoutes,
-  '/production-order-item-additional-feature-options': ProductionOrderItemAdditionalFeatureOptionRoutes,
-  '/boxes': BoxRoutes,
-  '/box-items': BoxItemRoutes,
-  '/delivery-notes': DeliveryNoteRoutes,
-  '/delivery-note-items': DeliveryNoteItemRoutes,
-  '/expeditions': ExpeditionRoutes,
-  '/invoices': InvoiceRoutes,
-  '/invoice-items': InvoiceItemRoutes,
-  '/movement-log-entities': MovementLogEntityRoutes,
-  '/movement-log-entity-items': movementLogEntityItemRoutes,
-};
-
-// Aplica autenticação + resolveEntityContext a todos os sub-routers protegidos
-for (const [path, subRouter] of Object.entries(protectedRouters)) {
-  router.use(path, authenticateToken, resolveEntityContext, subRouter);
-}
+// Rotas principais
+router.use('/species', specieRoutes);
+router.use('/bones', boneRoutes);
 
 export default router;
