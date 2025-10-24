@@ -52,7 +52,7 @@ Bone.init({
   timestamps: true,
   indexes: [
     {
-      fields: ['specie_id'],
+      fields: ['specieId'],
     },
     {
       fields: ['active'],
