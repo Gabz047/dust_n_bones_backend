@@ -6,7 +6,6 @@ import dotenv from 'dotenv';
 import { Connect } from './config/database.js';
 import { sequelize } from './models/index.js';
 import routes from './routes/index.js';
-import { redisClient } from './config/redis.js';
 import cookieParser from 'cookie-parser';
 
 dotenv.config();
@@ -16,17 +15,15 @@ app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 app.use(cookieParser());
-
 app.use(helmet());
 
 const corsOptions = {
   origin: (origin, callback) => {
-    
     if (!origin) return callback(null, true);
     const isEstoquellogiaSubdomain = /^https?:\/\/([a-zA-Z0-9-]+\.)?estoquelogia\.com(:\d+)?$/.test(origin);
     const additionalAllowedOrigins = process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : ['http://localhost:5173', 'http://localhost:3001', 'http://localhost:3002', 'http://zecatutorial.localhost:3001', 'http://acme.localhost:3001', 'http://ventura.localhost:3001','http://venturas.localhost:3001','http://venturaquari.localhost:3001', 'http://textilville.localhost:3001'];
+      : ['http://localhost:5173', 'http://localhost:3001', 'http://localhost:3002', 'http://zecatutorial.localhost:3001', 'http://acme.localhost:3001', 'http://ventura.localhost:3001','http://venturas.localhost:3001','http://venturaquari.localhost:3001','http://textilville.localhost:3001'];
     if (isEstoquellogiaSubdomain || additionalAllowedOrigins.includes(origin)) {
       return callback(null, true);
     }
@@ -81,10 +78,6 @@ app.use((error, req, res, next) => {
 
 const startServer = async () => {
   try {
-    // Conecta Redis
-    await redisClient.connect();
-    console.log('✅ Redis conectado');
-
     // Conecta banco
     await Connect();
 
@@ -110,14 +103,12 @@ const startServer = async () => {
 process.on('SIGTERM', async () => {
   console.log('Recebido SIGTERM, encerrando servidor...');
   await sequelize.close();
-  await redisClient.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('Recebido SIGINT, encerrando servidor...');
   await sequelize.close();
-  await redisClient.disconnect();
   process.exit(0);
 });
 
