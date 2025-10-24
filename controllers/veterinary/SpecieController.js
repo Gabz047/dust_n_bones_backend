@@ -8,7 +8,7 @@ class SpecieController {
   static async create(req, res) {
     const transaction = await sequelize.transaction();
     try {
-      const { name, description } = req.body;
+      const { name, description, scientificName } = req.body;
 
       if (!name)
         return res.status(400).json({ success: false, message: 'Nome é obrigatório.' });
@@ -17,6 +17,7 @@ class SpecieController {
         {
           id: uuidv4(),
           name,
+          scientificName,
           description,
           active: true,
         },
@@ -104,12 +105,12 @@ class SpecieController {
       const where = {};
 
       // 🔍 Filtro textual
-      if (term && fields) {
-        const searchFields = fields.split(',');
-        where[Op.or] = searchFields.map((field) => ({
-          [field]: { [Op.iLike]: `%${term}%` },
-        }));
-      }
+     if (term && fields) {
+  const searchFields = Array.isArray(fields) ? fields : fields.split(',');
+  where[Op.or] = searchFields.map((field) => ({
+    [field]: { [Op.iLike]: `%${term}%` },
+  }));
+}
 
       // 🔘 Filtro por ativo
       if (active !== undefined) {
@@ -117,21 +118,27 @@ class SpecieController {
       }
 
       // ↕️ Ordenação customizada
-      let order = [['createdAt', 'DESC']];
-      switch (orderBy) {
-        case 'name_asc':
-          order = [['name', 'ASC']];
-          break;
-        case 'name_desc':
-          order = [['name', 'DESC']];
-          break;
-        case 'qtd_desc':
-          order = [['totalQuantity', 'DESC']];
-          break;
-        case 'qtd_asc':
-          order = [['totalQuantity', 'ASC']];
-          break;
-      }
+let order = [['createdAt', 'DESC']];
+
+if (req.query.sortBy && req.query.order) {
+  order = [[req.query.sortBy, req.query.order.toUpperCase()]];
+} else if (req.query.orderBy) {
+  // compatibilidade com versão antiga
+  switch (req.query.orderBy) {
+    case 'name_asc':
+      order = [['name', 'ASC']];
+      break;
+    case 'name_desc':
+      order = [['name', 'DESC']];
+      break;
+    case 'qtd_desc':
+      order = [['totalQuantity', 'DESC']];
+      break;
+    case 'qtd_asc':
+      order = [['totalQuantity', 'ASC']];
+      break;
+  }
+}
 
       // 📦 Paginação + include com buildQueryOptions
       const result = await buildQueryOptions(req, Specie, {

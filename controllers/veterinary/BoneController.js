@@ -17,10 +17,11 @@ class BoneController {
         return res.status(400).json({ success: false, message: 'É necessário informar a espécie.' });
 
       // Valida se a espécie existe
-      const specie = await Specie.findByPk(specieId);
+      const specie = await Specie.findByPk(specieId, { transaction });
       if (!specie)
         return res.status(404).json({ success: false, message: 'Espécie não encontrada.' });
 
+      // Cria o osso
       const bone = await Bone.create(
         {
           id: uuidv4(),
@@ -32,6 +33,10 @@ class BoneController {
         },
         { transaction }
       );
+
+      // Atualiza o totalQuantity da espécie
+      const total = await Bone.sum('quantity', { where: { specieId }, transaction });
+      await specie.update({ totalQuantity: total || 0 }, { transaction });
 
       await transaction.commit();
       return res.status(201).json({ success: true, data: bone });
@@ -58,8 +63,14 @@ class BoneController {
         return res.status(404).json({ success: false, message: 'Osso não encontrado.' });
 
       await bone.update(updates, { transaction });
-      await transaction.commit();
 
+      // Atualiza totalQuantity se quantidade ou espécie mudar
+      const specieId = updates.specieId || bone.specieId;
+      const total = await Bone.sum('quantity', { where: { specieId }, transaction });
+      const specie = await Specie.findByPk(specieId, { transaction });
+      if (specie) await specie.update({ totalQuantity: total || 0 }, { transaction });
+
+      await transaction.commit();
       return res.status(200).json({ success: true, data: bone });
     } catch (error) {
       await transaction.rollback();
@@ -82,9 +93,15 @@ class BoneController {
       if (!bone)
         return res.status(404).json({ success: false, message: 'Osso não encontrado.' });
 
+      const specieId = bone.specieId;
       await bone.destroy({ transaction });
-      await transaction.commit();
 
+      // Atualiza totalQuantity da espécie
+      const total = await Bone.sum('quantity', { where: { specieId }, transaction });
+      const specie = await Specie.findByPk(specieId, { transaction });
+      if (specie) await specie.update({ totalQuantity: total || 0 }, { transaction });
+
+      await transaction.commit();
       return res.status(200).json({ success: true, message: 'Osso removido com sucesso.' });
     } catch (error) {
       await transaction.rollback();
@@ -97,21 +114,20 @@ class BoneController {
     }
   }
 
-  // 📋 Listar ossos com filtros, paginação e ordenação
+  // 📋 Listar ossos
   static async getAll(req, res) {
     try {
       const { term, fields, orderBy } = req.query;
       const where = {};
 
-      // 🔍 Filtro de busca textual
-      if (term && fields) {
-        const searchFields = fields.split(',');
-        where[Op.or] = searchFields.map((field) => ({
-          [field]: { [Op.iLike]: `%${term}%` },
-        }));
-      }
+   // 🔍 Filtro textual
+     if (term && fields) {
+  const searchFields = Array.isArray(fields) ? fields : fields.split(',');
+  where[Op.or] = searchFields.map((field) => ({
+    [field]: { [Op.iLike]: `%${term}%` },
+  }));
+}
 
-      // ↕️ Ordenação customizada
       let order = [['createdAt', 'DESC']];
       switch (orderBy) {
         case 'qtd_desc':
@@ -128,14 +144,13 @@ class BoneController {
           break;
       }
 
-      // 📦 Paginação e include com buildQueryOptions
       const result = await buildQueryOptions(req, Bone, {
         where,
         include: [
           {
             model: Specie,
             as: 'specie',
-            attributes: ['id', 'name', 'scientificName'],
+            attributes: ['id', 'name', 'scientificName', 'totalQuantity'],
           },
         ],
         order,
@@ -167,7 +182,7 @@ class BoneController {
           {
             model: Specie,
             as: 'specie',
-            attributes: ['id', 'name', 'scientificName'],
+            attributes: ['id', 'name', 'scientificName', 'totalQuantity'],
           },
         ],
       });

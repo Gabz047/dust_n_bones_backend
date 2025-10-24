@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-// import rateLimit from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { Connect } from './config/database.js';
 import { sequelize } from './models/index.js';
@@ -81,22 +81,20 @@ app.use((error, req, res, next) => {
 
 const startServer = async () => {
   try {
-    console.log('🟡 Iniciando servidor...');
-
     // Conecta Redis
-    console.log('🔄 Conectando ao Redis...');
     await redisClient.connect();
     console.log('✅ Redis conectado');
 
     // Conecta banco
-    console.log('🔄 Conectando ao banco...');
     await Connect();
 
-    console.log('🔄 Autenticando modelos...');
-    await sequelize.authenticate();
-    console.log('✅ Modelos sincronizados com o banco de dados');
+    if (process.env.NODE_ENV === 'development') {
+      // await sequelize.sync({ alter: false });
+      await sequelize.authenticate()
+      console.log('✅ Modelos sincronizados com o banco de dados');
+    }
 
-    console.log('🚀 Tentando iniciar servidor na porta', PORT);
+    // Inicia servidor só após conexões OK
     app.listen(PORT, () => {
       console.log(`🚀 Servidor rodando na porta ${PORT}`);
       console.log(`📖 Documentação da API: http://localhost:${PORT}/api`);
@@ -108,7 +106,6 @@ const startServer = async () => {
     process.exit(1);
   }
 };
-
 
 process.on('SIGTERM', async () => {
   console.log('Recebido SIGTERM, encerrando servidor...');
